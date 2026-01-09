@@ -1,0 +1,297 @@
+/**
+ * MyMind Clone - Global Styles
+ * 
+ * Light theme matching the real mymind.com aesthetic.
+ * Features warm off-white background, serif typography, and colorful tags.
+ * 
+ * @fileoverview Global styles with mymind-inspired design system
+ */
+
+/* Font imports must come first */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+
+@import "tailwindcss";
+
+/* =============================================================================
+   DESIGN TOKENS (MyMind Palette)
+   ============================================================================= */
+
+:root {
+  /* Core Colors - Light Theme */
+  --background: #F7F6F3;
+  /* Warm off-white (paper-like) */
+  --background-secondary: #EFEEEB;
+  /* Slightly darker for contrast */
+  --foreground: #2D2D2D;
+  /* Soft black */
+  --foreground-muted: #6B6B6B;
+  /* Muted text */
+  --card-bg: #FFFFFF;
+  /* Pure white cards */
+  --border: rgba(0, 0, 0, 0.06);
+  /* Subtle borders */
+  --border-hover: rgba(0, 0, 0, 0.12);
+
+  /* Accent Colors (Electric Lavender / Blurple) */
+  --accent-primary: #7B68EE;
+  /* Medium slate blue */
+  --accent-hover: #6A5ACD;
+  /* Slate blue */
+  --accent-light: rgba(123, 104, 238, 0.1);
+
+  /* Tag Colors - Vibrant palette */
+  --tag-green: #22C55E;
+  --tag-red: #EF4444;
+  --tag-blue: #3B82F6;
+  --tag-orange: #F97316;
+  --tag-purple: #A855F7;
+  --tag-pink: #EC4899;
+  --tag-cyan: #06B6D4;
+  --tag-amber: #F59E0B;
+
+  /* Typography */
+  --font-serif: 'Libre Baskerville', 'Georgia', 'Charter', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Spacing */
+  --header-height: 56px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+/* =============================================================================
+   TAILWIND THEME CUSTOMIZATION
+   ============================================================================= */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+}
+
+/* =============================================================================
+   BASE STYLES
+   ============================================================================= */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--foreground);
+  line-height: 1.6;
+}
+
+/* Serif headings for that literary feel */
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+}
+
+/* Custom scrollbar - light theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+/* Focus visible styles */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* =============================================================================
+   TAG COLOR CLASSES
+   ============================================================================= */
+
+.tag-green {
+  --tag-color: var(--tag-green);
+}
+
+.tag-red {
+  --tag-color: var(--tag-red);
+}
+
+.tag-blue {
+  --tag-color: var(--tag-blue);
+}
+
+.tag-orange {
+  --tag-color: var(--tag-orange);
+}
+
+.tag-purple {
+  --tag-color: var(--tag-purple);
+}
+
+.tag-pink {
+  --tag-color: var(--tag-pink);
+}
+
+.tag-cyan {
+  --tag-color: var(--tag-cyan);
+}
+
+.tag-amber {
+  --tag-color: var(--tag-amber);
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  background-color: white;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tag-pill:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tag-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--tag-color, var(--accent-primary));
+}
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+
+/* Hide scrollbar but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Serif text */
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Card shadow */
+.card-shadow {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.card-shadow-hover {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Animate shimmer for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg,
+      #e5e5e5 0%,
+      #f0f0f0 50%,
+      #e5e5e5 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Horizontal scroll container */
+.scroll-container {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  scroll-snap-type: x mandatory;
+}
+
+.scroll-container>* {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Platform-specific card borders */
+.border-instagram {
+  border-left: 3px solid #E4405F;
+}
+
+.border-twitter {
+  border-left: 3px solid #1DA1F2;
+}
+
+.border-youtube {
+  border-left: 3px solid #FF0000;
+}
+
+.border-reddit {
+  border-left: 3px solid #FF4500;
+}
+
+.border-article {
+  border-left: 3px solid var(--accent-primary);
+}
+
+/* Toast slide-up animation */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out;
+}

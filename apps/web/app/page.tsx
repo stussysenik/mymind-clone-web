@@ -1,0 +1,101 @@
+/**
+ * MyMind Clone - Home Page
+ * 
+ * Main application page matching mymind.com layout.
+ * Features search bar, tag scroller, and masonry grid.
+ * 
+ * @fileoverview Main page with mymind-inspired layout
+ */
+
+import { Suspense } from 'react';
+import { AddButton, Header, CardGrid, SearchBar, TagScroller } from '@/components';
+
+// =============================================================================
+// PAGE PROPS
+// =============================================================================
+
+interface HomePageProps {
+  searchParams: Promise<{ q?: string; type?: string }>;
+}
+
+// =============================================================================
+// LOADING SKELETON
+// =============================================================================
+
+function CardGridSkeleton() {
+  return (
+    <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div
+          key={i}
+          className="mb-4 break-inside-avoid rounded-lg bg-white card-shadow overflow-hidden"
+        >
+          <div className="aspect-[4/3] w-full animate-shimmer" />
+          <div className="p-3 space-y-2">
+            <div className="h-4 w-3/4 animate-shimmer rounded" />
+            <div className="h-3 w-1/2 animate-shimmer rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// =============================================================================
+// PAGE COMPONENT
+// =============================================================================
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const params = await searchParams;
+  const searchQuery = params.q ?? '';
+  const typeFilter = params.type ?? '';
+
+  return (
+    <div className="min-h-screen bg-[var(--background)]">
+      {/* Header */}
+      <Header />
+
+      {/* Main Content */}
+      <main className="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-8">
+        {/* Search Section */}
+        <section className="py-6">
+          <Suspense fallback={<div className="h-12 animate-shimmer rounded" />}>
+            <SearchBar />
+          </Suspense>
+        </section>
+
+        {/* Tag Scroller */}
+        <section className="border-b border-[var(--border)] mb-6">
+          <Suspense fallback={<div className="h-10 animate-shimmer rounded" />}>
+            <TagScroller />
+          </Suspense>
+        </section>
+
+        {/* Card Grid */}
+        <section className="pb-12">
+          <Suspense fallback={<CardGridSkeleton />}>
+            <CardGrid searchQuery={searchQuery} typeFilter={typeFilter} />
+          </Suspense>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-[var(--border)] py-6 text-center text-sm text-[var(--foreground-muted)]">
+        <p>
+          Built as a portfolio project •{' '}
+          <a
+            href="https://github.com"
+            className="text-[var(--accent-primary)] hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View Source
+          </a>
+        </p>
+      </footer>
+
+      {/* Add Button (FAB) */}
+      <AddButton />
+    </div>
+  );
+}
