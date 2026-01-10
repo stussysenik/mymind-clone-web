@@ -1,0 +1,27 @@
+#!/bin/sh
+# ============================================================================
+# Git Pre-Commit Hook
+# ============================================================================
+# This hook runs before each commit to prevent accidental exposure of API keys,
+# secrets, and sensitive information.
+#
+# If the hook exits with a non-zero status, the commit will be aborted.
+#
+# To enable this hook:
+#   chmod +x .husky/pre-commit
+#   npx husky add .husky/pre-commit
+#
+# @fileoverview Pre-commit hook for secret detection
+# ============================================================================
+
+set -e
+
+echo "🔒 Running pre-commit checks..."
+
+# Run the secret detection script on staged files
+node scripts/check-secrets.js
+
+# The secret detection script will exit with code 1 if secrets are found,
+# which will block the commit. If it exits with code 0, the commit proceeds.
+
+echo "✅ Pre-commit checks passed!"

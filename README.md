@@ -9,6 +9,7 @@
 ![Tailwind 4](https://img.shields.io/badge/Tailwind-4-cyan)
 ![Supabase](https://img.shields.io/badge/Supabase-Auth%20%2B%20DB-emerald)
 ![AI](https://img.shields.io/badge/AI-GLM--4-purple)
+![Security](https://img.shields.io/badge/Security-API%20Keys%20Protected-success)
 
 ---
 
@@ -372,6 +373,27 @@ const { data, error } = await supabase
 
 ---
 
+## 🔒 Security
+
+**⚠️ IMPORTANT: Protect Your API Keys**
+
+This project uses Supabase and Zhipu AI, which require API keys. Follow these security practices:
+
+1. **Never commit `.env.local`** to version control (it's in `.gitignore`)
+2. **Use environment variables** in Vercel for production deployments
+3. **Enable pre-commit hooks** to prevent accidental key exposure:
+   ```bash
+   chmod +x .husky/pre-commit
+   npm install --save-dev husky
+   npx husky install
+   ```
+4. **Read the security guide**: [SECURITY.md](SECURITY.md) for comprehensive security best practices
+
+Your `.gitignore` already protects:
+- ✅ All `.env` files except `.env.example`
+- ✅ `.env.local` with your real keys
+- ✅ `.vercel` and other sensitive directories
+
 ## 📊 Project Metrics
 
 - **Lines of Code**: ~5,000+
@@ -407,6 +429,13 @@ MIT License - feel free to use this project for your own visual knowledge base.
 - Inspired by [mymind.com](https://mymind.com)
 - Built with modern tools: Next.js, Supabase, Zhipu AI
 - Design philosophy influenced by anti-pattern movement
+
+## 📚 Additional Documentation
+
+- **[SECURITY.md](SECURITY.md)** - API key security and best practices
+- **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide with troubleshooting
+- **[VERCEL_SETUP.md](VERCEL_SETUP.md)** - Detailed Vercel configuration
+- **[QUICK_DEPLOY.md](QUICK_DEPLOY.md)** - Fast deployment reference
 
 ---
 

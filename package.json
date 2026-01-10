@@ -1,0 +1,38 @@
+{
+        "name": "mymind-clone",
+        "version": "1.0.0",
+        "private": true,
+        "description": "A privacy-first, AI-powered visual knowledge manager",
+        "workspaces": [
+                "apps/*"
+        ],
+        "scripts": {
+                "dev": "cd apps/web && npm run dev",
+                "build": "cd apps/web && npm run build",
+                "start": "cd apps/web && npm run start",
+                "lint": "cd apps/web && npm run lint",
+                "test": "cd apps/web && npx playwright test",
+                "check-secrets": "node scripts/check-secrets.js",
+                "prepare": "husky install"
+        },
+        "engines": {
+                "node": ">=20.0.0",
+                "npm": ">=9.0.0"
+        },
+        "repository": {
+                "type": "git",
+                "url": "https://github.com/yourusername/mymind-clone.git"
+        },
+        "keywords": [
+                "knowledge-management",
+                "ai",
+                "nextjs",
+                "supabase",
+                "mymind-clone"
+        ],
+        "author": "Senik & Antigravity",
+        "license": "MIT",
+        "devDependencies": {
+                "husky": "^9.0.0"
+        }
+}
