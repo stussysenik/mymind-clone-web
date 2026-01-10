@@ -29,9 +29,10 @@ async function main() {
                                 tags: classification.tags,
                                 summary: classification.summary
                         });
-                } catch (e) {
+                } catch (e: unknown) {
+                        const message = e instanceof Error ? e.message : 'Unknown error';
                         console.error(`Failed ${url}:`, e);
-                        results.push({ url, error: e.message });
+                        results.push({ url, error: message });
                 }
         }
 
@@ -44,7 +45,7 @@ async function main() {
 |-----|-------|------|------------------|
 ${results.map(r => r.error
                 ? `| ${r.url} | ERROR | - | ${r.error} |`
-                : `| ${r.url} | ${r.title} | ${r.tags.join(', ')} | ${r.cleanContentPrefix}... |`
+                : `| ${r.url} | ${r.title} | ${(r.tags || []).join(', ')} | ${r.cleanContentPrefix}... |`
         ).join('\n')}
 `;
 
