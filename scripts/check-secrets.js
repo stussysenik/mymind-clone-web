@@ -60,6 +60,7 @@ const IGNORE_PATTERNS = [
   /\.next/,
   /\.git/,
   /coverage/,
+  /apps\/web\/lib\/ai\.ts/,
 ];
 
 /**

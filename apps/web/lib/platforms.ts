@@ -20,6 +20,9 @@ export type Platform =
         | 'reddit'
         | 'letterboxd'
         | 'imdb'
+        | 'goodreads'
+        | 'amazon'
+        | 'storygraph'
         | 'spotify'
         | 'github'
         | 'tiktok'
@@ -139,6 +142,27 @@ export const PLATFORMS: Record<Platform, PlatformInfo> = {
                 bgColor: 'rgba(255, 103, 25, 0.08)',
                 icon: 'mail',
         },
+        goodreads: {
+                id: 'goodreads',
+                name: 'Goodreads',
+                color: '#553B08',
+                bgColor: 'rgba(85, 59, 8, 0.08)',
+                icon: 'bookOpen',
+        },
+        amazon: {
+                id: 'amazon',
+                name: 'Amazon',
+                color: '#FF9900',
+                bgColor: 'rgba(255, 153, 0, 0.08)',
+                icon: 'package',
+        },
+        storygraph: {
+                id: 'storygraph',
+                name: 'StoryGraph',
+                color: '#9B7EBD',
+                bgColor: 'rgba(155, 126, 189, 0.08)',
+                icon: 'bookMarked',
+        },
         unknown: {
                 id: 'unknown',
                 name: 'Web',
@@ -223,6 +247,21 @@ export function detectPlatform(url: string | null | undefined): Platform {
         // Substack
         if (urlLower.includes('substack.com')) {
                 return 'substack';
+        }
+
+        // Goodreads
+        if (urlLower.includes('goodreads.com')) {
+                return 'goodreads';
+        }
+
+        // Amazon
+        if (urlLower.includes('amazon.com') || urlLower.includes('amazon.co') || urlLower.includes('amzn.')) {
+                return 'amazon';
+        }
+
+        // StoryGraph
+        if (urlLower.includes('thestorygraph.com') || urlLower.includes('storygraph.com')) {
+                return 'storygraph';
         }
 
         return 'unknown';

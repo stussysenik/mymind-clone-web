@@ -44,38 +44,25 @@ function extractQuickMetadata(url: string | null, content: string | null) {
         return { title, type };
 }
 
+import { scrapeUrl } from '@/lib/scraper';
+
 /**
- * Fetch URL metadata (OG image, title) without AI
+ * Fetch URL metadata (OG image, title, content) using scraper
  */
-async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?: string }> {
+async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?: string; content?: string }> {
         try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-
-                const response = await fetch(url, {
-                        signal: controller.signal,
-                        headers: {
-                                'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
-                        },
-                });
-                clearTimeout(timeoutId);
-
-                const html = await response.text();
-
-                // Extract OG image
-                const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
-                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-                const imageUrl = ogImageMatch?.[1] || undefined;
-
-                // Extract OG title or page title
-                const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-                        html.match(/<title[^>]*>([^<]+)<\/title>/i);
-                const title = titleMatch?.[1]?.trim() || undefined;
-
-                return { title, imageUrl };
+                const scraped = await scrapeUrl(url);
+                return {
+                        title: scraped.title,
+                        imageUrl: scraped.imageUrl ?? undefined,
+                        content: scraped.content
+                };
         } catch (error) {
-                console.log('[Save] URL preview fetch failed:', error);
-                return {};
+                console.log('[Save] URL scrape failed:', error);
+                // Fallback to minimal screenshot if scrape fails
+                return {
+                        imageUrl: `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
+                };
         }
 }
 
@@ -176,10 +163,23 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                 // STEP 1: Quick metadata (no AI)
                 const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
 
-                // Get URL preview (OG image/title) - fast parallel fetch
-                let preview: { title?: string; imageUrl?: string } = {};
+                // Get URL preview (OG image/title/content) - fast parallel fetch
+                let preview: { title?: string; imageUrl?: string; content?: string; description?: string } = {};
                 if (url) {
-                        preview = await fetchUrlPreview(url);
+                        // We use the scraper to get rich metadata
+                        const scraped = await scrapeUrl(url);
+
+                        // Fallback to Microlink screenshot if no image found in metadata
+                        const fallbackImage = !scraped.imageUrl
+                                ? `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
+                                : undefined;
+
+                        preview = {
+                                title: scraped.title,
+                                imageUrl: scraped.imageUrl ?? fallbackImage,
+                                content: scraped.content,
+                                description: scraped.description
+                        };
                 }
 
                 // Upload image if base64
@@ -190,11 +190,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                 }
 
                 // STEP 2: Insert card immediately with basic data
+                // Use scraped content if user didn't provide any
+                const finalContent = content ?? preview.content ?? preview.description ?? null;
+
                 const cardData: Partial<CardRow> = {
                         user_id: userId,
                         type: type ?? quickMeta.type,
                         title: title ?? preview.title ?? quickMeta.title,
-                        content: content ?? null,
+                        content: finalContent,
                         url: url ?? null,
                         image_url: finalImageUrl ?? preview.imageUrl ?? null,
                         metadata: {
