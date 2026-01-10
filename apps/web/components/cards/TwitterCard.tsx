@@ -9,6 +9,8 @@
 'use client';
 
 import Image from 'next/image';
+import { ExternalLink, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import type { Card } from '@/lib/types';
 
 // =============================================================================
@@ -17,6 +19,9 @@ import type { Card } from '@/lib/types';
 
 interface TwitterCardProps {
         card: Card;
+        onDelete?: () => void;
+        onRestore?: () => void;
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -26,12 +31,18 @@ interface TwitterCardProps {
 /**
  * Twitter/X style card for tweets.
  */
-export function TwitterCard({ card }: TwitterCardProps) {
+export function TwitterCard({ card, onDelete, onRestore, onClick }: TwitterCardProps) {
+        const [isHovered, setIsHovered] = useState(false);
         const author = card.metadata.author || '@user';
         const tweetText = card.content || card.title || '';
 
         return (
-                <article className="relative flex flex-col overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-black">
+                <article
+                        className={`relative flex flex-col overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-black ${onClick ? 'cursor-pointer' : ''}`}
+                        onClick={onClick}
+                        onMouseEnter={() => setIsHovered(true)}
+                        onMouseLeave={() => setIsHovered(false)}
+                >
                         {/* Header */}
                         <div className="flex items-center gap-3 p-3 pb-2">
                                 {/* X Logo */}
@@ -91,6 +102,56 @@ export function TwitterCard({ card }: TwitterCardProps) {
                                                         #{tag}
                                                 </span>
                                         ))}
+                                </div>
+                        )}
+
+                        {/* Processing Indicator */}
+                        {card.metadata?.processing && (
+                                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium animate-pulse">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Analyzing...
+                                </div>
+                        )}
+
+                        {/* Hover Actions */}
+                        {isHovered && (
+                                <div className="absolute right-2 top-2 flex gap-1">
+                                        {card.url && (
+                                                <a
+                                                        href={card.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                                        aria-label="Open original link"
+                                                >
+                                                        <ExternalLink className="h-3.5 w-3.5" />
+                                                </a>
+                                        )}
+                                        {onDelete && (
+                                                <button
+                                                        onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onDelete();
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-red-600 transition-colors"
+                                                        aria-label="Delete card"
+                                                >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                        )}
+                                        {onRestore && (
+                                                <button
+                                                        onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onRestore();
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-green-600 transition-colors"
+                                                        aria-label="Restore card"
+                                                >
+                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                </button>
+                                        )}
                                 </div>
                         )}
                 </article>

@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Play } from 'lucide-react';
+import { Play, ExternalLink, Trash2 } from 'lucide-react';
 import type { Card } from '@/lib/types';
 
 // =============================================================================
@@ -19,6 +19,9 @@ import type { Card } from '@/lib/types';
 
 interface YouTubeCardProps {
         card: Card;
+        onDelete?: () => void;
+        onRestore?: () => void;
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -28,13 +31,19 @@ interface YouTubeCardProps {
 /**
  * YouTube style card for videos.
  */
-export function YouTubeCard({ card }: YouTubeCardProps) {
+export function YouTubeCard({ card, onDelete, onRestore, onClick }: YouTubeCardProps) {
         const [imageError, setImageError] = useState(false);
+        const [isHovered, setIsHovered] = useState(false);
         const channelName = card.metadata.author || 'YouTube';
         const viewCount = card.metadata.viewCount;
 
         return (
-                <article className="relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-red-600">
+                <article
+                        className={`relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-red-600 ${onClick ? 'cursor-pointer' : ''}`}
+                        onClick={onClick}
+                        onMouseEnter={() => setIsHovered(true)}
+                        onMouseLeave={() => setIsHovered(false)}
+                >
                         {/* Thumbnail */}
                         <div className="relative aspect-video w-full overflow-hidden bg-gray-900">
                                 {card.imageUrl && !imageError ? (
@@ -76,6 +85,33 @@ export function YouTubeCard({ card }: YouTubeCardProps) {
                                         </svg>
                                         <span className="text-xs font-medium text-white">YouTube</span>
                                 </div>
+
+                                {/* Hover Actions */}
+                                {isHovered && (
+                                        <div className="absolute right-2 top-2 flex gap-1 z-20">
+                                                {card.url && (
+                                                        <a
+                                                                href={card.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
+                                                                aria-label="Open in YouTube"
+                                                        >
+                                                                <ExternalLink className="h-4 w-4 text-gray-600" />
+                                                        </a>
+                                                )}
+                                                {onDelete && (
+                                                        <button
+                                                                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                                                                className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
+                                                                aria-label="Delete card"
+                                                        >
+                                                                <Trash2 className="h-4 w-4 text-gray-600 hover:text-red-500" />
+                                                        </button>
+                                                )}
+                                        </div>
+                                )}
                         </div>
 
                         {/* Content */}

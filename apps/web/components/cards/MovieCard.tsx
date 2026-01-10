@@ -20,6 +20,9 @@ import { detectPlatform } from '@/lib/platforms';
 
 interface MovieCardProps {
         card: Card;
+        onDelete?: () => void;
+        onRestore?: () => void;
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -29,8 +32,9 @@ interface MovieCardProps {
 /**
  * Movie/Film card for IMDB and Letterboxd.
  */
-export function MovieCard({ card }: MovieCardProps) {
+export function MovieCard({ card, onDelete, onRestore, onClick }: MovieCardProps) {
         const [imageError, setImageError] = useState(false);
+        const [isHovered, setIsHovered] = useState(false);
         const platform = detectPlatform(card.url);
         const isLetterboxd = platform === 'letterboxd';
         const isImdb = platform === 'imdb';
@@ -45,8 +49,11 @@ export function MovieCard({ card }: MovieCardProps) {
 
         return (
                 <article
-                        className="relative overflow-hidden rounded-lg bg-white card-shadow"
+                        className={`relative overflow-hidden rounded-lg bg-white card-shadow ${onClick ? 'cursor-pointer' : ''}`}
                         style={{ borderLeft: `3px solid ${borderColor}` }}
+                        onClick={onClick}
+                        onMouseEnter={() => setIsHovered(true)}
+                        onMouseLeave={() => setIsHovered(false)}
                 >
                         {/* Poster */}
                         <div className="relative aspect-[2/3] w-full overflow-hidden bg-gray-900">

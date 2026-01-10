@@ -19,6 +19,9 @@ import type { Card } from '@/lib/types';
 
 interface RedditCardProps {
         card: Card;
+        onDelete?: () => void;
+        onRestore?: () => void;
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -28,15 +31,21 @@ interface RedditCardProps {
 /**
  * Reddit style card for posts.
  */
-export function RedditCard({ card }: RedditCardProps) {
+export function RedditCard({ card, onDelete, onRestore, onClick }: RedditCardProps) {
         const [imageError, setImageError] = useState(false);
+        const [isHovered, setIsHovered] = useState(false);
         const subreddit = card.metadata.subreddit || extractSubreddit(card.url);
         const author = card.metadata.author || 'u/redditor';
         const upvotes = card.metadata.upvotes;
         const comments = card.metadata.comments;
 
         return (
-                <article className="relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#FF4500]">
+                <article
+                        className={`relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#FF4500] ${onClick ? 'cursor-pointer' : ''}`}
+                        onClick={onClick}
+                        onMouseEnter={() => setIsHovered(true)}
+                        onMouseLeave={() => setIsHovered(false)}
+                >
                         {/* Header */}
                         <div className="flex items-center gap-2 p-3 pb-2">
                                 {/* Reddit Logo */}

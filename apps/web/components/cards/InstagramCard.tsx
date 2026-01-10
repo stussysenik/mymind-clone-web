@@ -19,6 +19,9 @@ import type { Card } from '@/lib/types';
 
 interface InstagramCardProps {
         card: Card;
+        onDelete?: () => void;
+        onRestore?: () => void;
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -28,13 +31,19 @@ interface InstagramCardProps {
 /**
  * Instagram style card for posts and reels.
  */
-export function InstagramCard({ card }: InstagramCardProps) {
+export function InstagramCard({ card, onDelete, onRestore, onClick }: InstagramCardProps) {
         const [imageError, setImageError] = useState(false);
+        const [isHovered, setIsHovered] = useState(false);
         const isReel = card.url?.includes('/reel/') || card.url?.includes('/reels/');
         const author = card.metadata.author || 'instagram';
 
         return (
-                <article className="relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#E4405F]">
+                <article
+                        className={`relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#E4405F] ${onClick ? 'cursor-pointer' : ''}`}
+                        onClick={onClick}
+                        onMouseEnter={() => setIsHovered(true)}
+                        onMouseLeave={() => setIsHovered(false)}
+                >
                         {/* Image Container - Square aspect ratio for Instagram */}
                         <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400">
                                 {card.imageUrl && !imageError ? (

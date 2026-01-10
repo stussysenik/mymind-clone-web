@@ -22,6 +22,10 @@ import { InstagramCard } from './cards/InstagramCard';
 import { YouTubeCard } from './cards/YouTubeCard';
 import { MovieCard } from './cards/MovieCard';
 import { RedditCard } from './cards/RedditCard';
+import { LetterboxdCard } from './cards/LetterboxdCard';
+import { GoodreadsCard } from './cards/GoodreadsCard';
+import { AmazonCard } from './cards/AmazonCard';
+import { StoryGraphCard } from './cards/StoryGraphCard';
 
 // =============================================================================
 // PROPS
@@ -42,16 +46,16 @@ interface CardProps {
 // =============================================================================
 
 const TYPE_ICONS = {
-	article: FileText,
-	image: Globe,
-	note: StickyNote,
-	product: ShoppingBag,
-	book: BookOpen,
-	video: Play,
-	audio: Volume2,
-	twitter: Twitter,
-	reddit: MessageSquare,
-	website: Globe,
+        article: FileText,
+        image: Globe,
+        note: StickyNote,
+        product: ShoppingBag,
+        book: BookOpen,
+        video: Play,
+        audio: Volume2,
+        twitter: Twitter,
+        reddit: MessageSquare,
+        website: Globe,
 } as const;
 
 // =============================================================================
@@ -67,16 +71,23 @@ export function Card({ card, onDelete, onRestore, onClick }: CardProps) {
         // Route to platform-specific cards
         switch (platform) {
                 case 'twitter':
-                        return <TwitterCard card={card} />;
+                        return <TwitterCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 case 'instagram':
-                        return <InstagramCard card={card} />;
+                        return <InstagramCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 case 'youtube':
-                        return <YouTubeCard card={card} />;
+                        return <YouTubeCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 case 'reddit':
-                        return <RedditCard card={card} />;
+                        return <RedditCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 case 'letterboxd':
+                        return <LetterboxdCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 case 'imdb':
-                        return <MovieCard card={card} />;
+                        return <MovieCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                case 'goodreads':
+                        return <GoodreadsCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                case 'amazon':
+                        return <AmazonCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                case 'storygraph':
+                        return <StoryGraphCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
                 default:
                         return <GenericCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
         }
@@ -106,14 +117,16 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
         const renderVisual = () => {
                 const hasValidUrl = card.url && !card.url.startsWith('file:') && !card.url.startsWith('local-');
 
-                // 1. Primary Image
+                // 1. Primary Image - Natural Aspect Ratio for Masonry
                 if (card.imageUrl && !imageError) {
                         return (
-                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
+                                <div className="relative w-full overflow-hidden bg-gray-100/50">
                                         <Image
                                                 src={card.imageUrl}
                                                 alt={card.title || 'Card image'}
-                                                fill
+                                                width={500}
+                                                height={300}
+                                                style={{ width: '100%', height: 'auto', display: 'block' }}
                                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                                 className="object-cover"
                                                 loading="lazy"
@@ -122,7 +135,7 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                                         {/* Video Play Button */}
                                         {isVideo && (
                                                 <div className="absolute inset-0 flex items-center justify-center">
-                                                        <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                                                        <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg backdrop-blur-sm">
                                                                 <Play className="w-5 h-5 text-gray-800 ml-0.5" fill="currentColor" />
                                                         </div>
                                                 </div>
@@ -131,11 +144,11 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                         );
                 }
 
-                // 2. Fallback: Automatic Screenshot (Microlink)
+                // 2. Fallback: Automatic Screenshot (Microlink) - Fixed Golden Ratio for consistency
                 if (hasValidUrl && !screenshotError) {
                         const screenshotUrl = `https://api.microlink.io/?url=${encodeURIComponent(card.url!)}&screenshot=true&meta=false&embed=screenshot.url`;
                         return (
-                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50 group-hover:bg-gray-100 transition-colors">
+                                <div className="relative aspect-[1.618/1] w-full overflow-hidden bg-gray-50 group-hover:bg-gray-100 transition-colors">
                                         <Image
                                                 src={screenshotUrl}
                                                 alt="Site Preview"
@@ -146,7 +159,7 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                                                 unoptimized
                                                 onError={() => setScreenshotError(true)}
                                         />
-                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-medium text-gray-500">
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-medium text-gray-500 shadow-sm">
                                                 <Globe className="w-2.5 h-2.5" />
                                                 AUTO-SHOT
                                         </div>
@@ -171,10 +184,23 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                         );
                 }
 
-                // Placeholder for cards without images
+                // Placeholder with dynamic gradient and Golden Ratio
+                const getGradient = (str: string) => {
+                        let hash = 0;
+                        for (let i = 0; i < str.length; i++) {
+                                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                        }
+                        const hue1 = Math.abs(hash % 360);
+                        const hue2 = (hue1 + 40) % 360;
+                        return `linear-gradient(135deg, hsl(${hue1}, 70%, 90%), hsl(${hue2}, 70%, 95%))`;
+                };
+
                 return (
-                        <div className="aspect-[4/3] w-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-                                <TypeIcon className="h-10 w-10 text-gray-300" />
+                        <div
+                                className="aspect-[1.618/1] w-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105"
+                                style={{ background: getGradient(card.title || card.type) }}
+                        >
+                                <TypeIcon className="h-12 w-12 text-gray-400/50" />
                         </div>
                 );
         };
@@ -241,7 +267,7 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                                                                         key={tag}
                                                                         onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                router.push(`/?q=${tag}`);
+                                                                                router.push(`/?q=%23${tag}`);
                                                                         }}
                                                                         className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)] hover:text-[var(--accent-primary)] hover:underline cursor-pointer transition-colors"
                                                                 >
@@ -257,9 +283,9 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                                 )}
                         </div>
 
-                        {/* Processing Indicator */}
+                        {/* Processing Indicator - positioned on left to avoid conflicting with hover actions */}
                         {card.metadata?.processing && (
-                                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium animate-pulse">
+                                <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium animate-pulse">
                                         <Loader2 className="h-3 w-3 animate-spin" />
                                         Analyzing...
                                 </div>
