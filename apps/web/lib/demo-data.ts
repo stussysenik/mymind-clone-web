@@ -36,6 +36,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['design', 'inspiration', 'wisdom'],
                 createdAt: '2024-01-09T14:30:00Z',
                 updatedAt: '2024-01-09T14:30:00Z',
+                deletedAt: null,
         },
         {
                 id: 'twitter-002',
@@ -51,6 +52,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['gamedev', 'physics', 'havok'],
                 createdAt: '2024-01-08T11:20:00Z',
                 updatedAt: '2024-01-08T11:20:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -70,6 +72,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['design', 'branding', 'japan'],
                 createdAt: '2024-01-07T16:45:00Z',
                 updatedAt: '2024-01-07T16:45:00Z',
+                deletedAt: null,
         },
         {
                 id: 'instagram-002',
@@ -85,6 +88,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['coffee', 'morning', 'ritual'],
                 createdAt: '2024-01-06T08:15:00Z',
                 updatedAt: '2024-01-06T08:15:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -106,6 +110,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['music', 'electronic', 'montreal'],
                 createdAt: '2024-01-05T22:00:00Z',
                 updatedAt: '2024-01-05T22:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'youtube-002',
@@ -123,6 +128,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['productivity', 'PKM', 'notes'],
                 createdAt: '2024-01-04T14:30:00Z',
                 updatedAt: '2024-01-04T14:30:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -145,6 +151,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['sideproject', 'ai', 'bookmarks'],
                 createdAt: '2024-01-03T10:00:00Z',
                 updatedAt: '2024-01-03T10:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'reddit-002',
@@ -163,6 +170,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['desk', 'setup', 'minimal'],
                 createdAt: '2024-01-02T15:45:00Z',
                 updatedAt: '2024-01-02T15:45:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -185,6 +193,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['film', 'drama', 'romance', 'korean'],
                 createdAt: '2024-01-01T20:00:00Z',
                 updatedAt: '2024-01-01T20:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'letterboxd-002',
@@ -202,6 +211,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['film', 'biography', 'history'],
                 createdAt: '2023-12-28T19:30:00Z',
                 updatedAt: '2023-12-28T19:30:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -223,6 +233,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['film', 'scifi', 'epic'],
                 createdAt: '2023-12-25T21:00:00Z',
                 updatedAt: '2023-12-25T21:00:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -244,6 +255,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['ai', 'creativity', 'technology'],
                 createdAt: '2024-01-09T10:30:00Z',
                 updatedAt: '2024-01-09T10:30:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -263,6 +275,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['nature', 'photography', 'inspiration'],
                 createdAt: '2024-01-06T08:00:00Z',
                 updatedAt: '2024-01-06T08:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'image-002',
@@ -278,6 +291,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['art', 'abstract', 'colorful'],
                 createdAt: '2024-01-04T11:45:00Z',
                 updatedAt: '2024-01-04T11:45:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -298,6 +312,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['audio', 'headphones', 'wishlist'],
                 createdAt: '2024-01-02T12:00:00Z',
                 updatedAt: '2024-01-02T12:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'product-002',
@@ -314,6 +329,7 @@ export const DEMO_CARDS: Card[] = [
                 tags: ['keyboard', 'mechanical', 'desk-setup'],
                 createdAt: '2024-01-01T09:30:00Z',
                 updatedAt: '2024-01-01T09:30:00Z',
+                deletedAt: null,
         },
 
         // =========================================================================
@@ -338,6 +354,7 @@ Start with the bookmark manager - most immediate need.`,
                 tags: ['ideas', 'projects', 'planning'],
                 createdAt: '2024-01-09T08:00:00Z',
                 updatedAt: '2024-01-09T08:00:00Z',
+                deletedAt: null,
         },
         {
                 id: 'note-002',
@@ -362,6 +379,7 @@ Start with the bookmark manager - most immediate need.`,
                 tags: ['recipe', 'cooking', 'italian'],
                 createdAt: '2024-01-05T19:30:00Z',
                 updatedAt: '2024-01-05T19:30:00Z',
+                deletedAt: null,
         },
 ];
 

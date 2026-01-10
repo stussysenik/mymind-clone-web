@@ -1,9 +1,9 @@
 /**
  * MyMind Clone - Card Component
- * 
+ *
  * Routes to platform-specific card renderers based on URL.
  * Falls back to generic card for unknown platforms.
- * 
+ *
  * @fileoverview Smart card router component
  */
 
@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2, Twitter, Volume2, MessageSquare } from 'lucide-react';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
 
@@ -42,11 +42,16 @@ interface CardProps {
 // =============================================================================
 
 const TYPE_ICONS = {
-        article: FileText,
-        image: Globe,
-        note: StickyNote,
-        product: ShoppingBag,
-        book: BookOpen,
+	article: FileText,
+	image: Globe,
+	note: StickyNote,
+	product: ShoppingBag,
+	book: BookOpen,
+	video: Play,
+	audio: Volume2,
+	twitter: Twitter,
+	reddit: MessageSquare,
+	website: Globe,
 } as const;
 
 // =============================================================================
