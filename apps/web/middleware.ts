@@ -51,7 +51,8 @@ export async function middleware(request: NextRequest) {
         }
 
         // Redirect to login if not authenticated
-        if (!user && request.nextUrl.pathname !== '/') {
+        // SECURITY: All routes require authentication except /login and /signup
+        if (!user) {
                 const url = request.nextUrl.clone();
                 url.pathname = '/login';
                 return NextResponse.redirect(url);

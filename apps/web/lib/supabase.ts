@@ -61,15 +61,20 @@ export const supabaseBrowser: SupabaseClient | null =
  * 
  * ⚠️ Never expose this client to the browser!
  */
-export const supabaseAdmin: SupabaseClient | null =
-        supabaseUrl && supabaseServiceKey
-                ? createClient(supabaseUrl, supabaseServiceKey, {
+export const supabaseAdmin: SupabaseClient | null = (() => {
+        if (!supabaseUrl || !supabaseServiceKey) return null;
+        try {
+                return createClient(supabaseUrl, supabaseServiceKey, {
                         auth: {
                                 autoRefreshToken: false,
                                 persistSession: false,
                         },
-                })
-                : null;
+                });
+        } catch (error) {
+                console.warn('[Supabase] Failed to initialize admin client (Check SUPABASE_SERVICE_ROLE_KEY):', error);
+                return null;
+        }
+})();
 
 // =============================================================================
 // UTILITY FUNCTIONS
@@ -118,6 +123,7 @@ export async function fetchCards(
                 .from('cards')
                 .select('*')
                 .is('deleted_at', null)
+                .is('archived_at', null)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
@@ -177,6 +183,12 @@ export async function searchCards(
         // Note: For tags (array), we need 'cs' (contains) or text search. ilike works on text representation of json/array sometimes but explicit text search is better.
         // For simplicity, we stick to title/content ilike for now, enabling partial matches.
 
+        // Check for hashtag search
+        if (terms.length === 1 && terms[0].startsWith('#')) {
+                const tag = terms[0].slice(1);
+                return searchCardsByTag(tag, userId, limit);
+        }
+
         const filters = terms.map(term => {
                 const pattern = `%${term}%`;
                 return `title.ilike.${pattern},content.ilike.${pattern}`;
@@ -187,6 +199,7 @@ export async function searchCards(
                 .select('*')
                 .or(filters)
                 .is('deleted_at', null)
+                .is('archived_at', null)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
@@ -215,6 +228,63 @@ export async function searchCards(
         if (error) {
                 console.error('[Supabase] Error searching cards:', error.message);
                 return null;
+        }
+
+        return data as CardRow[];
+}
+
+/**
+ * Searches cards by tag using Postgres array contains.
+ * Optimized for direct tag lookup without full-text overhead.
+ * 
+ * @param tag - Tag to search (without # prefix)
+ * @param userId - Filter by user ID (optional)
+ */
+export async function searchCardsByTag(
+        tag: string,
+        userId?: string,
+        limit: number = 50
+): Promise<CardRow[] | null> {
+        const client = getSupabaseClient(true);
+        if (!client) return null;
+
+        // Use Postgres array contains operator for efficient tag search
+        // Format: tags @> '["tagname"]'
+        let dbQuery = client
+                .from('cards')
+                .select('*')
+                .contains('tags', [tag])
+                .contains('tags', [tag])
+                .is('deleted_at', null)
+                .is('archived_at', null)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+        if (userId) {
+                dbQuery = dbQuery.eq('user_id', userId);
+        }
+
+        const { data, error } = await dbQuery;
+
+        // Fallback for case-insensitive or missing migration
+        if (error) {
+                console.error('[Supabase] Error searching by tag:', error.message);
+                // Try text pattern match on tags column as fallback
+                const fallbackQuery = client
+                        .from('cards')
+                        .select('*')
+                        .ilike('tags::text', `%${tag}%`)
+                        .ilike('tags::text', `%${tag}%`)
+                        .is('deleted_at', null)
+                        .is('archived_at', null)
+                        .order('created_at', { ascending: false })
+                        .limit(limit);
+
+                if (userId) fallbackQuery.eq('user_id', userId);
+
+                const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+                if (fallbackError) return null;
+                return fallbackData as CardRow[];
         }
 
         return data as CardRow[];
@@ -365,6 +435,80 @@ export async function fetchDeletedCards(userId?: string): Promise<CardRow[] | nu
 
         if (error) {
                 console.error('[Supabase] Error fetching deleted cards:', error.message);
+                return null;
+        }
+
+        return data as CardRow[];
+}
+
+/**
+ * Archives a card by ID.
+ */
+export async function archiveCard(id: string): Promise<boolean> {
+        const client = getSupabaseClient(true);
+        if (!client) return false;
+
+        const { error } = await client
+                .from('cards')
+                .update({ archived_at: new Date().toISOString() })
+                .eq('id', id);
+
+        if (error) {
+                console.error('[Supabase] Error archiving card:', error.message);
+                return false;
+        }
+
+        return true;
+}
+
+/**
+ * Unarchives a card by ID.
+ */
+export async function unarchiveCard(id: string): Promise<boolean> {
+        const client = getSupabaseClient(true);
+        if (!client) return false;
+
+        const { error } = await client
+                .from('cards')
+                .update({ archived_at: null })
+                .eq('id', id);
+
+        if (error) {
+                console.error('[Supabase] Error unarchiving card:', error.message);
+                return false;
+        }
+
+        return true;
+}
+
+/**
+ * Fetches archived cards.
+ */
+export async function fetchArchivedCards(userId?: string): Promise<CardRow[] | null> {
+        const client = getSupabaseClient(true);
+        if (!client) return null;
+
+        let query = client
+                .from('cards')
+                .select('*')
+                .is('deleted_at', null)
+                .not('archived_at', 'is', null)
+                .order('archived_at', { ascending: false });
+
+        if (userId) {
+                query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query;
+
+        // Fallback for missing migration
+        if (error && error.message?.includes('archived_at')) {
+                console.warn('[Supabase] Migration missing (archived_at). Returning empty archive.');
+                return [];
+        }
+
+        if (error) {
+                console.error('[Supabase] Error fetching archived cards:', error.message);
                 return null;
         }
 

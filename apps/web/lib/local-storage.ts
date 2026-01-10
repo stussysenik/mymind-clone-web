@@ -29,13 +29,65 @@ export function getLocalCards(): Card[] {
         try {
                 const stored = localStorage.getItem(STORAGE_KEY);
                 if (!stored) return [];
-                return JSON.parse(stored) as Card[];
+                const cards = JSON.parse(stored) as Card[];
+                // Filter out deleted and archived by default for main view
+                // Actually existing getLocalCards returns EVERYTHING?
+                // CardGridClient filters them?
+                // No, CardGridClient uses localCards as source.
+                // Checking CardGridClient usage: setLocalCards(getLocalCards()).
+                // Then uniqueCards filters out deletedIds.
+                // If I want getLocalCards to return all for the client to filter, I should leave it.
+                // But CardGridClient doesn't filter by archivedAt unless I tell it to.
+                return cards;
         } catch (error) {
                 console.error('[LocalStorage] Error reading cards:', error);
                 return [];
         }
 }
 
+/**
+ * Archives a local card.
+ */
+export function archiveLocalCard(id: string): boolean {
+        if (typeof window === 'undefined') return false;
+
+        try {
+                const existing = getLocalCards();
+                const updated = existing.map(card => {
+                        if (card.id === id) {
+                                return { ...card, archivedAt: new Date().toISOString() };
+                        }
+                        return card;
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                return true;
+        } catch (error) {
+                console.error('[LocalStorage] Error archiving card:', error);
+                return false;
+        }
+}
+
+/**
+ * Unarchives a local card.
+ */
+export function unarchiveLocalCard(id: string): boolean {
+        if (typeof window === 'undefined') return false;
+
+        try {
+                const existing = getLocalCards();
+                const updated = existing.map(card => {
+                        if (card.id === id) {
+                                return { ...card, archivedAt: null };
+                        }
+                        return card;
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                return true;
+        } catch (error) {
+                console.error('[LocalStorage] Error unarchiving card:', error);
+                return false;
+        }
+}
 /**
  * Saves a new card to localStorage.
  * Prepends to existing cards (newest first).

@@ -46,6 +46,11 @@ export const metadata: Metadata = {
     'second brain',
   ],
   authors: [{ name: 'Portfolio Project' }],
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
+  },
   openGraph: {
     title: 'mymind - Your visual mind, organized',
     description: 'Save anything with one click. Find it naturally.',

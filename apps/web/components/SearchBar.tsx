@@ -46,28 +46,48 @@ export function SearchBar({
 
         const debouncedQuery = useDebounce(query, 300);
 
-        /**
-         * Updates URL with search query.
-         */
-        const updateUrl = useCallback((searchQuery: string) => {
-                const params = new URLSearchParams(searchParams.toString());
+        // Sync local state when URL changes externally (e.g. tag click)
+        useEffect(() => {
+                const urlQuery = searchParams.get('q') || '';
 
-                if (searchQuery) {
-                        params.set('q', searchQuery);
-                } else {
-                        params.delete('q');
+                // Only update if different AND we aren't focused (to avoid overwriting while typing)
+                // This prevents the race condition where debounced URL update reverts local state
+                if (!isFocused && urlQuery !== query) {
+                        setQuery(urlQuery);
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [searchParams, isFocused]); // query excluded to avoid cycle, verify logic
+
+        // Update URL when debounced query changes
+        useEffect(() => {
+                const currentQ = searchParams.get('q') || '';
+
+                // Prevent infinite loop: Only push if query is actually different
+                if (debouncedQuery !== currentQ) {
+                        const params = new URLSearchParams(searchParams.toString());
+                        if (debouncedQuery) {
+                                params.set('q', debouncedQuery);
+                        } else {
+                                params.delete('q');
+                        }
+                        console.log('[SearchBar] Updating URL:', debouncedQuery);
+                        router.push(`?${params.toString()}`, { scroll: false });
                 }
 
-                router.push(`?${params.toString()}`, { scroll: false });
-        }, [router, searchParams]);
 
-        useEffect(() => {
-                updateUrl(debouncedQuery);
                 onSearch?.(debouncedQuery);
-        }, [debouncedQuery, onSearch, updateUrl]);
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [debouncedQuery, router, onSearch]); // Exclude searchParams to avoid loop when URL changes externally
+
+        // Clean up: Removed separate updateUrl callback to simplify recursion risk
+
 
         const handleClear = () => {
                 setQuery('');
+                // Ensure we keep focus or handle it? 
+                // If user clicks clear, they might want to type again immediately.
+                // The button onClick will take focus momentarily but we can refocus input?
+                // Actually, usually clearer to just clear.
         };
 
         const handleSaveSpace = async () => {
@@ -97,6 +117,18 @@ export function SearchBar({
                 if (e.key === 'Escape') {
                         handleClear();
                         (e.target as HTMLInputElement).blur();
+                } else if (e.key === 'Enter' && !e.shiftKey) {
+                        // Immediate URL update on Enter (bypass debounce for explicit submit intent)
+                        e.preventDefault();
+                        const params = new URLSearchParams(searchParams.toString());
+                        if (query.trim()) {
+                                params.set('q', query.trim());
+                        } else {
+                                params.delete('q');
+                        }
+                        console.log('[SearchBar] Enter pressed, immediate URL update:', query.trim());
+                        router.push(`?${params.toString()}`, { scroll: false });
+                        onSearch?.(query.trim());
                 } else if (e.key === 'Enter' && e.shiftKey) {
                         // Shift+Enter to save as space
                         e.preventDefault();
@@ -109,13 +141,13 @@ export function SearchBar({
                         {/* Search Container */}
                         <div
                                 className={`
-                                        flex items-center gap-3 py-3 px-4 rounded-xl
-                                        transition-all duration-200 border
-                                        ${isFocused
+					flex items-center gap-3 py-3 px-4 rounded-xl
+					transition-all duration-200 border
+					${isFocused
                                                 ? 'bg-white shadow-md border-transparent ring-1 ring-black/5'
                                                 : 'bg-gray-50 border-transparent hover:bg-white hover:shadow-sm'
                                         }
-                                `}
+				`}
                         >
                                 {/* Search Icon */}
                                 <Search
@@ -159,6 +191,7 @@ export function SearchBar({
                                                         onClick={handleClear}
                                                         className="p-1 rounded-full hover:bg-black/5 text-[var(--foreground-muted)] transition-colors"
                                                         aria-label="Clear search"
+                                                        type="button" // Important preventing form submit
                                                 >
                                                         <X className="h-4 w-4" />
                                                 </button>

@@ -15,3 +15,5 @@ export { SearchBar } from './SearchBar';
 export { TagScroller } from './TagScroller';
 export { CardGridClient } from './CardGridClient';
 export { UserMenu } from './UserMenu';
+export { SpaceCard } from './SpaceCard';
+export { SpacesGridClient } from './SpacesGridClient';

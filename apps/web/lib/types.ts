@@ -57,11 +57,14 @@ export interface CardMetadata {
         /** Director for films */
         director?: string;
 
-        // Internal processing flags
         /** Whether the card is currently being processed by AI */
         processing?: boolean;
         /** Error message if enrichment failed */
         enrichmentError?: string;
+        /** Timestamp when enrichment failed */
+        enrichmentFailedAt?: string;
+        /** Timestamp when enrichment completed successfully */
+        enrichedAt?: string;
         /** User notes/thought (from detail view) */
         note?: string;
 }
@@ -95,6 +98,8 @@ export interface Card {
         updatedAt: string;
         /** Timestamp of deletion (if soft deleted) */
         deletedAt: string | null;
+        /** Timestamp of archiving (hidden from main feed) */
+        archivedAt: string | null;
 }
 
 // =============================================================================
@@ -136,7 +141,10 @@ export interface ClassificationResult {
         /** AI-suggested tags (max 5) */
         tags: string[];
         /** Brief summary of the content */
+        /** Brief summary of the content */
         summary: string;
+        /** Detected platform (e.g. twitter, mastodon, github) */
+        platform?: string;
 }
 
 /**
@@ -233,6 +241,7 @@ export interface CardRow {
         created_at: string;
         updated_at: string;
         deleted_at: string | null;
+        archived_at?: string | null; // Optional to support older schemas
 }
 
 /**
@@ -253,6 +262,7 @@ export function rowToCard(row: CardRow): Card {
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
                 deletedAt: row.deleted_at,
+                archivedAt: row.archived_at || null,
         };
 }
 
@@ -272,5 +282,6 @@ export function cardToRow(card: Partial<Card>): Partial<CardRow> {
         if (card.metadata !== undefined) row.metadata = card.metadata;
         if (card.tags !== undefined) row.tags = card.tags;
         if (card.deletedAt !== undefined) row.deleted_at = card.deletedAt;
+        if (card.archivedAt !== undefined) row.archived_at = card.archivedAt;
         return row;
 }

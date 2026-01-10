@@ -17,7 +17,7 @@ export const revalidate = 0; // Disable caching for realtime updates
 // =============================================================================
 
 interface HomePageProps {
-  searchParams: Promise<{ q?: string; type?: string }>;
+  searchParams: Promise<{ q?: string; type?: string; view?: string }>;
 }
 
 // =============================================================================
@@ -43,27 +43,22 @@ function CardGridSkeleton() {
   );
 }
 
-// =============================================================================
-// PAGE COMPONENT
-// =============================================================================
-
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const searchQuery = params.q ?? '';
   const typeFilter = params.type ?? '';
+  const mode = (params.view === 'archive' || params.view === 'trash') ? params.view : 'default';
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)] flex flex-col">
       {/* Header */}
       <Header />
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-8">
+      {/* Main Content - flex-1 to push footer down */}
+      <main className="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-8 flex-1 w-full">
         {/* Search Section */}
         <section className="py-6">
-          <Suspense fallback={<div className="h-12 animate-shimmer rounded" />}>
-            <SearchBar />
-          </Suspense>
+          <SearchBar />
         </section>
 
         {/* Tag Scroller */}
@@ -73,16 +68,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </Suspense>
         </section>
 
+        {/* View Title */}
+        {mode !== 'default' && (
+          <section className="pb-4">
+            <h2 className="text-2xl font-serif capitalize text-gray-800">{mode}</h2>
+          </section>
+        )}
+
         {/* Card Grid */}
         <section className="pb-12">
           <Suspense fallback={<CardGridSkeleton />}>
-            <CardGrid searchQuery={searchQuery} typeFilter={typeFilter} />
+            <CardGrid searchQuery={searchQuery} typeFilter={typeFilter} mode={mode} />
           </Suspense>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-[var(--border)] py-6 text-center text-sm text-[var(--foreground-muted)]">
+      {/* Footer - mt-auto ensures it sticks to bottom when content is short */}
+      <footer className="border-t border-[var(--border)] py-6 text-center text-sm text-[var(--foreground-muted)] mt-auto">
         <p>
           Built as a portfolio project •{' '}
           <a
