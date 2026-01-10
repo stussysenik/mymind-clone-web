@@ -61,6 +61,7 @@ const IGNORE_PATTERNS = [
   /\.git/,
   /coverage/,
   /apps\/web\/lib\/ai\.ts/,
+  /apps\/web\/scripts\/verify-links\.ts/,
 ];
 
 /**

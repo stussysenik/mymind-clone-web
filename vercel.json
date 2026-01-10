@@ -5,12 +5,14 @@
         "framework": "nextjs",
         "cleanUrls": true,
         "trailingSlash": false,
-        "regions": ["iad1"],
+        "regions": [
+                "iad1"
+        ],
         "functions": {
-                "memory": 1024
-        },
-        "buildCommandSettings": {
-                "maxLambdaSize": "50mb"
+                "app/**/*.js": {
+                        "memory": 1024,
+                        "maxDuration": 30
+                }
         },
         "headers": [
                 {
