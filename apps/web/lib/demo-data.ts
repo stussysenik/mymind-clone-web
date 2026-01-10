@@ -37,6 +37,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-09T14:30:00Z',
                 updatedAt: '2024-01-09T14:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'twitter-002',
@@ -53,6 +54,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-08T11:20:00Z',
                 updatedAt: '2024-01-08T11:20:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -73,6 +75,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-07T16:45:00Z',
                 updatedAt: '2024-01-07T16:45:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'instagram-002',
@@ -89,6 +92,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-06T08:15:00Z',
                 updatedAt: '2024-01-06T08:15:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -111,6 +115,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-05T22:00:00Z',
                 updatedAt: '2024-01-05T22:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'youtube-002',
@@ -129,6 +134,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-04T14:30:00Z',
                 updatedAt: '2024-01-04T14:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -152,6 +158,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-03T10:00:00Z',
                 updatedAt: '2024-01-03T10:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'reddit-002',
@@ -171,6 +178,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-02T15:45:00Z',
                 updatedAt: '2024-01-02T15:45:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -194,6 +202,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-01T20:00:00Z',
                 updatedAt: '2024-01-01T20:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'letterboxd-002',
@@ -212,6 +221,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2023-12-28T19:30:00Z',
                 updatedAt: '2023-12-28T19:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -234,6 +244,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2023-12-25T21:00:00Z',
                 updatedAt: '2023-12-25T21:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -256,6 +267,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-09T10:30:00Z',
                 updatedAt: '2024-01-09T10:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -276,6 +288,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-06T08:00:00Z',
                 updatedAt: '2024-01-06T08:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'image-002',
@@ -292,6 +305,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-04T11:45:00Z',
                 updatedAt: '2024-01-04T11:45:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -313,6 +327,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-02T12:00:00Z',
                 updatedAt: '2024-01-02T12:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'product-002',
@@ -330,6 +345,7 @@ export const DEMO_CARDS: Card[] = [
                 createdAt: '2024-01-01T09:30:00Z',
                 updatedAt: '2024-01-01T09:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 
         // =========================================================================
@@ -355,6 +371,7 @@ Start with the bookmark manager - most immediate need.`,
                 createdAt: '2024-01-09T08:00:00Z',
                 updatedAt: '2024-01-09T08:00:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
         {
                 id: 'note-002',
@@ -380,6 +397,7 @@ Start with the bookmark manager - most immediate need.`,
                 createdAt: '2024-01-05T19:30:00Z',
                 updatedAt: '2024-01-05T19:30:00Z',
                 deletedAt: null,
+                archivedAt: null,
         },
 ];
 

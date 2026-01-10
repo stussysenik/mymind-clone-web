@@ -147,6 +147,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                                 createdAt: new Date().toISOString(),
                                 updatedAt: new Date().toISOString(),
                                 deletedAt: null,
+                                archivedAt: null,
                         };
 
                         return NextResponse.json({
@@ -229,6 +230,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         createdAt: insertedRow.created_at,
                         updatedAt: insertedRow.updated_at,
                         deletedAt: insertedRow.deleted_at,
+                        archivedAt: insertedRow.archived_at,
                 };
 
                 return NextResponse.json({
