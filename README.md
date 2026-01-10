@@ -27,14 +27,19 @@ As of **January 2026**, the project is a **feature-rich MVP** with core function
 
 #### Visual Memory System
 - **Masonry Grid Layout**: Pinterest-style responsive grid that adapts to screen size
-- **10+ Card Types**: `article`, `image`, `note`, `product`, `book`, `video`, `audio`, `twitter`, `reddit`, `website`
-- **Platform-Specific Renderers**: Custom components for Twitter/X, Instagram, YouTube, Reddit, IMDB, Letterboxd
-- **Search & Filtering**: Full-text search with type and tag filters
+- **12+ Card Types**: `article`, `image`, `note`, `product`, `book`, `video`, `audio`, `twitter`, `reddit`, `website`, `movie`, `space`
+- **Smart Organization**:
+  - **Spaces**: Create and manage collection spaces
+  - **Tags**: Auto-generated and manual tagging with filter pills
+  - **Archive & Trash**: Full lifecycle management (Active -> Archive -> Trash -> Delete)
+- **Platform-Specific Renderers**: Custom components for Twitter/X, Instagram, YouTube, Reddit, IMDB, Letterboxd, Goodreads, Amazon
+- **Search & Filtering**: Full-text search with type, tag, and space filtering
 - **Real-time Updates**: Optimistic UI with instant feedback (<200ms save time)
 
 #### AI Intelligence
 - **Zhipu GLM-4.7 Integration**: Content classification and automatic tagging
 - **Smart Enrichment Pipeline**: Background processing that extracts metadata, summaries, and tags
+- **Interactive AI**: Manually edit AI-generated titles and summaries for perfect accuracy
 - **Multi-Format Support**: Processes URLs, text notes, and images
 - **Cost-Effective AI**: Uses GLM-4 models for high accuracy at low cost
 
@@ -46,18 +51,21 @@ As of **January 2026**, the project is a **feature-rich MVP** with core function
   - `GET /api/cards` - Retrieve cards with pagination
   - `POST /api/enrich` - Manual AI enrichment trigger
   - `GET /api/diagnose` - Health check and configuration validation
+  - `DELETE /api/cards/[id]` - Soft delete and permanent removal
 
 #### Testing & Quality
-- **Playwright E2E Suite**: 9 test specs covering critical user flows
+- **Playwright E2E Suite**: Comprehensive testing covering 9 critical specs (Auth, Search, Archive, Visuals)
+- **QA Ledger**: `QA_LEDGER.md` tracking test health and versioning
 - **TypeScript Strict Mode**: Full type safety throughout the codebase
+- **Bun Runtime**: Optimized for speed and developer experience
 - **Tailwind CSS 4**: Modern, zero-runtime styling
 
 #### Additional Features
-- **Multiple Pages**: Auth, spaces, serendipity, trash routes (UI scaffolding complete)
+- **Multiple Pages**: Auth, spaces, serendipity, archive, trash routes
 - **Tag Management**: TagScroller component for horizontal filtering
 - **User Menu**: Account management interface
 - **Toast Notifications**: Feedback system for user actions
-- **Detail Modal**: Expanded view for individual cards
+- **Detail Modal**: Expanded view with editable fields and rich metadata
 
 ### 🚧 In Progress / Partial
 
@@ -198,9 +206,9 @@ mymind-clone/
    cd mymind-clone/apps/web
    ```
 
-2. **Install dependencies**
+3. **Install dependencies**
    ```bash
-   npm install
+   bun install
    ```
 
 3. **Configure environment variables**
@@ -225,7 +233,7 @@ mymind-clone/
 
 5. **Run the development server**
    ```bash
-   npm run dev
+   bun dev
    ```
    
    Open [http://localhost:3000](http://localhost:3000) in your browser.

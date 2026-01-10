@@ -7,17 +7,16 @@
                 "apps/*"
         ],
         "scripts": {
-                "dev": "cd apps/web && npm run dev",
-                "build": "cd apps/web && npm run build",
-                "start": "cd apps/web && npm run start",
-                "lint": "cd apps/web && npm run lint",
-                "test": "cd apps/web && npx playwright test",
-                "check-secrets": "node scripts/check-secrets.js",
-                "prepare": "husky install"
+                "dev": "cd apps/web && bun run dev",
+                "build": "cd apps/web && bun run build",
+                "start": "cd apps/web && bun run start",
+                "lint": "cd apps/web && bun run lint",
+                "test": "cd apps/web && bun run test",
+                "check-secrets": "bun scripts/check-secrets.js",
+                "prepare": "husky"
         },
         "engines": {
-                "node": "20.x",
-                "npm": ">=9.0.0"
+                "node": "20.x"
         },
         "repository": {
                 "type": "git",
