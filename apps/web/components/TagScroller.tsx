@@ -39,13 +39,13 @@ interface TagScrollerProps {
 
 const DEFAULT_TAGS: Tag[] = [
         { id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles },
-        { id: 'webpages', label: 'Web Pages', color: 'var(--tag-blue)', icon: Globe },
-        { id: 'videos', label: 'Videos', color: 'var(--tag-red)', icon: Video },
-        { id: 'images', label: 'Images', color: 'var(--tag-purple)', icon: Image },
-        { id: 'articles', label: 'Articles', color: 'var(--tag-cyan)', icon: FileText },
-        { id: 'posts', label: 'Posts', color: 'var(--tag-blue)', icon: MessageSquare },
-        { id: 'products', label: 'Products', color: 'var(--tag-green)', icon: ShoppingBag },
-        { id: 'books', label: 'Books', color: 'var(--tag-amber)', icon: BookOpen },
+        { id: 'webpages', label: 'Web Pages', color: '#00A99D' }, // Riso Teal
+        { id: 'videos', label: 'Videos', color: '#FF48B0' },      // Riso Pink
+        { id: 'images', label: 'Images', color: '#9D7AD2' },      // Riso Purple
+        { id: 'articles', label: 'Articles', color: '#00A99D' },  // Riso Cyan
+        { id: 'posts', label: 'Posts', color: '#2B579A' },        // Riso Blue
+        { id: 'products', label: 'Products', color: '#00A99D' },  // Riso Teal
+        { id: 'books', label: 'Books', color: '#FFE800' },        // Riso Yellow
 ];
 
 // =============================================================================
@@ -55,11 +55,45 @@ const DEFAULT_TAGS: Tag[] = [
 /**
  * Horizontal scrolling tag filter bar.
  */
+import { useRouter, useSearchParams } from 'next/navigation';
+
+// ...
+
 export function TagScroller({
         tags = DEFAULT_TAGS,
-        selectedTag = 'all',
+        selectedTag: propSelectedTag,
         onTagSelect
 }: TagScrollerProps) {
+        const router = useRouter();
+        const searchParams = useSearchParams();
+        const currentType = searchParams.get('type') || 'all';
+
+        // Use prop if provided, otherwise URL state
+        const selectedTag = propSelectedTag || currentType;
+
+        const handleTagSelect = (tagId: string | null) => {
+                if (onTagSelect) {
+                        onTagSelect(tagId);
+                        return;
+                }
+
+                const params = new URLSearchParams(searchParams.toString());
+                if (tagId && tagId !== 'all') {
+                        // Map UI tags to DB types correctly
+                        let dbType = tagId;
+                        if (tagId === 'webpages') dbType = 'article';
+                        if (tagId === 'images') dbType = 'image';
+                        if (tagId === 'products') dbType = 'product';
+                        if (tagId === 'books') dbType = 'book';
+                        if (tagId === 'videos') dbType = 'video'; // Requires 'video' type specific logic or map to youtube platform search? 
+                        if (tagId === 'posts') dbType = 'twitter';
+
+                        params.set('type', dbType);
+                } else {
+                        params.delete('type');
+                }
+                router.push(`/?${params.toString()}`);
+        };
         const scrollRef = useRef<HTMLDivElement>(null);
         const [showLeftArrow, setShowLeftArrow] = useState(false);
         const [showRightArrow, setShowRightArrow] = useState(true);
@@ -112,32 +146,31 @@ export function TagScroller({
                                         return (
                                                 <button
                                                         key={tag.id}
-                                                        onClick={() => onTagSelect?.(isSelected ? null : tag.id)}
+                                                        onClick={() => handleTagSelect(isSelected ? null : tag.id)}
                                                         className={`
-                inline-flex items-center gap-2 px-3 py-1.5
+                group inline-flex items-center gap-2 px-4 py-2
                 rounded-full text-sm font-medium whitespace-nowrap
-                border transition-all duration-200
+                transition-all duration-200
                 ${isSelected
-                                                                        ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)]'
-                                                                        : 'bg-white border-[var(--border)] text-[var(--foreground)] hover:border-[var(--border-hover)] hover:shadow-sm'
+                                                                        ? 'bg-white text-black shadow-md ring-1 ring-black/5'
+                                                                        : 'bg-transparent text-gray-500 hover:bg-white hover:text-black hover:shadow-sm'
                                                                 }
               `}
                                                 >
                                                         {/* Colored Dot or Icon */}
                                                         {Icon ? (
-                                                                <Icon className={`h-3.5 w-3.5 ${isSelected ? 'text-white' : ''}`} />
+                                                                <Icon className={`h-3.5 w-3.5 ${isSelected ? 'text-[var(--accent-primary)]' : 'text-gray-400 group-hover:text-[var(--accent-primary)]'}`} />
                                                         ) : (
                                                                 <span
-                                                                        className="w-2 h-2 rounded-full"
-                                                                        style={{ backgroundColor: tag.color }}
+                                                                        className={`w-2.5 h-2.5 rounded-full border-[1.5px] transition-colors duration-300 ${isSelected ? 'bg-[var(--tag-color)] border-[var(--tag-color)]' : 'bg-transparent border-[var(--tag-color)] group-hover:bg-[var(--tag-color)]'}`}
+                                                                        style={{
+                                                                                '--tag-color': tag.color,
+                                                                                backgroundColor: isSelected ? tag.color : 'transparent',
+                                                                                borderColor: tag.color
+                                                                        } as React.CSSProperties}
                                                                 />
                                                         )}
                                                         {tag.label}
-                                                        {tag.count !== undefined && (
-                                                                <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-[var(--foreground-muted)]'}`}>
-                                                                        {tag.count}
-                                                                </span>
-                                                        )}
                                                 </button>
                                         );
                                 })}

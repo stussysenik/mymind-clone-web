@@ -15,7 +15,7 @@
  * Supported card types in the system.
  * Each type determines how the card is displayed in the grid.
  */
-export type CardType = 'article' | 'image' | 'note' | 'product' | 'book';
+export type CardType = 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'twitter' | 'reddit' | 'website';
 
 /**
  * AI-extracted metadata stored in the card's metadata JSONB field.
@@ -56,6 +56,14 @@ export interface CardMetadata {
         year?: string;
         /** Director for films */
         director?: string;
+
+        // Internal processing flags
+        /** Whether the card is currently being processed by AI */
+        processing?: boolean;
+        /** Error message if enrichment failed */
+        enrichmentError?: string;
+        /** User notes/thought (from detail view) */
+        note?: string;
 }
 
 /**
@@ -85,6 +93,8 @@ export interface Card {
         createdAt: string;
         /** Timestamp of last update */
         updatedAt: string;
+        /** Timestamp of deletion (if soft deleted) */
+        deletedAt: string | null;
 }
 
 // =============================================================================
@@ -130,7 +140,7 @@ export interface ClassificationResult {
 }
 
 /**
- * Result from image analysis (Google Vision or fallback).
+ * Result from image analysis (Google Vision or fallback)
  */
 export interface ImageAnalysisResult {
         /** Dominant colors in the image (hex values) */
@@ -172,6 +182,8 @@ export interface SaveCardResponse {
         success: boolean;
         /** Created card (if successful) */
         card?: Card;
+        /** Source of the saved card */
+        source?: 'db' | 'mock';
         /** Error message (if failed) */
         error?: string;
 }
@@ -220,6 +232,7 @@ export interface CardRow {
         tags: string[];
         created_at: string;
         updated_at: string;
+        deleted_at: string | null;
 }
 
 /**
@@ -239,6 +252,7 @@ export function rowToCard(row: CardRow): Card {
                 tags: row.tags,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
+                deletedAt: row.deleted_at,
         };
 }
 
@@ -257,5 +271,6 @@ export function cardToRow(card: Partial<Card>): Partial<CardRow> {
         if (card.imageUrl !== undefined) row.image_url = card.imageUrl;
         if (card.metadata !== undefined) row.metadata = card.metadata;
         if (card.tags !== undefined) row.tags = card.tags;
+        if (card.deletedAt !== undefined) row.deleted_at = card.deletedAt;
         return row;
 }

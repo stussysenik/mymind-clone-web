@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Header, AddButton } from '@/components';
 import { getUser } from '@/lib/supabase-server';
 import { getUniqueTags } from '@/lib/supabase';
+import { CreateSpace } from '@/components/CreateSpace';
 import { Hash, PackageOpen } from 'lucide-react';
 
 // =============================================================================
@@ -42,6 +43,9 @@ export default async function SpacesPage() {
                                         <p className="text-[var(--foreground-muted)]">
                                                 Smart collections based on your tags details
                                         </p>
+                                        <div className="mt-4">
+                                                <CreateSpace />
+                                        </div>
                                 </div>
 
                                 <Suspense fallback={<SpacesSkeleton />}>

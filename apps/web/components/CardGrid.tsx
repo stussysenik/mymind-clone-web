@@ -38,7 +38,7 @@ export async function CardGrid({ searchQuery, typeFilter }: CardGridProps) {
                 const rows = searchQuery
                         ? await searchCards(searchQuery)
                         : await fetchCards();
-                cards = rows?.map(rowToCard) ?? getDemoCards();
+                cards = rows?.map(rowToCard) ?? [];
         } else {
                 cards = getDemoCards(); // Always get full demo data, client will filter
         }

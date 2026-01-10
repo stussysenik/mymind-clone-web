@@ -11,8 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { insertCard, updateCard, isSupabaseConfigured } from '@/lib/supabase';
-import { classifyContent } from '@/lib/ai';
+import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
 import type { SaveCardRequest, SaveCardResponse, CardRow } from '@/lib/types';
 
@@ -80,6 +79,46 @@ async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?
         }
 }
 
+/**
+ * Upload base64 image to Supabase Storage
+ */
+async function uploadImageToStorage(base64Data: string, userId: string): Promise<string | null> {
+        try {
+                // Remove data prefix
+                const matches = base64Data.match(/^data:(image\/([a-zA-Z]*));base64,(.*)$/);
+                if (!matches || matches.length !== 4) return null;
+
+                const extension = matches[2] === 'jpeg' ? 'jpg' : matches[2];
+                const cleanBase64 = matches[3];
+                const buffer = Buffer.from(cleanBase64, 'base64');
+                const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+
+                const client = getSupabaseClient(true);
+                if (!client) return null;
+
+                const { error } = await client.storage
+                        .from('images')
+                        .upload(fileName, buffer, {
+                                contentType: matches[1],
+                                upsert: false
+                        });
+
+                if (error) {
+                        console.error('[Storage] Upload failed:', error);
+                        return null;
+                }
+
+                const { data: { publicUrl } } = client.storage
+                        .from('images')
+                        .getPublicUrl(fileName);
+
+                return publicUrl;
+        } catch (error) {
+                console.error('[Storage] Error:', error);
+                return null;
+        }
+}
+
 // =============================================================================
 // ROUTE HANDLER
 // =============================================================================
@@ -94,7 +133,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
         try {
                 // Parse request body
                 const body = (await request.json()) as SaveCardRequest;
-                const { url, type, title, content, imageUrl, tags } = body;
+                const { url, type: rawType, title, content, imageUrl, tags } = body;
+                // If type is 'auto', treat it as undefined so we autodetect
+                const type = (rawType as string) === 'auto' ? undefined : rawType;
 
                 // Validate: at least one of url, content, or imageUrl is required
                 if (!url && !content && !imageUrl) {
@@ -118,11 +159,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                                 tags: tags ?? [],
                                 createdAt: new Date().toISOString(),
                                 updatedAt: new Date().toISOString(),
+                                deletedAt: null,
                         };
 
                         return NextResponse.json({
                                 success: true,
                                 card: mockCard,
+                                source: 'mock',
                         });
                 }
 
@@ -139,6 +182,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         preview = await fetchUrlPreview(url);
                 }
 
+                // Upload image if base64
+                let finalImageUrl = imageUrl;
+                if (imageUrl && imageUrl.startsWith('data:image')) {
+                        const uploaded = await uploadImageToStorage(imageUrl, userId);
+                        if (uploaded) finalImageUrl = uploaded;
+                }
+
                 // STEP 2: Insert card immediately with basic data
                 const cardData: Partial<CardRow> = {
                         user_id: userId,
@@ -146,7 +196,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         title: title ?? preview.title ?? quickMeta.title,
                         content: content ?? null,
                         url: url ?? null,
-                        image_url: imageUrl ?? preview.imageUrl ?? null,
+                        image_url: finalImageUrl ?? preview.imageUrl ?? null,
                         metadata: {
                                 processing: !tags, // Flag as processing if we need AI
                         },
@@ -175,19 +225,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         tags: insertedRow.tags,
                         createdAt: insertedRow.created_at,
                         updatedAt: insertedRow.updated_at,
+                        deletedAt: insertedRow.deleted_at,
                 };
-
-                // STEP 4: Enrich with AI in background (don't await)
-                if (!tags) {
-                        // Fire and forget - don't block response
-                        enrichCardWithAI(insertedRow.id, url, content, imageUrl).catch(err => {
-                                console.error('[Save] Background AI enrichment failed:', err);
-                        });
-                }
 
                 return NextResponse.json({
                         success: true,
                         card: savedCard,
+                        source: 'db',
                 });
         } catch (error) {
                 console.error('[API] Save error:', error);
@@ -199,55 +243,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         },
                         { status: 500 }
                 );
-        }
-}
-
-// =============================================================================
-// BACKGROUND AI ENRICHMENT
-// =============================================================================
-
-/**
- * Enrich a card with AI-generated tags and metadata.
- * Runs in background after response is sent.
- */
-async function enrichCardWithAI(
-        cardId: string,
-        url: string | null | undefined,
-        content: string | null | undefined,
-        imageUrl: string | null | undefined
-): Promise<void> {
-        try {
-                console.log('[AI] Starting background enrichment for card:', cardId);
-
-                // Call AI classification
-                const classification = await classifyContent(
-                        url ?? null,
-                        content ?? null,
-                        imageUrl
-                );
-
-                // Update card with AI results
-                await updateCard(cardId, {
-                        type: classification.type,
-                        title: classification.title,
-                        tags: classification.tags,
-                        metadata: {
-                                summary: classification.summary,
-                                processing: false,
-                        },
-                });
-
-                console.log('[AI] Background enrichment complete for card:', cardId);
-        } catch (error) {
-                console.error('[AI] Background enrichment failed:', error);
-
-                // Mark card as not processing even on failure
-                await updateCard(cardId, {
-                        metadata: {
-                                processing: false,
-                                enrichmentError: error instanceof Error ? error.message : 'Unknown error',
-                        },
-                });
         }
 }
 

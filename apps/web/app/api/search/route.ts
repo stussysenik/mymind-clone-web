@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { searchCards, isSupabaseConfigured } from '@/lib/supabase';
+import { expandSearchQuery } from '@/lib/ai';
 import { getDemoCards } from '@/lib/demo-data';
 import { rowToCard } from '@/lib/types';
 import type { Card } from '@/lib/types';
@@ -38,8 +39,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SearchResp
                 let cards: Card[];
 
                 if (isSupabaseConfigured()) {
-                        // Search Supabase
-                        const rows = await searchCards(query);
+                        // Search Supabase with Semantic Expansion
+                        let searchTerms: string | string[] = query;
+                        if (query) {
+                                searchTerms = await expandSearchQuery(query);
+                        }
+
+                        const rows = await searchCards(searchTerms);
                         cards = rows?.map(rowToCard) ?? [];
                 } else {
                         // Fallback to demo data

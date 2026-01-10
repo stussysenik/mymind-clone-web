@@ -1,23 +1,25 @@
 /**
  * MyMind Clone - Add Modal Component
  * 
- * Modal for adding new URLs, notes, or images.
- * Auto-detects platform from URL and shows preview.
+ * "Smart Input" modal for adding new items.
+ * Auto-detects URLs, text notes, and handles image drops/pastes fluidly.
+ * Designed for "addictive loop" with minimal friction.
  * 
- * @fileoverview Modal for adding new cards
+ * @fileoverview Modal for adding new cards (Smart Input)
  */
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Link2, StickyNote, Image as ImageIcon, Loader2, Globe, Sparkles, Upload } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { X, Link2, StickyNote, Image as ImageIcon, Loader2, Globe, Sparkles, Upload, ArrowUp } from 'lucide-react';
 import { detectPlatform, getPlatformInfo } from '@/lib/platforms';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-type TabType = 'link' | 'note' | 'image';
+type Mode = 'auto' | 'link' | 'note' | 'image';
 
 interface AddModalProps {
         isOpen: boolean;
@@ -28,148 +30,154 @@ interface AddModalProps {
 // COMPONENT
 // =============================================================================
 
-/**
- * Modal for adding new items to the collection.
- */
 export function AddModal({ isOpen, onClose }: AddModalProps) {
-        const [activeTab, setActiveTab] = useState<TabType>('link');
-        const [url, setUrl] = useState('');
-        const [noteTitle, setNoteTitle] = useState('');
-        const [noteContent, setNoteContent] = useState('');
+        const router = useRouter();
+
+        // State
+        const [content, setContent] = useState(''); // Unified content (URL or Note)
+        const [mode, setMode] = useState<Mode>('auto'); // Current detected mode
         const [imageFile, setImageFile] = useState<File | null>(null);
         const [imagePreview, setImagePreview] = useState<string | null>(null);
         const [isSubmitting, setIsSubmitting] = useState(false);
         const [error, setError] = useState<string | null>(null);
+        const [isDragOver, setIsDragOver] = useState(false);
 
-        const inputRef = useRef<HTMLInputElement>(null);
         const textareaRef = useRef<HTMLTextAreaElement>(null);
         const fileInputRef = useRef<HTMLInputElement>(null);
 
-        // Focus input when modal opens
+        // Auto-detect mode based on content
+        useEffect(() => {
+                if (imageFile) {
+                        setMode('image');
+                        return;
+                }
+
+                const trimmed = content.trim();
+                // Check if purely a URL
+                if (/^https?:\/\/[^\s]+$/i.test(trimmed) || /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/.test(trimmed)) {
+                        setMode('link');
+                } else if (trimmed.length > 0) {
+                        setMode('note');
+                } else {
+                        setMode('auto');
+                }
+        }, [content, imageFile]);
+
+        // Focus on open
         useEffect(() => {
                 if (isOpen) {
                         setTimeout(() => {
-                                if (activeTab === 'link') {
-                                        inputRef.current?.focus();
-                                } else if (activeTab === 'note') {
-                                        textareaRef.current?.focus();
-                                }
+                                textareaRef.current?.focus();
                         }, 100);
                 }
-        }, [isOpen, activeTab]);
+        }, [isOpen]);
 
         // Reset state on close
         useEffect(() => {
                 if (!isOpen) {
-                        setUrl('');
-                        setNoteTitle('');
-                        setNoteContent('');
+                        setContent('');
                         setImageFile(null);
                         setImagePreview(null);
                         setError(null);
-                        setActiveTab('link');
+                        setMode('auto');
                 }
         }, [isOpen]);
 
-        // Keyboard shortcuts
+        // Keyboard & Paste
         useEffect(() => {
                 const handleKeyDown = (e: KeyboardEvent) => {
-                        if (e.key === 'Escape') {
-                                onClose();
+                        if (e.key === 'Escape') onClose();
+                        // CMD+Enter to save
+                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                handleSubmit();
+                        }
+                };
+
+                const handlePaste = (e: ClipboardEvent) => {
+                        const items = e.clipboardData?.items;
+                        if (items) {
+                                for (let i = 0; i < items.length; i++) {
+                                        if (items[i].type.indexOf('image') !== -1) {
+                                                const file = items[i].getAsFile();
+                                                if (file) handleImageFile(file);
+                                                e.preventDefault(); // Prevent pasting binary text
+                                        }
+                                }
                         }
                 };
 
                 if (isOpen) {
                         document.addEventListener('keydown', handleKeyDown);
-                        return () => document.removeEventListener('keydown', handleKeyDown);
-                }
-        }, [isOpen, onClose]);
-
-        /**
-         * Handle image file selection.
-         */
-        const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                        // Validate file type
-                        if (!file.type.startsWith('image/')) {
-                                setError('Please select an image file');
-                                return;
-                        }
-                        // Validate file size (max 5MB)
-                        if (file.size > 5 * 1024 * 1024) {
-                                setError('Image must be less than 5MB');
-                                return;
-                        }
-
-                        setImageFile(file);
-                        setError(null);
-
-                        // Create preview
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                                setImagePreview(e.target?.result as string);
+                        document.addEventListener('paste', handlePaste);
+                        return () => {
+                                document.removeEventListener('keydown', handleKeyDown);
+                                document.removeEventListener('paste', handlePaste);
                         };
-                        reader.readAsDataURL(file);
                 }
+        }, [isOpen, content, imageFile, imagePreview]); // dependencies for callbacks
+
+        const handleImageFile = (file: File) => {
+                if (!file.type.startsWith('image/')) {
+                        setError('Please select an image file');
+                        return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                        setError('Image must be less than 5MB');
+                        return;
+                }
+
+                setImageFile(file);
+                setError(null);
+
+                const reader = new FileReader();
+                reader.onload = (e) => setImagePreview(e.target?.result as string);
+                reader.readAsDataURL(file);
         };
 
-        /**
-         * Handle drag and drop.
-         */
         const handleDrop = (e: React.DragEvent) => {
                 e.preventDefault();
+                setIsDragOver(false);
                 const file = e.dataTransfer.files[0];
-                if (file && file.type.startsWith('image/')) {
-                        const event = { target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>;
-                        handleImageSelect(event);
-                }
+                if (file) handleImageFile(file);
         };
 
-        /**
-         * Handles form submission.
-         */
-        const handleSubmit = useCallback(async () => {
-                setError(null);
+        const handleSubmit = async () => {
+                if (isSubmitting) return;
+
+                // Corrections before submitting
+                let finalType = mode;
+                let payload: any = {};
+                let finalContent = content.trim();
+
+                if (mode === 'auto' && !finalContent) return; // Nothing to save
+
                 setIsSubmitting(true);
+                setError(null);
 
                 try {
-                        let payload;
-
-                        if (activeTab === 'link') {
-                                if (!url.trim()) {
-                                        throw new Error('Please enter a URL');
-                                }
-                                // Validate URL
-                                try {
-                                        new URL(url);
-                                } catch {
-                                        throw new Error('Please enter a valid URL');
-                                }
-                                payload = { url, type: 'auto' };
-                        } else if (activeTab === 'note') {
-                                if (!noteContent.trim()) {
-                                        throw new Error('Please enter some content');
-                                }
-                                payload = {
-                                        type: 'note',
-                                        title: noteTitle || 'Untitled Note',
-                                        content: noteContent
-                                };
-                        } else if (activeTab === 'image') {
-                                if (!imagePreview) {
-                                        throw new Error('Please select an image');
-                                }
+                        if (mode === 'image' && imagePreview) {
                                 payload = {
                                         type: 'image',
                                         title: imageFile?.name || 'Uploaded Image',
-                                        imageUrl: imagePreview, // Send as base64 data URL
+                                        imageUrl: imagePreview,
                                 };
+                        } else if (mode === 'link' || (mode === 'auto' && /^(http|\w+\.)/.test(finalContent))) {
+                                // Assume link
+                                if (!/^https?:\/\//i.test(finalContent)) {
+                                        finalContent = 'https://' + finalContent;
+                                }
+                                payload = { url: finalContent, type: 'auto' };
                         } else {
-                                throw new Error('Unknown tab');
+                                // Default to note
+                                const lines = finalContent.split('\n');
+                                const title = lines[0].length < 50 ? lines[0] : 'Untitled Note';
+                                payload = {
+                                        type: 'note',
+                                        title: title,
+                                        content: finalContent
+                                };
                         }
 
-                        // Call API
                         const response = await fetch('/api/save', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -178,278 +186,171 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
                         const data = await response.json();
 
-                        if (!response.ok) {
-                                throw new Error(data.error || 'Failed to save');
+                        if (!response.ok) throw new Error(data.error || 'Failed to save');
+
+                        // Trigger AI Enrichment (Background)
+                        // Uses keepalive to ensure request completes even if modal closes
+                        if (data.card?.id) {
+                                fetch('/api/enrich', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ cardId: data.card.id }),
+                                        keepalive: true
+                                }).catch(err => console.error('[AddModal] Enrichment trigger failed:', err));
                         }
 
-                        // Save to localStorage for demo mode persistence
-                        if (data.card) {
-                                // Import dynamically to avoid SSR issues
-                                const { saveLocalCard } = await import('@/lib/local-storage');
-                                // Create a properly typed card with local prefix for ID
-                                const cardToSave = {
-                                        ...data.card,
-                                        id: `local-${Date.now()}`,
-                                };
-                                saveLocalCard(cardToSave);
-                        }
-
-                        // Success - close modal and refresh
                         onClose();
-                        window.location.reload();
+                        router.refresh();
                 } catch (err) {
                         setError(err instanceof Error ? err.message : 'Something went wrong');
                 } finally {
                         setIsSubmitting(false);
                 }
-        }, [activeTab, url, noteTitle, noteContent, imageFile, imagePreview, onClose]);
-
-        // Detect platform from URL
-        const platform = detectPlatform(url);
-        const platformInfo = getPlatformInfo(url);
-        const showPlatformPreview = url.length > 10 && platform !== 'unknown';
+        };
 
         if (!isOpen) return null;
 
+        const platformInfo = (mode === 'link' || mode === 'auto') ? getPlatformInfo(content) : null;
+        const canSubmit = (mode === 'image' && !!imagePreview) || content.trim().length > 0;
+
         return (
                 <>
-                        {/* Backdrop */}
-                        <div
-                                className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-                                onClick={onClose}
-                        />
+                        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md transition-opacity" onClick={onClose} />
 
-                        {/* Modal */}
-                        <div className="fixed inset-x-4 top-[20%] z-50 mx-auto max-w-lg rounded-xl bg-white shadow-2xl sm:inset-x-auto">
-                                {/* Header */}
-                                <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-                                        <h2 className="text-lg font-semibold text-[var(--foreground)]">
-                                                Save to Mind
-                                        </h2>
-                                        <button
-                                                onClick={onClose}
-                                                className="rounded-lg p-1.5 text-[var(--foreground-muted)] hover:bg-gray-100"
-                                        >
-                                                <X className="h-5 w-5" />
+                        <div
+                                className={`
+                                        fixed inset-x-4 top-[15%] z-[70] mx-auto max-w-2xl 
+                                        bg-white rounded-2xl shadow-2xl overflow-hidden
+                                        transition-all duration-300 ease-out transform
+                                        ${isDragOver ? 'scale-105 ring-4 ring-[var(--accent-primary)]' : 'scale-100'}
+                                `}
+                                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                                onDragLeave={() => setIsDragOver(false)}
+                                onDrop={handleDrop}
+                        >
+                                {/* Active Mode Indicator / Header */}
+                                <div className="absolute top-4 right-4 flex gap-2 z-10">
+                                        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+                                                <X className="w-5 h-5" />
                                         </button>
                                 </div>
 
-                                {/* Tabs */}
-                                <div className="flex border-b border-[var(--border)]">
-                                        <TabButton
-                                                active={activeTab === 'link'}
-                                                onClick={() => setActiveTab('link')}
-                                                icon={Link2}
-                                                label="Link"
-                                        />
-                                        <TabButton
-                                                active={activeTab === 'note'}
-                                                onClick={() => setActiveTab('note')}
-                                                icon={StickyNote}
-                                                label="Note"
-                                        />
-                                        <TabButton
-                                                active={activeTab === 'image'}
-                                                onClick={() => setActiveTab('image')}
-                                                icon={ImageIcon}
-                                                label="Image"
-                                        />
-                                </div>
-
-                                {/* Content */}
-                                <div className="p-4">
-                                        {activeTab === 'link' && (
-                                                <div className="space-y-4">
-                                                        {/* URL Input */}
-                                                        <div>
-                                                                <input
-                                                                        ref={inputRef}
-                                                                        type="url"
-                                                                        value={url}
-                                                                        onChange={(e) => setUrl(e.target.value)}
-                                                                        placeholder="Paste a URL..."
-                                                                        className="
-                                                                                w-full rounded-lg border border-[var(--border)] px-4 py-3
-                                                                                text-[var(--foreground)] placeholder:text-[var(--foreground-muted)]
-                                                                                focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/20
-                                                                        "
-                                                                />
-                                                        </div>
-
-                                                        {/* Platform Preview */}
-                                                        {showPlatformPreview && (
-                                                                <div
-                                                                        className="flex items-center gap-3 rounded-lg p-3"
-                                                                        style={{ backgroundColor: platformInfo.bgColor }}
+                                <div className="p-1">
+                                        {/* Image Preview Area */}
+                                        {mode === 'image' && imagePreview ? (
+                                                <div className="relative w-full aspect-video bg-gray-50 rounded-xl overflow-hidden group">
+                                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                                <button
+                                                                        onClick={() => { setImageFile(null); setImagePreview(null); }}
+                                                                        className="opacity-0 group-hover:opacity-100 bg-white/90 text-red-500 px-4 py-2 rounded-full text-sm font-medium shadow-sm transform translate-y-2 group-hover:translate-y-0 transition-all"
                                                                 >
-                                                                        <div
-                                                                                className="flex h-8 w-8 items-center justify-center rounded-full"
-                                                                                style={{ backgroundColor: platformInfo.color }}
-                                                                        >
-                                                                                <Globe className="h-4 w-4 text-white" />
-                                                                        </div>
-                                                                        <div>
-                                                                                <p className="text-sm font-medium text-[var(--foreground)]">
-                                                                                        {platformInfo.name} detected
-                                                                                </p>
-                                                                                <p className="text-xs text-[var(--foreground-muted)]">
-                                                                                        Will be saved as a {platformInfo.name} card
-                                                                                </p>
-                                                                        </div>
-                                                                        <Sparkles className="ml-auto h-4 w-4 text-[var(--accent-primary)]" />
+                                                                        Remove Image
+                                                                </button>
+                                                        </div>
+                                                </div>
+                                        ) : (
+                                                /* Main Input Area */
+                                                <div className="relative p-6 pt-8">
+                                                        <textarea
+                                                                ref={textareaRef}
+                                                                value={content}
+                                                                onChange={(e) => setContent(e.target.value)}
+                                                                placeholder="Save something..."
+                                                                className="w-full text-2xl font-serif text-gray-800 placeholder:text-gray-300 bg-transparent border-none resize-none focus:ring-0 leading-relaxed custom-scrollbar"
+                                                                rows={mode === 'link' ? 2 : 5}
+                                                                disabled={isSubmitting}
+                                                        />
+
+                                                        {/* Link Detected Badge */}
+                                                        {mode === 'link' && platformInfo && (
+                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                                                        <Globe className="w-4 h-4" />
+                                                                        <span className="text-sm font-medium">Link detected: {platformInfo.name}</span>
+                                                                        {content.length > 20 && <Sparkles className="w-3 h-3 ml-auto animate-pulse" />}
                                                                 </div>
                                                         )}
                                                 </div>
                                         )}
 
-                                        {activeTab === 'note' && (
-                                                <div className="space-y-3">
-                                                        <input
-                                                                type="text"
-                                                                value={noteTitle}
-                                                                onChange={(e) => setNoteTitle(e.target.value)}
-                                                                placeholder="Title (optional)"
-                                                                className="
-                                                                        w-full rounded-lg border border-[var(--border)] px-4 py-2
-                                                                        text-[var(--foreground)] placeholder:text-[var(--foreground-muted)]
-                                                                        focus:border-[var(--accent-primary)] focus:outline-none
-                                                                "
-                                                        />
-                                                        <textarea
-                                                                ref={textareaRef}
-                                                                value={noteContent}
-                                                                onChange={(e) => setNoteContent(e.target.value)}
-                                                                placeholder="Start typing..."
-                                                                rows={6}
-                                                                className="
-                                                                        w-full resize-none rounded-lg border border-[var(--border)] px-4 py-3
-                                                                        text-[var(--foreground)] placeholder:text-[var(--foreground-muted)]
-                                                                        focus:border-[var(--accent-primary)] focus:outline-none
-                                                                "
-                                                        />
-                                                </div>
-                                        )}
-
-                                        {activeTab === 'image' && (
-                                                <div className="space-y-3">
+                                        {/* Footer / Controls */}
+                                        <div className="flex items-center justify-between px-6 pb-6 pt-2">
+                                                <div className="flex gap-1">
+                                                        {/* Manual Mode Toggles (Subtle) */}
+                                                        <button
+                                                                onClick={() => fileInputRef.current?.click()}
+                                                                className={`p-2 rounded-lg transition-colors ${mode === 'image' ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
+                                                                title="Upload Image"
+                                                        >
+                                                                <ImageIcon className="w-5 h-5" />
+                                                        </button>
                                                         <input
                                                                 ref={fileInputRef}
                                                                 type="file"
-                                                                accept="image/*"
-                                                                onChange={handleImageSelect}
                                                                 className="hidden"
+                                                                accept="image/*"
+                                                                onChange={(e) => {
+                                                                        if (e.target.files?.[0]) handleImageFile(e.target.files[0]);
+                                                                }}
                                                         />
 
-                                                        {imagePreview ? (
-                                                                <div className="relative">
-                                                                        <img
-                                                                                src={imagePreview}
-                                                                                alt="Preview"
-                                                                                className="w-full h-48 object-cover rounded-lg"
-                                                                        />
-                                                                        <button
-                                                                                onClick={() => {
-                                                                                        setImageFile(null);
-                                                                                        setImagePreview(null);
-                                                                                }}
-                                                                                className="absolute top-2 right-2 p-1 rounded-full bg-black/50 text-white hover:bg-black/70"
-                                                                        >
-                                                                                <X className="h-4 w-4" />
-                                                                        </button>
-                                                                        <p className="mt-2 text-sm text-[var(--foreground-muted)] truncate">
-                                                                                {imageFile?.name}
-                                                                        </p>
-                                                                </div>
-                                                        ) : (
-                                                                <div
-                                                                        onClick={() => fileInputRef.current?.click()}
-                                                                        onDragOver={(e) => e.preventDefault()}
-                                                                        onDrop={handleDrop}
-                                                                        className="flex flex-col items-center justify-center h-48 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-[var(--accent-primary)] cursor-pointer transition-colors"
-                                                                >
-                                                                        <Upload className="h-8 w-8 text-[var(--foreground-muted)] mb-2" />
-                                                                        <p className="text-sm text-[var(--foreground-muted)]">
-                                                                                Click or drag to upload
-                                                                        </p>
-                                                                        <p className="text-xs text-[var(--foreground-muted)] mt-1">
-                                                                                Max 5MB • PNG, JPG, GIF
-                                                                        </p>
-                                                                </div>
+                                                        {mode !== 'image' && (
+                                                                <div className="h-6 w-px bg-gray-200 mx-2 self-center" />
+                                                        )}
+
+                                                        {mode !== 'image' && (
+                                                                <span className="text-xs text-gray-300 font-medium self-center tracking-wide uppercase px-2">
+                                                                        {mode === 'auto' ? 'Smart Mode' : mode}
+                                                                </span>
                                                         )}
                                                 </div>
-                                        )}
 
-                                        {/* Error */}
+                                                <div className="flex items-center gap-3">
+                                                        <span className="hidden sm:inline text-xs text-gray-300 mr-2">CMD + Enter to save</span>
+                                                        <button
+                                                                onClick={handleSubmit}
+                                                                disabled={!canSubmit || isSubmitting}
+                                                                className={`
+                                                                        flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all
+                                                                        ${canSubmit
+                                                                                ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] hover:shadow-md transform hover:-translate-y-0.5'
+                                                                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                                        }
+                                                                `}
+                                                        >
+                                                                {isSubmitting ? (
+                                                                        <>
+                                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                                                <span>Saving...</span>
+                                                                        </>
+                                                                ) : (
+                                                                        <>
+                                                                                <span>Save to Brain</span>
+                                                                                <ArrowUp className={`w-4 h-4 ${canSubmit ? 'animate-bounce-short' : ''}`} />
+                                                                        </>
+                                                                )}
+                                                        </button>
+                                                </div>
+                                        </div>
+
+                                        {/* Error Toast styled */}
                                         {error && (
-                                                <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                                                <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
                                                         {error}
                                                 </div>
                                         )}
-                                </div>
 
-                                {/* Footer */}
-                                <div className="flex justify-end gap-3 border-t border-[var(--border)] px-4 py-3">
-                                        <button
-                                                onClick={onClose}
-                                                className="rounded-lg px-4 py-2 text-sm font-medium text-[var(--foreground-muted)] hover:bg-gray-100"
-                                        >
-                                                Cancel
-                                        </button>
-                                        <button
-                                                onClick={handleSubmit}
-                                                disabled={isSubmitting}
-                                                className="
-                                                        flex items-center gap-2 rounded-lg bg-[var(--accent-primary)] px-4 py-2
-                                                        text-sm font-medium text-white
-                                                        hover:bg-[var(--accent-hover)]
-                                                        disabled:opacity-50
-                                                "
-                                        >
-                                                {isSubmitting ? (
-                                                        <>
-                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                                Saving...
-                                                        </>
-                                                ) : (
-                                                        'Save'
-                                                )}
-                                        </button>
+                                        {/* Drop Zone Overlay (only when dragging) */}
+                                        {isDragOver && (
+                                                <div className="absolute inset-0 bg-[var(--accent-primary)]/10 backdrop-blur-sm flex flex-col items-center justify-center border-4 border-[var(--accent-primary)] border-dashed m-1 rounded-xl z-50">
+                                                        <Upload className="w-16 h-16 text-[var(--accent-primary)] mb-4 animate-bounce" />
+                                                        <h3 className="text-2xl font-serif text-[var(--accent-primary)] font-bold">Drop visual</h3>
+                                                </div>
+                                        )}
                                 </div>
                         </div>
                 </>
-        );
-}
-
-// =============================================================================
-// SUBCOMPONENTS
-// =============================================================================
-
-interface TabButtonProps {
-        active: boolean;
-        onClick: () => void;
-        icon: typeof Link2;
-        label: string;
-        disabled?: boolean;
-}
-
-function TabButton({ active, onClick, icon: Icon, label, disabled }: TabButtonProps) {
-        return (
-                <button
-                        onClick={onClick}
-                        disabled={disabled}
-                        data-testid={`tab-${label.toLowerCase()}`}
-                        className={`
-                                flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium transition-colors
-                                ${active
-                                        ? 'border-b-2 border-[var(--accent-primary)] text-[var(--foreground)]'
-                                        : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
-                                }
-                                ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        `}
-                >
-                        <Icon className="h-4 w-4" />
-                        {label}
-                </button>
         );
 }
 

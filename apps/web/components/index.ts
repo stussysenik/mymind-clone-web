@@ -13,3 +13,5 @@ export { CardGrid } from './CardGrid';
 export { Header } from './Header';
 export { SearchBar } from './SearchBar';
 export { TagScroller } from './TagScroller';
+export { CardGridClient } from './CardGridClient';
+export { UserMenu } from './UserMenu';

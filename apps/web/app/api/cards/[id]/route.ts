@@ -7,7 +7,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteCard, isSupabaseConfigured } from '@/lib/supabase';
+import { deleteCard, permanentDeleteCard, isSupabaseConfigured, updateCard, getSupabaseClient } from '@/lib/supabase';
+import { getUser } from '@/lib/supabase-server';
 
 // =============================================================================
 // TYPES
@@ -55,7 +56,12 @@ export async function DELETE(
                         );
                 }
 
-                const success = await deleteCard(id);
+                const { searchParams } = new URL(request.url);
+                const permanent = searchParams.get('permanent') === 'true';
+
+                const success = permanent
+                        ? await permanentDeleteCard(id)
+                        : await deleteCard(id);
 
                 if (!success) {
                         return NextResponse.json(
@@ -74,5 +80,38 @@ export async function DELETE(
                         },
                         { status: 500 }
                 );
+        }
+}
+
+export async function PATCH(
+        request: NextRequest,
+        { params }: RouteParams
+): Promise<NextResponse> {
+        try {
+                const user = await getUser();
+                if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+                const { id } = await params;
+                const body = await request.json();
+
+                // Check ownership
+                const client = getSupabaseClient(true);
+                if (!client) return NextResponse.json({ success: false, error: 'DB config error' }, { status: 500 });
+
+                const { data: existing } = await client
+                        .from('cards')
+                        .select('user_id')
+                        .eq('id', id)
+                        .single();
+
+                if (!existing || existing.user_id !== user.id) {
+                        return NextResponse.json({ success: false, error: 'Not found or forbidden' }, { status: 404 });
+                }
+
+                const updated = await updateCard(id, body);
+                return NextResponse.json({ success: true, card: updated });
+        } catch (error) {
+                console.error('[API] Update error:', error);
+                return NextResponse.json({ success: false, error: 'Update failed' }, { status: 500 });
         }
 }

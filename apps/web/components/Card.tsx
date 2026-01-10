@@ -10,8 +10,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2 } from 'lucide-react';
+import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
 
@@ -30,6 +31,10 @@ interface CardProps {
         card: CardType;
         /** Optional delete handler */
         onDelete?: () => void;
+        /** Optional restore handler (for Trash) */
+        onRestore?: () => void;
+        /** Optional click handler (for Detail View) */
+        onClick?: () => void;
 }
 
 // =============================================================================
@@ -51,7 +56,7 @@ const TYPE_ICONS = {
 /**
  * Smart card component that routes to platform-specific renderers.
  */
-export function Card({ card, onDelete }: CardProps) {
+export function Card({ card, onDelete, onRestore, onClick }: CardProps) {
         const platform = detectPlatform(card.url);
 
         // Route to platform-specific cards
@@ -68,7 +73,7 @@ export function Card({ card, onDelete }: CardProps) {
                 case 'imdb':
                         return <MovieCard card={card} />;
                 default:
-                        return <GenericCard card={card} onDelete={onDelete} />;
+                        return <GenericCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
         }
 }
 
@@ -79,9 +84,11 @@ export function Card({ card, onDelete }: CardProps) {
 /**
  * Generic card for non-platform-specific content.
  */
-function GenericCard({ card, onDelete }: CardProps) {
+function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
         const [imageError, setImageError] = useState(false);
+        const [screenshotError, setScreenshotError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
+        const router = useRouter();
 
         const platformInfo = getPlatformInfo(card.url);
         const domain = extractDomain(card.url);
@@ -92,6 +99,9 @@ function GenericCard({ card, onDelete }: CardProps) {
          * Renders the card visual content.
          */
         const renderVisual = () => {
+                const hasValidUrl = card.url && !card.url.startsWith('file:') && !card.url.startsWith('local-');
+
+                // 1. Primary Image
                 if (card.imageUrl && !imageError) {
                         return (
                                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
@@ -104,7 +114,6 @@ function GenericCard({ card, onDelete }: CardProps) {
                                                 loading="lazy"
                                                 onError={() => setImageError(true)}
                                         />
-
                                         {/* Video Play Button */}
                                         {isVideo && (
                                                 <div className="absolute inset-0 flex items-center justify-center">
@@ -116,6 +125,31 @@ function GenericCard({ card, onDelete }: CardProps) {
                                 </div>
                         );
                 }
+
+                // 2. Fallback: Automatic Screenshot (Microlink)
+                if (hasValidUrl && !screenshotError) {
+                        const screenshotUrl = `https://api.microlink.io/?url=${encodeURIComponent(card.url!)}&screenshot=true&meta=false&embed=screenshot.url`;
+                        return (
+                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50 group-hover:bg-gray-100 transition-colors">
+                                        <Image
+                                                src={screenshotUrl}
+                                                alt="Site Preview"
+                                                fill
+                                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                                className="object-cover object-top opacity-90 hover:opacity-100 transition-opacity"
+                                                loading="lazy"
+                                                unoptimized
+                                                onError={() => setScreenshotError(true)}
+                                        />
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-medium text-gray-500">
+                                                <Globe className="w-2.5 h-2.5" />
+                                                AUTO-SHOT
+                                        </div>
+                                </div>
+                        );
+                }
+
+                // 3. Last Resort: Type Icon
 
                 // Note card without image
                 if (card.type === 'note') {
@@ -142,11 +176,13 @@ function GenericCard({ card, onDelete }: CardProps) {
 
         return (
                 <article
+                        onClick={onClick}
                         className={`
         group relative flex flex-col overflow-hidden rounded-lg
         bg-white card-shadow
         transition-all duration-200
         hover:card-shadow-hover
+        ${onClick ? 'cursor-pointer' : ''}
       `}
                         style={{ borderLeft: `3px solid ${platformInfo.color}` }}
                         onMouseEnter={() => setIsHovered(true)}
@@ -198,7 +234,11 @@ function GenericCard({ card, onDelete }: CardProps) {
                                                         return (
                                                                 <span
                                                                         key={tag}
-                                                                        className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)]"
+                                                                        onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                router.push(`/?q=${tag}`);
+                                                                        }}
+                                                                        className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)] hover:text-[var(--accent-primary)] hover:underline cursor-pointer transition-colors"
                                                                 >
                                                                         <span
                                                                                 className="w-1.5 h-1.5 rounded-full"
@@ -211,6 +251,14 @@ function GenericCard({ card, onDelete }: CardProps) {
                                         </div>
                                 )}
                         </div>
+
+                        {/* Processing Indicator */}
+                        {card.metadata?.processing && (
+                                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium animate-pulse">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Analyzing...
+                                </div>
+                        )}
 
                         {/* Hover Actions */}
                         {isHovered && (
@@ -236,6 +284,18 @@ function GenericCard({ card, onDelete }: CardProps) {
                                                         aria-label="Delete card"
                                                 >
                                                         <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                        )}
+                                        {onRestore && (
+                                                <button
+                                                        onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onRestore();
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-green-600 transition-colors"
+                                                        aria-label="Restore card"
+                                                >
+                                                        <RotateCcw className="h-3.5 w-3.5" />
                                                 </button>
                                         )}
                                 </div>

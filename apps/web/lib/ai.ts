@@ -196,7 +196,7 @@ export async function classifyContent(
                         [
                                 {
                                         role: 'system',
-                                        content: 'You are a content classifier for a personal knowledge manager. Analyze the provided content and classify it accurately. Always use the classify_content function.',
+                                        content: 'You are a highly sophisticated curator for a "digital second brain". Analyze the content not just for what it is, but for its "vibes", "eras", "concepts", and "connections". Generate insightful tags that connect this item to broader themes (e.g., instead of just "chair", use "mid-century", "cozy", "reading-nook"). Always use the classify_content function.',
                                 },
                                 {
                                         role: 'user',
@@ -443,5 +443,48 @@ export async function generateSummary(
         } catch (error) {
                 console.error('[AI] Summary generation error:', error);
                 return content.slice(0, 150).trim() + '...';
+        }
+}
+// =============================================================================
+// SEARCH QUERY EXPANSION
+// =============================================================================
+
+/**
+ * Expands a search query with semantic synonyms and related concepts.
+ * Returns the original query + up to 3 related terms.
+ */
+export async function expandSearchQuery(query: string): Promise<string[]> {
+        if (!ZHIPU_API_KEY || !query) {
+                return [query];
+        }
+
+        try {
+                const response = await callGLM(TEXT_MODEL, [
+                        {
+                                role: 'system',
+                                content: 'You are a semantic search assistant. Given a search query, output a JSON array of up to 3 closely related synonyms, concepts, or "vibes" that would help find relevant items in a curatorial database. Output ONLY the JSON array.',
+                        },
+                        {
+                                role: 'user',
+                                content: `Query: "${query}"`,
+                        },
+                ]);
+
+                const content = response.choices[0]?.message?.content;
+                if (content) {
+                        // Extract array from possible markdown
+                        const match = content.match(/\[[\s\S]*\]/);
+                        if (match) {
+                                const terms = JSON.parse(match[0]) as string[];
+                                // Filter unique and combined
+                                const results = Array.from(new Set([query, ...terms])).slice(0, 4);
+                                return results;
+                        }
+                }
+
+                return [query];
+        } catch (error) {
+                console.error('[AI] Search expansion error:', error);
+                return [query];
         }
 }

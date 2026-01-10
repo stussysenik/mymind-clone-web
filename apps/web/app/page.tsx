@@ -10,6 +10,8 @@
 import { Suspense } from 'react';
 import { AddButton, Header, CardGrid, SearchBar, TagScroller } from '@/components';
 
+export const revalidate = 0; // Disable caching for realtime updates
+
 // =============================================================================
 // PAGE PROPS
 // =============================================================================

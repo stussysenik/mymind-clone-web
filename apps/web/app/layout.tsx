@@ -31,8 +31,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'mymind - Your visual mind, organized',
-    template: '%s | mymind',
+    default: 'Creative Brain - Your visual mind, organized',
+    template: '%s | Creative Brain',
   },
   description:
     'A privacy-first, AI-powered visual knowledge manager. Save anything with one click. Find it naturally. No folders, no manual tags.',

@@ -13,7 +13,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, LayoutGrid, Shuffle } from 'lucide-react';
+import { Sparkles, LayoutGrid, Shuffle, Archive } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 
 // =============================================================================
@@ -45,11 +45,11 @@ export function Header() {
                                 {/* Left: Brand */}
                                 <div className="flex items-center min-w-[120px]">
                                         <Link href="/" className="flex items-center gap-2 group">
-                                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent-primary)] to-purple-500 flex items-center justify-center">
-                                                        <span className="text-white font-serif text-sm font-bold">m</span>
+                                                <div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)] flex items-center justify-center text-white">
+                                                        <Sparkles className="h-5 w-5 fill-white/20" />
                                                 </div>
-                                                <span className="font-serif text-lg font-semibold text-[var(--foreground)] group-hover:text-[var(--accent-primary)] transition-colors hidden sm:inline">
-                                                        mymind
+                                                <span className="font-serif text-xl font-bold text-[var(--foreground)] tracking-tight group-hover:text-[var(--accent-primary)] transition-colors hidden sm:inline">
+                                                        Creative Brain
                                                 </span>
                                         </Link>
                                 </div>
@@ -79,8 +79,19 @@ export function Header() {
                                         })}
                                 </nav>
 
-                                {/* Right: User Menu */}
-                                <div className="flex items-center min-w-[120px] justify-end">
+                                {/* Right: User Menu & Trash */}
+                                <div className="flex items-center min-w-[120px] justify-end gap-2">
+                                        <Link
+                                                href="/trash"
+                                                className={`
+                                                        p-2 rounded-lg text-[var(--foreground-muted)] 
+                                                        hover:text-[var(--foreground)] hover:bg-gray-100 transition-colors
+                                                        ${pathname === '/trash' ? 'text-[var(--foreground)] bg-gray-100' : ''}
+                                                `}
+                                                title="Archive / Recently Deleted"
+                                        >
+                                                <Archive className="h-5 w-5" />
+                                        </Link>
                                         <UserMenu />
                                 </div>
                         </div>

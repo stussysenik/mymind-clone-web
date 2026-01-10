@@ -32,22 +32,28 @@
   /* Subtle borders */
   --border-hover: rgba(0, 0, 0, 0.12);
 
-  /* Accent Colors (Electric Lavender / Blurple) */
-  --accent-primary: #7B68EE;
-  /* Medium slate blue */
-  --accent-hover: #6A5ACD;
-  /* Slate blue */
-  --accent-light: rgba(123, 104, 238, 0.1);
+  /* Accent Colors (Riso Orange/Pink Theme) */
+  --accent-primary: #FF6B4A;
+  /* Riso Orange */
+  --accent-hover: #E35332;
+  /* Darker Orange */
+  --accent-light: rgba(255, 107, 74, 0.1);
 
-  /* Tag Colors - Vibrant palette */
-  --tag-green: #22C55E;
-  --tag-red: #EF4444;
-  --tag-blue: #3B82F6;
-  --tag-orange: #F97316;
-  --tag-purple: #A855F7;
-  --tag-pink: #EC4899;
-  --tag-cyan: #06B6D4;
-  --tag-amber: #F59E0B;
+  /* Tag Colors - Riso Palette */
+  --tag-green: #00A99D;
+  /* Riso Teal */
+  --tag-red: #FF48B0;
+  /* Riso Fluorescent Pink */
+  --tag-blue: #2B579A;
+  /* Riso Medium Blue */
+  --tag-orange: #FF6B4A;
+  /* Riso Orange */
+  --tag-purple: #9D7AD2;
+  /* Riso Purple */
+  --tag-pink: #FD7BB9;
+  --tag-cyan: #00A99D;
+  --tag-amber: #FFE800;
+  /* Riso Yellow */
 
   /* Typography */
   --font-serif: 'Libre Baskerville', 'Georgia', 'Charter', serif;
@@ -286,6 +292,7 @@ h3 {
     transform: translateY(100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;

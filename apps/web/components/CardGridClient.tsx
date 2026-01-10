@@ -10,11 +10,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, List as ListIcon } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { getLocalCards, deleteLocalCard } from '@/lib/local-storage';
+import { supabaseBrowser } from '@/lib/supabase';
 import { Card as CardComponent } from './Card';
+import { CardDetailModal } from './CardDetailModal';
 
 // =============================================================================
 // PROPS
@@ -25,6 +27,8 @@ interface CardGridClientProps {
         serverCards: Card[];
         /** Search query for filtering */
         searchQuery?: string;
+        /** Display mode: default (active cards) or trash (deleted cards) */
+        mode?: 'default' | 'trash';
 }
 
 // =============================================================================
@@ -34,12 +38,14 @@ interface CardGridClientProps {
 /**
  * Client-side wrapper that merges localStorage cards with server cards.
  */
-export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps) {
+export function CardGridClient({ serverCards, searchQuery, mode = 'default' }: CardGridClientProps) {
         const router = useRouter();
+        const searchParams = useSearchParams();
         const [localCards, setLocalCards] = useState<Card[]>([]);
         const [mounted, setMounted] = useState(false);
         const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
         const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+        const [selectedCard, setSelectedCard] = useState<Card | null>(null);
 
         // Load localStorage cards on mount
         useEffect(() => {
@@ -59,6 +65,22 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
                 return () => window.removeEventListener('storage', handleStorage);
         }, []);
 
+        // Realtime updates from Supabase
+        useEffect(() => {
+                if (!supabaseBrowser) return;
+
+                const channel = supabaseBrowser
+                        .channel('realtime_cards')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, () => {
+                                router.refresh();
+                        })
+                        .subscribe();
+
+                return () => {
+                        supabaseBrowser?.removeChannel(channel);
+                };
+        }, [router]);
+
         /**
          * Handle card deletion.
          */
@@ -75,7 +97,8 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
 
                 // For Supabase cards, call the delete API
                 try {
-                        const response = await fetch(`/api/cards/${cardId}`, {
+                        const url = mode === 'trash' ? `/api/cards/${cardId}?permanent=true` : `/api/cards/${cardId}`;
+                        const response = await fetch(url, {
                                 method: 'DELETE',
                         });
 
@@ -87,6 +110,23 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
                         }
                 } catch (error) {
                         console.error('Delete error:', error);
+                }
+        };
+
+        const handleRestore = async (cardId: string) => {
+                // Optimistically hide
+                setDeletedIds(prev => new Set(prev).add(cardId));
+
+                try {
+                        const response = await fetch(`/api/cards/${cardId}/restore`, {
+                                method: 'POST',
+                        });
+
+                        if (response.ok) {
+                                router.refresh();
+                        }
+                } catch (error) {
+                        console.error('Restore error:', error);
                 }
         };
 
@@ -139,13 +179,25 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
                                                 />
                                         </svg>
                                 </div>
-                                <h3 className="mb-1 text-lg font-medium text-[var(--foreground)]">
-                                        No cards found
+                                <h3 className="mb-1 text-lg font-medium text-[var(--foreground)] font-serif">
+                                        It's quiet here
                                 </h3>
                                 <p className="text-sm text-[var(--foreground-muted)]">
                                         {searchQuery
                                                 ? `No results for "${searchQuery}"`
-                                                : 'Save something to get started'}
+                                                : (() => {
+                                                        const type = searchParams.get('type');
+                                                        const label = type ? (
+                                                                type === 'webpages' ? 'website' :
+                                                                        type === 'videos' ? 'video' :
+                                                                                type === 'images' ? 'image' :
+                                                                                        type === 'articles' ? 'article' :
+                                                                                                type === 'products' ? 'product' :
+                                                                                                        type === 'books' ? 'book' : 'item'
+                                                        ) : 'item';
+                                                        return `There's no ${label} yet. Add yours to expand your creative brain.`;
+                                                })()
+                                        }
                                 </p>
                         </div>
                 );
@@ -189,7 +241,12 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
                                 <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5">
                                         {uniqueCards.map((card) => (
                                                 <div key={card.id} className="mb-4 break-inside-avoid">
-                                                        <CardComponent card={card} onDelete={() => handleDelete(card.id)} />
+                                                        <CardComponent
+                                                                card={card}
+                                                                onDelete={() => handleDelete(card.id)}
+                                                                onRestore={mode === 'trash' ? () => handleRestore(card.id) : undefined}
+                                                                onClick={() => setSelectedCard(card)}
+                                                        />
                                                 </div>
                                         ))}
                                 </div>
@@ -198,11 +255,30 @@ export function CardGridClient({ serverCards, searchQuery }: CardGridClientProps
                                         {uniqueCards.map((card) => (
                                                 /* List View Item - Reusing CardComponent effectively but wrapped to limit width */
                                                 <div key={card.id} className="w-full">
-                                                        <CardComponent card={card} onDelete={() => handleDelete(card.id)} />
+                                                        <CardComponent
+                                                                card={card}
+                                                                onDelete={() => handleDelete(card.id)}
+                                                                onRestore={mode === 'trash' ? () => handleRestore(card.id) : undefined}
+                                                                onClick={() => setSelectedCard(card)}
+                                                        />
                                                 </div>
                                         ))}
                                 </div>
                         )}
+                        {/* Detail Modal */}
+                        <CardDetailModal
+                                card={selectedCard}
+                                isOpen={!!selectedCard}
+                                onClose={() => setSelectedCard(null)}
+                                onDelete={(id) => {
+                                        handleDelete(id);
+                                        setSelectedCard(null);
+                                }}
+                                onRestore={mode === 'trash' ? (id) => {
+                                        handleRestore(id);
+                                        setSelectedCard(null);
+                                } : undefined}
+                        />
                 </div>
         );
 }

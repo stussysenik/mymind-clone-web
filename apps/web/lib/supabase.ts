@@ -117,6 +117,7 @@ export async function fetchCards(
         let query = client
                 .from('cards')
                 .select('*')
+                .is('deleted_at', null)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
@@ -125,6 +126,26 @@ export async function fetchCards(
         }
 
         const { data, error } = await query;
+
+        // Fallback for missing migration (missing deleted_at column)
+        if (error && error.message?.includes('deleted_at')) {
+                console.warn('[Supabase] Migration missing (deleted_at). Falling back to basic query.');
+                // Retry without soft-delete filter
+                const retryQuery = client
+                        .from('cards')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(limit);
+
+                if (userId) retryQuery.eq('user_id', userId);
+
+                const { data: retryData, error: retryError } = await retryQuery;
+                if (retryError) {
+                        console.error('[Supabase] Retry failed:', retryError.message);
+                        return null;
+                }
+                return retryData as CardRow[];
+        }
 
         if (error) {
                 console.error('[Supabase] Error fetching cards:', error.message);
@@ -143,19 +164,29 @@ export async function fetchCards(
  * @param limit - Maximum results
  */
 export async function searchCards(
-        query: string,
+        query: string | string[],
         userId?: string,
         limit: number = 50
 ): Promise<CardRow[] | null> {
         const client = getSupabaseClient(true);
         if (!client) return null;
 
-        const searchPattern = `%${query}%`;
+        const terms = Array.isArray(query) ? query : [query];
+
+        // Build OR filter for all terms across title, content, and tags (if array column support improved, otherwise just text/title)
+        // Note: For tags (array), we need 'cs' (contains) or text search. ilike works on text representation of json/array sometimes but explicit text search is better.
+        // For simplicity, we stick to title/content ilike for now, enabling partial matches.
+
+        const filters = terms.map(term => {
+                const pattern = `%${term}%`;
+                return `title.ilike.${pattern},content.ilike.${pattern}`;
+        }).join(',');
 
         let dbQuery = client
                 .from('cards')
                 .select('*')
-                .or(`title.ilike.${searchPattern},content.ilike.${searchPattern}`)
+                .or(filters)
+                .is('deleted_at', null)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
@@ -164,6 +195,22 @@ export async function searchCards(
         }
 
         const { data, error } = await dbQuery;
+
+        // Fallback for missing migration
+        if (error && error.message?.includes('deleted_at')) {
+                const retryQuery = client
+                        .from('cards')
+                        .select('*')
+                        .or(filters)
+                        .order('created_at', { ascending: false })
+                        .limit(limit);
+
+                if (userId) retryQuery.eq('user_id', userId);
+
+                const { data: retryData, error: retryError } = await retryQuery;
+                if (retryError) return null;
+                return retryData as CardRow[];
+        }
 
         if (error) {
                 console.error('[Supabase] Error searching cards:', error.message);
@@ -190,7 +237,7 @@ export async function insertCard(card: Partial<CardRow>): Promise<CardRow | null
 
         if (error) {
                 console.error('[Supabase] Error inserting card:', error.message);
-                return null;
+                throw new Error(error.message); // Throw matching error
         }
 
         return data as CardRow;
@@ -229,7 +276,50 @@ export async function updateCard(
  * 
  * @param id - Card ID to delete
  */
+/**
+ * Soft deletes a card by ID.
+ */
 export async function deleteCard(id: string): Promise<boolean> {
+        const client = getSupabaseClient(true);
+        if (!client) return false;
+
+        const { error } = await client
+                .from('cards')
+                .update({ deleted_at: new Date().toISOString() })
+                .eq('id', id);
+
+        if (error) {
+                console.error('[Supabase] Error soft-deleting card:', error.message);
+                return false;
+        }
+
+        return true;
+}
+
+/**
+ * Restores a soft-deleted card.
+ */
+export async function restoreCard(id: string): Promise<boolean> {
+        const client = getSupabaseClient(true);
+        if (!client) return false;
+
+        const { error } = await client
+                .from('cards')
+                .update({ deleted_at: null })
+                .eq('id', id);
+
+        if (error) {
+                console.error('[Supabase] Error restoring card:', error.message);
+                return false;
+        }
+
+        return true;
+}
+
+/**
+ * Permanently deletes a card.
+ */
+export async function permanentDeleteCard(id: string): Promise<boolean> {
         const client = getSupabaseClient(true);
         if (!client) return false;
 
@@ -239,11 +329,46 @@ export async function deleteCard(id: string): Promise<boolean> {
                 .eq('id', id);
 
         if (error) {
-                console.error('[Supabase] Error deleting card:', error.message);
+                console.error('[Supabase] Error permanently deleting card:', error.message);
                 return false;
         }
 
         return true;
+}
+
+/**
+ * Fetches deleted cards (Trash).
+ */
+export async function fetchDeletedCards(userId?: string): Promise<CardRow[] | null> {
+        const client = getSupabaseClient(true);
+        if (!client) return null;
+
+        let query = client
+                .from('cards')
+                .select('*')
+                // .not('deleted_at', 'is', null) // Syntax might vary, 'neq' null is better?
+                // Supabase JS: .not('deleted_at', 'is', null) is correct for IS NOT NULL
+                .not('deleted_at', 'is', null)
+                .order('deleted_at', { ascending: false });
+
+        if (userId) {
+                query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query;
+
+        // Fallback for missing migration
+        if (error && error.message?.includes('deleted_at')) {
+                console.warn('[Supabase] Migration missing (deleted_at). Returning empty trash.');
+                return [];
+        }
+
+        if (error) {
+                console.error('[Supabase] Error fetching deleted cards:', error.message);
+                return null;
+        }
+
+        return data as CardRow[];
 }
 
 /**
@@ -283,3 +408,40 @@ export async function getUniqueTags(userId?: string): Promise<{ tag: string; cou
                 .map(([tag, count]) => ({ tag, count }))
                 .sort((a, b) => b.count - a.count);
 }
+
+/**
+ * Fetches random cards for serendipity.
+ * Strategy: Fetch IDs, pick random ones, fetch content.
+ */
+export async function fetchRandomCards(userId?: string, limit: number = 5): Promise<CardRow[] | null> {
+        const client = getSupabaseClient(true);
+        if (!client) return null;
+
+        // 1. Fetch all IDs (lightweight)
+        let query = client.from('cards').select('id').is('deleted_at', null); // Exclude deleted
+        if (userId) query = query.eq('user_id', userId);
+
+        const { data: allIds, error } = await query;
+
+        if (error || !allIds || allIds.length === 0) return [];
+
+        // 2. Pick random IDs
+        const randomIds = allIds
+                .sort(() => 0.5 - Math.random())
+                .slice(0, limit)
+                .map(row => row.id);
+
+        // 3. Fetch full cards
+        const { data: cards, error: fetchError } = await client
+                .from('cards')
+                .select('*')
+                .in('id', randomIds);
+
+        if (fetchError) {
+                console.error('[Supabase] Error fetching random cards:', fetchError.message);
+                return null;
+        }
+
+        return cards as CardRow[];
+}
+

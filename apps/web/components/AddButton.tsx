@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { AddModal } from '@/components/AddModal';
 
@@ -22,6 +22,20 @@ import { AddModal } from '@/components/AddModal';
  */
 export function AddButton() {
         const [isModalOpen, setIsModalOpen] = useState(false);
+
+        // Global keyboard shortcut (Cmd+A or Cmd+I)
+        useEffect(() => {
+                const handleKeyDown = (e: KeyboardEvent) => {
+                        // Check for Cmd/Ctrl + A or Cmd/Ctrl + I
+                        if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'i')) {
+                                e.preventDefault();
+                                setIsModalOpen(true);
+                        }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+        }, []);
 
         return (
                 <>
@@ -39,6 +53,7 @@ export function AddButton() {
           active:scale-95
         "
                                 aria-label="Add new item"
+                                title="Add Item (Cmd+A)"
                         >
                                 <Plus className="h-6 w-6" strokeWidth={2.5} />
                         </button>
