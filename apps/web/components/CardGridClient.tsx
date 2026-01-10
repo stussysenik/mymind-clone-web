@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, List as ListIcon } from 'lucide-react';
 import type { Card } from '@/lib/types';
-import { getLocalCards, deleteLocalCard } from '@/lib/local-storage';
+import { getLocalCards, deleteLocalCard, archiveLocalCard, unarchiveLocalCard } from '@/lib/local-storage';
 import { supabaseBrowser } from '@/lib/supabase';
 import { Card as CardComponent } from './Card';
 import { CardDetailModal } from './CardDetailModal';
@@ -27,8 +27,10 @@ interface CardGridClientProps {
         serverCards: Card[];
         /** Search query for filtering */
         searchQuery?: string;
-        /** Display mode: default (active cards) or trash (deleted cards) */
-        mode?: 'default' | 'trash';
+        /** Type filter for instant client-side filtering */
+        typeFilter?: string;
+        /** Display mode: default (active), archive, or trash */
+        mode?: 'default' | 'archive' | 'trash';
 }
 
 // =============================================================================
@@ -38,7 +40,7 @@ interface CardGridClientProps {
 /**
  * Client-side wrapper that merges localStorage cards with server cards.
  */
-export function CardGridClient({ serverCards, searchQuery, mode = 'default' }: CardGridClientProps) {
+export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'default' }: CardGridClientProps) {
         const router = useRouter();
         const searchParams = useSearchParams();
         const [localCards, setLocalCards] = useState<Card[]>([]);
@@ -130,20 +132,92 @@ export function CardGridClient({ serverCards, searchQuery, mode = 'default' }: C
                 }
         };
 
+        const handleArchive = async (cardId: string) => {
+                setDeletedIds(prev => new Set(prev).add(cardId));
+
+                if (cardId.startsWith('local-') || cardId.startsWith('mock-')) {
+                        archiveLocalCard(cardId);
+                        // Update local state to reflect change immediately without reload
+                        setLocalCards(prev => prev.map(c => c.id === cardId ? { ...c, archivedAt: new Date().toISOString() } : c));
+                        return;
+                }
+
+                try {
+                        await fetch(`/api/cards/${cardId}/archive`, { method: 'POST' });
+                        router.refresh();
+                } catch (error) {
+                        console.error('Archive error:', error);
+                }
+        };
+
+        const handleUnarchive = async (cardId: string) => {
+                setDeletedIds(prev => new Set(prev).add(cardId));
+
+                if (cardId.startsWith('local-') || cardId.startsWith('mock-')) {
+                        unarchiveLocalCard(cardId);
+                        setLocalCards(prev => prev.map(c => c.id === cardId ? { ...c, archivedAt: null } : c));
+                        return;
+                }
+
+                try {
+                        await fetch(`/api/cards/${cardId}/unarchive`, { method: 'POST' });
+                        router.refresh();
+                } catch (error) {
+                        console.error('Unarchive error:', error);
+                }
+        };
+
         // Memoize filtered cards to prevent expensive re-calculations
         const uniqueCards = useMemo(() => {
                 // Merge local and server cards (local cards first)
-                const allCards = [...localCards, ...serverCards];
+                let allCards = [...localCards, ...serverCards];
+
+                // Apply type filter FIRST (instant, no API call)
+                // Map UI type names to database type values
+                if (typeFilter) {
+                        const typeMap: Record<string, string[]> = {
+                                'article': ['article', 'webpages'],
+                                'image': ['image', 'images'],
+                                'video': ['video', 'videos'],
+                                'product': ['product', 'products'],
+                                'book': ['book', 'books'],
+                                'note': ['note'],
+                                'twitter': ['twitter', 'posts'],
+                        };
+
+                        // Check if typeFilter matches any mapped type
+                        const matchTypes = Object.entries(typeMap)
+                                .filter(([, aliases]) => aliases.includes(typeFilter))
+                                .map(([key]) => key);
+
+                        if (matchTypes.length > 0) {
+                                allCards = allCards.filter(card => matchTypes.includes(card.type));
+                        } else {
+                                // Direct match as fallback
+                                allCards = allCards.filter(card => card.type === typeFilter);
+                        }
+                }
 
                 // Filter by search query if provided
+                // checking params directly allows for instant client-side filtering without waiting for server roundtrip
+                const currentQuery = searchParams.get('q') ?? searchQuery;
+
                 let filtered = allCards;
-                if (searchQuery) {
-                        const query = searchQuery.toLowerCase();
-                        filtered = allCards.filter(card =>
-                                card.title?.toLowerCase().includes(query) ||
-                                card.content?.toLowerCase().includes(query) ||
-                                card.tags.some(tag => tag.toLowerCase().includes(query))
-                        );
+                if (currentQuery) {
+                        const query = currentQuery.toLowerCase();
+                        // Handle #tag search client-side too
+                        if (query.startsWith('#')) {
+                                const tagQuery = query.slice(1);
+                                filtered = allCards.filter(card =>
+                                        card.tags.some(tag => tag.toLowerCase().includes(tagQuery))
+                                );
+                        } else {
+                                filtered = allCards.filter(card =>
+                                        card.title?.toLowerCase().includes(query) ||
+                                        card.content?.toLowerCase().includes(query) ||
+                                        card.tags.some(tag => tag.toLowerCase().includes(query))
+                                );
+                        }
                 }
 
                 // Remove duplicates by ID and filter out deleted IDs
@@ -151,51 +225,78 @@ export function CardGridClient({ serverCards, searchQuery, mode = 'default' }: C
                 const seenIds = new Set<string>();
 
                 for (const card of filtered) {
-                        if (!seenIds.has(card.id) && !deletedIds.has(card.id)) {
+                        // Filter by mode
+                        const isArchived = !!card.archivedAt;
+                        // Deleted status is handled by server-side fetching for Supabase, 
+                        // but for 'local' cards we might need to check if we care about soft-delete property if we added it?
+                        // Currently local cards just delete from array.
+
+                        let shouldShow = false;
+                        if (mode === 'archive') {
+                                shouldShow = isArchived;
+                        } else if (mode === 'trash') {
+                                // For trash, Supabase returns deleted items. 
+                                // Local cards are permanently deleted so they won't show here unless we implemented soft delete for local.
+                                // We'll just show what's passed (serverCards) plus any local cards if we had soft delete.
+                                shouldShow = true; // serverCards are already filtered by mode='trash'
+                        } else {
+                                // Default mode: show only NON-archived
+                                shouldShow = !isArchived;
+                        }
+
+                        if (shouldShow && !seenIds.has(card.id) && !deletedIds.has(card.id)) {
                                 seenIds.add(card.id);
                                 unique.push(card);
                         }
                 }
 
                 return unique;
-        }, [localCards, serverCards, searchQuery, deletedIds]);
+        }, [localCards, serverCards, searchQuery, deletedIds, mode, typeFilter, searchParams]);
 
-        // Empty state
+        // Optimistic rendering: Show server cards immediately while hydrating.
+        // We removed the (!mounted) check to prevent the "double loading" effect (Server Skeleton -> Client Skeleton -> Content).
+        // Since localCards are empty initially, hydration logic is safe.
+
+
+        // Empty state (only shown after mount confirms there's truly nothing)
         if (uniqueCards.length === 0) {
                 return (
-                        <div className="flex flex-col items-center justify-center py-20">
-                                <div className="mb-4 p-4 rounded-full bg-gray-100">
-                                        <svg
-                                                className="h-8 w-8 text-gray-400"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                        >
-                                                <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={1.5}
-                                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                                />
-                                        </svg>
+                        <div className="flex flex-col items-center justify-center py-32 text-center animate-in fade-in duration-500">
+                                <div className="relative mb-6">
+                                        <div className="absolute inset-0 bg-[var(--accent-primary)]/20 blur-xl rounded-full"></div>
+                                        <div className="relative p-6 rounded-2xl bg-white shadow-xl border border-gray-100">
+                                                <svg
+                                                        className="h-10 w-10 text-[var(--accent-primary)]"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                >
+                                                        <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={1.5}
+                                                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                                                        />
+                                                </svg>
+                                        </div>
                                 </div>
-                                <h3 className="mb-1 text-lg font-medium text-[var(--foreground)] font-serif">
-                                        It's quiet here
+                                <h3 className="mb-2 text-2xl font-serif text-[var(--foreground)]">
+                                        Your mind is waiting
                                 </h3>
-                                <p className="text-sm text-[var(--foreground-muted)]">
+                                <p className="text-gray-500 max-w-md mx-auto mb-8 leading-relaxed">
                                         {searchQuery
-                                                ? `No results for "${searchQuery}"`
+                                                ? `We couldn't find anything matching "${searchQuery}". Try a broader search or explore your spaces.`
                                                 : (() => {
                                                         const type = searchParams.get('type');
                                                         const label = type ? (
-                                                                type === 'webpages' ? 'website' :
-                                                                        type === 'videos' ? 'video' :
-                                                                                type === 'images' ? 'image' :
-                                                                                        type === 'articles' ? 'article' :
-                                                                                                type === 'products' ? 'product' :
-                                                                                                        type === 'books' ? 'book' : 'item'
-                                                        ) : 'item';
-                                                        return `There's no ${label} yet. Add yours to expand your creative brain.`;
+                                                                type === 'webpages' ? 'websites' :
+                                                                        type === 'videos' ? 'videos' :
+                                                                                type === 'images' ? 'images' :
+                                                                                        type === 'articles' ? 'articles' :
+                                                                                                type === 'products' ? 'products' :
+                                                                                                        type === 'books' ? 'books' : 'items'
+                                                        ) : 'items';
+                                                        return `This space is empty using the current filter. Save some ${label} to fill your creative brain.`;
                                                 })()
                                         }
                                 </p>
@@ -274,10 +375,22 @@ export function CardGridClient({ serverCards, searchQuery, mode = 'default' }: C
                                         handleDelete(id);
                                         setSelectedCard(null);
                                 }}
-                                onRestore={mode === 'trash' ? (id) => {
-                                        handleRestore(id);
-                                        setSelectedCard(null);
-                                } : undefined}
+                                onRestore={
+                                        mode === 'trash' ? (id) => {
+                                                handleRestore(id);
+                                                setSelectedCard(null);
+                                        } : mode === 'archive' ? (id) => {
+                                                handleUnarchive(id);
+                                                setSelectedCard(null);
+                                        } : undefined
+                                }
+                                onArchive={
+                                        mode === 'default' ? (id) => {
+                                                handleArchive(id);
+                                                setSelectedCard(null);
+                                        } : undefined
+                                }
+                                availableSpaces={Array.from(new Set(uniqueCards.flatMap(c => c.tags))).sort()}
                         />
                 </div>
         );

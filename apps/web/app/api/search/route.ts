@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { searchCards, isSupabaseConfigured } from '@/lib/supabase';
+import { searchCards, searchCardsByTag, isSupabaseConfigured } from '@/lib/supabase';
 import { expandSearchQuery } from '@/lib/ai';
 import { getDemoCards } from '@/lib/demo-data';
 import { rowToCard } from '@/lib/types';
@@ -32,27 +32,41 @@ interface SearchResponse {
 export async function GET(request: NextRequest): Promise<NextResponse<SearchResponse>> {
         try {
                 const { searchParams } = new URL(request.url);
-                const query = searchParams.get('q') ?? '';
+                let query = searchParams.get('q') ?? '';
                 const type = searchParams.get('type');
                 const tag = searchParams.get('tag');
 
                 let cards: Card[];
 
-                if (isSupabaseConfigured()) {
-                        // Search Supabase with Semantic Expansion
-                        let searchTerms: string | string[] = query;
-                        if (query) {
-                                searchTerms = await expandSearchQuery(query);
-                        }
+                // Detect hashtag search - strip # and search tags directly
+                const isTagSearch = query.startsWith('#');
+                const tagQuery = isTagSearch ? query.slice(1).toLowerCase() : null;
 
-                        const rows = await searchCards(searchTerms);
-                        cards = rows?.map(rowToCard) ?? [];
+                if (isSupabaseConfigured()) {
+                        // Search Supabase
+                        if (isTagSearch && tagQuery) {
+                                // Direct tag search - match tags array
+                                const rows = await searchCardsByTag(tagQuery);
+                                cards = rows?.map(rowToCard) ?? [];
+                        } else if (query) {
+                                // Full text search with semantic expansion
+                                const searchTerms = await expandSearchQuery(query);
+                                const rows = await searchCards(searchTerms);
+                                cards = rows?.map(rowToCard) ?? [];
+                        } else {
+                                // No query - return recent cards (will be done on client side usually)
+                                cards = [];
+                        }
                 } else {
                         // Fallback to demo data
                         cards = getDemoCards();
 
-                        // Apply text search
-                        if (query) {
+                        // Apply text or tag search
+                        if (isTagSearch && tagQuery) {
+                                cards = cards.filter(card =>
+                                        card.tags.some(t => t.toLowerCase().includes(tagQuery))
+                                );
+                        } else if (query) {
                                 const q = query.toLowerCase();
                                 cards = cards.filter(card =>
                                         card.title?.toLowerCase().includes(q) ||
@@ -67,7 +81,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SearchResp
                         cards = cards.filter(card => card.type === type);
                 }
 
-                // Apply tag filter
+                // Apply additional tag filter (from ?tag= param)
                 if (tag) {
                         cards = cards.filter(card =>
                                 card.tags.some(t => t.toLowerCase() === tag.toLowerCase())

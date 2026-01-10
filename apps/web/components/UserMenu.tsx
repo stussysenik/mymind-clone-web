@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LogOut, LogIn, Trash2 } from 'lucide-react';
+import { User, LogOut, LogIn, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase-browser';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -93,13 +93,13 @@ export function UserMenu() {
                                                 </div>
                                                 <button
                                                         onClick={() => {
-                                                                router.push('/trash');
+                                                                router.push('/settings');
                                                                 setShowMenu(false);
                                                         }}
                                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-gray-100 transition-colors"
                                                 >
-                                                        <Trash2 className="h-4 w-4" />
-                                                        Trash
+                                                        <Settings className="h-4 w-4" />
+                                                        Settings
                                                 </button>
                                                 <button
                                                         onClick={handleSignOut}
