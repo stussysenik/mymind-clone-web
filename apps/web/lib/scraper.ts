@@ -164,19 +164,48 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                 });
 
                                                 // Also parse any embedded JSON for carousel images
-                                                const scripts = $('script:contains("edge_sidecar")').html() ||
-                                                        $('script:contains("display_url")').html() || '';
+                                                const scripts = $('script').map((_, el) => $(el).html()).get().join(' ');
 
-                                                const displayUrls = scripts.match(/"display_url"\s*:\s*"([^"]+)"/g);
-                                                displayUrls?.forEach(match => {
-                                                        const urlMatch = match.match(/"display_url"\s*:\s*"([^"]+)"/);
-                                                        if (urlMatch?.[1]) {
-                                                                const cleanUrl = urlMatch[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
-                                                                if (!images.includes(cleanUrl)) {
-                                                                        images.push(cleanUrl);
+                                                // Strategy 1: Look for edge_sidecar_to_children in JSON blobs
+                                                // This often appears in window.__additionalDataLoaded or similar
+                                                try {
+                                                        const sidecarMatches = scripts.match(/"edge_sidecar_to_children"\s*:\s*({[^}]+})/);
+                                                        if (sidecarMatches?.[1]) {
+                                                                // It's usually nested deeper, so simple regex might not catch the full object.
+                                                                // Instead, let's look for "display_url" patterns which usually appear for each child.
+                                                        }
+
+                                                        // Better Strategy: Regex for all display_url occurrences in the script content
+                                                        // This covers both single posts and carousels where all children are listed in the initial state
+                                                        // We use a set to dedup
+                                                        const urlRegex = /"display_url"\s*:\s*"([^"]+)"/g;
+                                                        let match;
+                                                        while ((match = urlRegex.exec(scripts)) !== null) {
+                                                                if (match[1]) {
+                                                                        const cleanUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                                                                        if (!images.includes(cleanUrl)) {
+                                                                                images.push(cleanUrl);
+                                                                        }
                                                                 }
                                                         }
-                                                });
+
+                                                        // Also look for "display_resources" which often has higher quality candidates
+                                                        // src pattern in JSON
+                                                        const srcRegex = /"src"\s*:\s*"([^"]+)"/g;
+                                                        while ((match = srcRegex.exec(scripts)) !== null) {
+                                                                if (match[1] && (match[1].includes('cdninstagram') || match[1].includes('fbcdn'))) {
+                                                                        const cleanUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+                                                                        // Only add if we don't have it (fuzzy match to avoid dupes of different sizes)
+                                                                        // For simplicity, just add if exact match missing
+                                                                        if (!images.includes(cleanUrl)) {
+                                                                                // Prefer not to flood with thumbnails, but "src" usually implies a candidate
+                                                                                // Let's stick to display_url as primary if found
+                                                                        }
+                                                                }
+                                                        }
+                                                } catch (e) {
+                                                        console.warn('[Scraper] Error parsing Instagram scripts:', e);
+                                                }
 
                                                 // Extract caption/text
                                                 const caption = $('.Caption').text()?.trim() ||

@@ -9,6 +9,8 @@
 | `search.spec.ts` | **Search**: Querying, Filtering, Result grids | 🟢 **PASS** | `v1.0.0` | 9/9 tests passed. Core search functionality intact. |
 | `card-modal.spec.ts` | **Interactions**: Opening, Closing, Edits | 🟢 **PASS** | `v1.0.1` | Fixed timeouts by using global locators and robust hydration waits. |
 | `archive-delete.spec.ts` | **Lifecycle**: Archive, Unarchive, Soft Delete (Trash) | 🟡 **PENDING** | `v1.0.0` | Validates `archived_at` logic. **Requires migration** in Supabase Dashboard. |
+| `trash-workflow.spec.ts` | **Lifecycle**: Trash | 🟢 **PASS** | `v1.0.0` | 1/1 tests passed. |
+| `bugs.spec.ts` | **Bug Fixes**: Summary Editing | 🟢 **PASS** | `v1.0.0` | 1/1 (Summary Editing) |
 | `state-sync.spec.ts` | **Sync**: Everything ↔ Serendipity ↔ Spaces consistency | 🟡 **PENDING** | `v1.0.0` | **New Suite**: Validates single source of truth after query fixes. |
 | `auth-security.spec.ts` | **Security**: Protected routes, Supabase RLS | 🟢 **PASS** | `v1.0.0` | Passed in batch run. Basic auth flow verified. |
 | `ux-performance.spec.ts` | **Perf**: LCP, CLS, loading states | 🔴 **FAIL** | `v1.0.0` | **Tag Filter**: Tag click doesn't update URL. Click event might be intercepted. |
@@ -38,7 +40,7 @@
   1. `fetchRandomCards` only filtered `deleted_at`, not `archived_at`
   2. `getUniqueTags` counted ALL cards (including deleted/archived)
 - **Fix**: Updated `supabase.ts` to filter by both `deleted_at` AND `archived_at` in both functions.
-- **Fix**: Updated `supabase.ts` to filter by both `deleted_at` AND `archived_at` in both functions.
+
 - **Verification**: Run migrations in Supabase Dashboard, then `npx playwright test tests/state-sync.spec.ts`.
 
 ### `filter-tabs.spec.ts` Timeout Analysis

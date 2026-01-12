@@ -99,41 +99,37 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         // Sync state when card is refreshed (same ID) from AI updates
         useEffect(() => {
                 if (card) {
-                        // For simplicity, we only sync tags as they might be AI generated.
-                        // We DO NOT sync note, title, summary if local state differs to prevent overwriting user input
-                        // However, if we aren't editing, we might want to sync?
-                        // Let's assume AI only adds tags/summary.
+                        // FIX: Only sync tags/summary if the SERVER card data has surprisingly changed
+                        // independent of our local edits.
+                        // We do NOT depend on 'tags' or 'summary' in the dependency array anymore.
+                        // This prevents the infinite loop of: local edit -> state change -> effect run -> prop vs state mismatch -> revert to prop.
 
+                        // 1. Tags Sync
+                        // We only overwrite local tags if the server has *different* tags and we aren't "in the middle" of an optimistic update.
+                        // Actually, without router.refresh() in addTag, 'card.tags' will be stale until next real refresh.
+                        // But if we trust our local state, we only want to sync if 'card' effectively represents a NEW load.
+                        // A simple heuristic: JSON stringify check is fine, BUT we must not run this effect when 'tags' changes.
                         if (JSON.stringify(card.tags) !== JSON.stringify(tags)) {
-                                // Only update if server has MORE tags or DIFFERENT tags?
-                                // If we optimized updated locally, tags has our new tag. card.tags might not yet (if refresh happens too fast).
-                                // BUT if we assume router.refresh() fetches LATEST data...
-                                // And we assume API Patch was fast.
-                                // Then card.tags should contain our tag.
-                                // If card.tags is missing our tag, it means race condition (server doesn't have it yet).
-                                // If we blindly sync, we lose our tag.
-                                // Safer strategy: UNION.
-                                // const merged = Array.from(new Set([...tags, ...(card.tags||[])]));
-                                // setTags(merged);
-                                // No, that revives deleted tags.
-
-                                // Alternative: Only update if 'card.tags' has MORE items?
-                                // Or simply: trust server? 
-                                // If we remove router.refresh from handleAddTag(), then the only refresh source is AI polling or other external events.
-                                // If AI triggers refresh, 'card.tags' might NOT have our new tag if we just added it and AI was finishing parallel job.
-                                // BUT we want AI tags.
-
-                                // Let's try trusting server but debouncing/checking?
-                                // For now, let's Enable it because failing to see tags is worse.
+                                // If we assume 'card' is the source of truth from a refresh...
                                 setTags(card.tags || []);
                         }
 
-                        // Update summary if it changed and we aren't editing it
-                        if (card.metadata.summary !== summary && !isSavingSummary && card.metadata.summary) {
+                        // 2. Summary Sync
+                        // Only update if card summary is different and present.
+                        // We use a ref to track if we are the ones who just saved it?
+                        // No, simpler: Just don't depend on 'summary'.
+                        // This way, this block ONLY runs when 'card' prop updates (e.g. invalidation).
+                        // It does NOT run when user types (updating 'summary' state).
+                        if (card.metadata.summary && card.metadata.summary !== summary) {
+                                // If the user has made local edits that deviate from an *old* card prop, we shouldn't overwrite.
+                                // But if 'card' just updated (fresh fetch), we probably want to show it.
+                                // Ideally we'd check timestamps, but for now, trusting the fresh prop is safer than the current bug.
+                                // The critical fix is ensuring this effect DOES NOT RUN on local summary change.
                                 setSummary(card.metadata.summary);
                         }
                 }
-        }, [card, isSavingSummary, summary, tags]);
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [card]); // CRITICAL FIX: Only run when the card prop itself changes (e.g. from router.refresh or parent re-render)
 
         // Debounced save for Title
         const saveTitle = useCallback(async (newTitle: string) => {
@@ -304,7 +300,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                         method: 'PATCH',
                         body: JSON.stringify({ tags: updated })
                 });
-                router.refresh();
+                // router.refresh(); // Removed to prevent state clobbering
         };
 
         // Create new space and add card to it

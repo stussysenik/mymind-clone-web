@@ -598,7 +598,10 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                                 key={selectedCard?.id ?? 'empty'}
                                 card={selectedCard}
                                 isOpen={!!selectedCard}
-                                onClose={() => setSelectedCard(null)}
+                                onClose={() => {
+                                        router.refresh();
+                                        setSelectedCard(null);
+                                }}
                                 onDelete={(id) => {
                                         handleDelete(id);
                                         setSelectedCard(null);

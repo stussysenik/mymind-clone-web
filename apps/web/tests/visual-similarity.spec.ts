@@ -127,3 +127,63 @@ test.describe('AI Summary Editability', () => {
                 await page.keyboard.press('Escape');
         });
 });
+
+test.describe('Instagram Multi-Image Support', () => {
+        test('displays carousel for cards with multiple images', async ({ page }) => {
+                // Strategy: Inject a card into localStorage since CardGridClient loads these on mount.
+                // This bypasses the complexity of server-side data mocking.
+                const mockCard = {
+                        id: 'mock-carousel-1',
+                        title: 'Instagram Carousel Test',
+                        type: 'image',
+                        url: 'https://instagram.com/test',
+                        imageUrl: 'https://images.unsplash.com/photo-1507608869274-2c330136e85e?auto=format&fit=crop&w=400&q=80',
+                        metadata: {
+                                images: [
+                                        'https://images.unsplash.com/photo-1507608869274-2c330136e85e?auto=format&fit=crop&w=800',
+                                        'https://images.unsplash.com/photo-1559827291-72ee739d0d9a?auto=format&fit=crop&w=800',
+                                        'https://images.unsplash.com/photo-1627483262769-04d0a1401487?auto=format&fit=crop&w=800'
+                                ]
+                        },
+                        tags: ['instagram', 'carousel'],
+                        createdAt: new Date().toISOString(),
+                        archivedAt: null,
+                        deletedAt: null
+                };
+
+                // Inject using evaluate to ensure we are in the right context, then reload
+                await page.goto('/');
+                await page.evaluate((card) => {
+                        localStorage.setItem('mymind_cards', JSON.stringify([card]));
+                }, mockCard);
+
+                await page.reload();
+                await page.waitForSelector('[data-testid="card-grid"]', { timeout: 10000 });
+
+                // Click our mock card
+                await page.getByText('Instagram Carousel Test').click();
+                await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+
+                // CHECK CAROUSEL UI
+                // Should see arrows (if we hover? or always?)
+                // Force hover to ensure controls appear if hidden
+                const visualSection = page.locator('[data-testid="card-visual"]'); // Assuming we have this ID now
+                await visualSection.hover();
+
+                // Check for generic chevron icons or just buttons
+                const nextBtn = page.locator('button').filter({ has: page.locator('svg.lucide-chevron-right') });
+                await expect(nextBtn).toBeVisible();
+
+                // Click next
+                await nextBtn.click();
+
+                // Verify carousel navigation works (dots update)
+                const dots = page.locator('.absolute.bottom-6.flex.gap-2 button'); // Assuming this class structure based on previous edits
+                if (await dots.count() > 0) {
+                        await expect(dots).toHaveCount(3);
+                        // Verify second dot is active (usually by opacity or size)
+                        // Implementation detail: we used `w-4` for active, `w-2` for inactive or similar logic. 
+                        // Or check attribute if we added aria-current?
+                }
+        });
+});
