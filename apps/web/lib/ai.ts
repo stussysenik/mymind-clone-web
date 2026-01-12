@@ -70,7 +70,7 @@ async function callGLM(
         const body: Record<string, unknown> = {
                 model,
                 messages,
-                max_tokens: 500,
+                max_tokens: 2000,
         };
 
         if (tools) {
@@ -96,8 +96,91 @@ async function callGLM(
 }
 
 // =============================================================================
+// IMAGE TO BASE64 CONVERSION (for GLM-4.6V)
+// =============================================================================
+
+/**
+ * Maximum image size in bytes (5MB).
+ * Larger images will be skipped to avoid memory issues.
+ */
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
+/**
+ * Fetches an image from URL and converts to base64 data URL.
+ * GLM-4.6V cannot access external URLs, so we must inline images.
+ * 
+ * @param imageUrl - External image URL to fetch
+ * @returns Base64 data URL or null if fetch fails
+ */
+async function fetchImageAsBase64(imageUrl: string): Promise<string | null> {
+        try {
+                // Skip if already base64
+                if (imageUrl.startsWith('data:')) {
+                        return imageUrl;
+                }
+
+                // Fetch with timeout (5 seconds)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(imageUrl, {
+                        signal: controller.signal,
+                        headers: {
+                                'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+                                'Accept': 'image/*',
+                        },
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                        console.warn(`[AI] Image fetch failed: ${response.status} for ${imageUrl}`);
+                        return null;
+                }
+
+                // Check content type
+                const contentType = response.headers.get('content-type') || 'image/jpeg';
+                if (!contentType.startsWith('image/')) {
+                        console.warn(`[AI] Not an image: ${contentType}`);
+                        return null;
+                }
+
+                // Check size via Content-Length header first (if available)
+                const contentLength = response.headers.get('content-length');
+                if (contentLength && parseInt(contentLength) > MAX_IMAGE_SIZE) {
+                        console.warn(`[AI] Image too large: ${contentLength} bytes`);
+                        return null;
+                }
+
+                // Read the buffer
+                const buffer = await response.arrayBuffer();
+
+                // Double-check size after download
+                if (buffer.byteLength > MAX_IMAGE_SIZE) {
+                        console.warn(`[AI] Image too large after download: ${buffer.byteLength} bytes`);
+                        return null;
+                }
+
+                // Convert to base64
+                const base64 = Buffer.from(buffer).toString('base64');
+                const dataUrl = `data:${contentType};base64,${base64}`;
+
+                console.log(`[AI] Converted image to base64: ${imageUrl.slice(0, 50)}... (${buffer.byteLength} bytes)`);
+                return dataUrl;
+        } catch (error) {
+                if (error instanceof Error && error.name === 'AbortError') {
+                        console.warn(`[AI] Image fetch timeout: ${imageUrl}`);
+                } else {
+                        console.error(`[AI] Image fetch error:`, error);
+                }
+                return null;
+        }
+}
+
+// =============================================================================
 // CONTENT CLASSIFICATION
 // =============================================================================
+
 
 /**
  * Tool definition for content classification.
@@ -121,8 +204,8 @@ const CLASSIFICATION_TOOL = {
                         properties: {
                                 type: {
                                         type: 'string',
-                                        enum: ['article', 'image', 'note', 'product', 'book'],
-                                        description: 'The primary content type. Use "product" for any shopping item or commercial tool.',
+                                        enum: ['article', 'image', 'note', 'product', 'book', 'video', 'audio'],
+                                        description: 'The primary content type. Use "product" for any shopping item, "video" for YouTube/Vimeo, "audio" for podcasts/music.',
                                 },
                                 title: {
                                         type: 'string',
@@ -133,7 +216,11 @@ const CLASSIFICATION_TOOL = {
                                         items: { type: 'string' },
                                         minItems: 3,
                                         maxItems: 5,
-                                        description: '3-5 tags balancing MICRO and MACRO concepts. E.g., include both "category-theory" AND "mathematics". Connect specific topics to broader fields. Lowercase, hyphenated.',
+                                        description: `3-5 HIERARCHICAL tags in this structure:
+  - 1-2 PRIMARY (essence): The core identity, e.g., "bmw", "breakdance", "terence-tao"
+  - 1-2 CONTEXTUAL (subject): The broader field, e.g., "automotive", "dance", "mathematics"
+  - 1 VIBE/MOOD (abstract): The feeling or energy, e.g., "kinetic", "minimalist", "atmospheric"
+This enables cross-disciplinary discovery. Lowercase, hyphenated.`,
                                 },
                                 summary: {
                                         type: 'string',
@@ -151,13 +238,13 @@ const CLASSIFICATION_TOOL = {
 
 /**
  * Normalize type to allowed database values.
- * Maps any type to: article, image, note, product, or book
+ * Maps any type to: article, image, note, product, book, video, or audio
  */
-function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' | 'book' {
+function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' {
         const normalized = type?.toLowerCase() ?? 'article';
 
         // Map common types to our allowed values
-        const typeMap: Record<string, 'article' | 'image' | 'note' | 'product' | 'book'> = {
+        const typeMap: Record<string, 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio'> = {
                 article: 'article',
                 blog: 'article',
                 post: 'article',
@@ -185,6 +272,16 @@ function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' |
                 document: 'book',
                 snippet: 'note',
                 code: 'note',
+                // Video & Audio types
+                video: 'video',
+                youtube: 'video',
+                vimeo: 'video',
+                movie: 'video',
+                film: 'video',
+                audio: 'audio',
+                podcast: 'audio',
+                music: 'audio',
+                song: 'audio',
         };
 
         return typeMap[normalized] ?? 'article';
@@ -207,39 +304,70 @@ export async function classifyContent(
 
         try {
                 // Choose model based on whether we have an image to analyze
-                const hasImage = imageUrl && !imageUrl.startsWith('data:'); // Can't inline base64 to API
-                const model = hasImage ? VISION_MODEL : TEXT_MODEL;
+                // Note: We'll try to convert external URLs to base64 for the vision model
+                let hasImage = imageUrl && imageUrl.length > 0;
+                let model = TEXT_MODEL; // Default to text model
+                let base64ImageUrl: string | null = null;
+
+                // Try to convert image to base64 if we have an image URL
+                if (hasImage && imageUrl) {
+                        console.log(`[AI] Attempting to convert image to base64: ${imageUrl.slice(0, 60)}...`);
+                        base64ImageUrl = await fetchImageAsBase64(imageUrl);
+
+                        if (base64ImageUrl) {
+                                model = VISION_MODEL;
+                                console.log(`[AI] Image converted successfully, using ${VISION_MODEL}`);
+                        } else {
+                                console.warn(`[AI] Image conversion failed, falling back to ${TEXT_MODEL}`);
+                                hasImage = false;
+                        }
+                }
 
                 // Build messages differently for vision vs text model
                 const messages: GLMMessage[] = [
                         {
                                 role: 'system',
-                                content: `You are a highly sophisticated curator for a visual knowledge system. Analyze the content and generate metadata.
+                                content: `You are a highly sophisticated curator for a visual knowledge system. Analyze content and generate metadata that enables SERENDIPITOUS discovery across disciplines.
 
 CRITICAL INSTRUCTIONS:
 1. SUMMARY: Write a HOLISTIC summary (3-8 sentences). Consider the entire text/image. Do not focus only on the intro. If it's a code snippet, describe what it does.
-2. TAGGING: Generate 3-5 tags. Balance MICRO (specific) and MACRO (broad) concepts.
-   - Example: For a Category Theory post -> ["category-theory", "mathematics", "abstract-algebra", "logic"].
-   - Example: For a Nike shoe -> ["nike", "sneakers", "footwear", "fashion", "sportswear"].
-   - DO NOT use generic tags like "website", "link", "page".
+
+2. TAGGING: Generate 3-5 HIERARCHICAL tags using this 3-layer structure:
+   LAYER 1 - PRIMARY (1-2 tags): The ESSENCE of the item. What makes it unique.
+     Examples: "bmw", "terence-tao", "category-theory", "breakdance"
+   
+   LAYER 2 - CONTEXTUAL (1-2 tags): The broader subject or field.
+     Examples: "automotive", "mathematics", "dance", "data-viz"
+   
+   LAYER 3 - VIBE/MOOD (1 tag): The abstract feeling, energy, or aesthetic. THIS IS CRITICAL.
+     Vocabulary: kinetic, atmospheric, minimalist, raw, nostalgic, elegant, chaotic, ethereal, tactile, visceral, contemplative, playful, precise, organic, geometric
+     Examples:
+       - Breakdance video -> "kinetic"
+       - Weather data viz -> "atmospheric"
+       - Japanese design article -> "minimalist"
+       - Academic math paper -> "contemplative"
+   
+   The VIBE tag creates cross-disciplinary portals: a breakdance video (kinetic) connects to a JavaScript animation (kinetic).
+   DO NOT use generic tags like "website", "link", "page", "content".
+
 3. PLATFORMS: Detect platforms like Are.na, Pinterest, Mastodon, Bluesky, GitHub.
 4. PRODUCTS: If the item is clearly a product, shopping item, or commercial tool, classify type as "product".`,
                         },
                 ];
 
-                if (hasImage) {
-                        // Multimodal message with image + text
+                if (hasImage && base64ImageUrl) {
+                        // Multimodal message with base64 image + text
                         const textParts: string[] = [];
                         if (url) textParts.push(`Source URL: ${url}`);
                         if (content) textParts.push(`Text content: ${content.slice(0, 800)}`);
-                        textParts.push('Analyze this image and metadata. Classify it with specific, non-generic tags (e.g., if it is a photo of a camera, use "photography", "leica", "analog" - NOT "image", "object").');
+                        textParts.push('Analyze this image and metadata. Include ONE abstract VIBE tag (e.g., "kinetic", "minimalist", "atmospheric", "raw", "elegant") alongside specific subject tags.');
 
                         messages.push({
                                 role: 'user',
                                 content: [
                                         {
                                                 type: 'image_url',
-                                                image_url: { url: imageUrl }
+                                                image_url: { url: base64ImageUrl } // Now using base64!
                                         },
                                         {
                                                 type: 'text',
@@ -263,6 +391,7 @@ CRITICAL INSTRUCTIONS:
                         messages,
                         [CLASSIFICATION_TOOL]
                 );
+
 
                 // Extract function call result
                 const toolCall = response.choices[0]?.message?.tool_calls?.[0];
@@ -348,7 +477,7 @@ function classifyContentFallback(
 
         // YouTube
         if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
-                type = 'article'; // Video type mapped to article
+                type = 'video'; // Proper video type for filter compatibility
                 tags.push('video', 'youtube', 'entertainment');
                 if (urlLower.includes('music') || contentLower.includes('music')) {
                         tags.push('music');
@@ -535,6 +664,7 @@ function classifyContentFallback(
 
 /**
  * Analyzes an image using GLM-4.6V for colors, objects, and text.
+ * Converts external URLs to base64 before sending to API.
  */
 export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResult> {
         if (!ZHIPU_API_KEY) {
@@ -547,17 +677,37 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResul
         }
 
         try {
+                // Convert image to base64 for API compatibility
+                const base64Url = await fetchImageAsBase64(imageUrl);
+                if (!base64Url) {
+                        console.warn('[AI] Could not fetch image for analysis, returning defaults');
+                        return {
+                                colors: ['#3498DB', '#2ECC71', '#9B59B6'],
+                                objects: ['image'],
+                                ocrText: null,
+                        };
+                }
+
                 const response = await callGLM(VISION_MODEL, [
                         {
                                 role: 'user',
                                 content: [
                                         {
                                                 type: 'text',
-                                                text: 'Analyze this image and respond with JSON containing: { "colors": ["#hex1", "#hex2", "#hex3"] (3 dominant colors as hex), "objects": ["object1", "object2"] (detected objects/labels), "ocrText": "any text visible in image or null" }',
+                                                text: `Analyze this image for visual similarity matching. Respond with JSON:
+{
+  "colors": ["#hex1", "#hex2", "#hex3"],  // 3-5 dominant colors as hex
+  "objects": ["object1", "object2"],       // Detected objects/subjects
+  "ocrText": "visible text or null",       // Any text in image
+  "texture": "smooth|textured|geometric|organic",  // Surface/pattern quality
+  "composition": "centered|grid|asymmetric|minimal|complex",  // Layout style
+  "visualElements": ["typography", "logo", ...],  // From: typography, logo, icon, photograph, illustration, diagram, pattern, product, person, nature, architecture, abstract
+  "paletteType": "monochrome|vibrant|muted|high-contrast|pastel"  // Color scheme
+}`,
                                         },
                                         {
                                                 type: 'image_url',
-                                                image_url: { url: imageUrl },
+                                                image_url: { url: base64Url }, // Using base64!
                                         },
                                 ],
                         },
@@ -573,6 +723,10 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResul
                                         colors: parsed.colors || ['#3498DB', '#2ECC71', '#9B59B6'],
                                         objects: parsed.objects || [],
                                         ocrText: parsed.ocrText || null,
+                                        texture: parsed.texture,
+                                        composition: parsed.composition,
+                                        visualElements: parsed.visualElements,
+                                        paletteType: parsed.paletteType,
                                 };
                         }
                 }
@@ -587,6 +741,8 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResul
                 };
         }
 }
+
+
 
 // =============================================================================
 // SUMMARY GENERATION
@@ -662,5 +818,69 @@ export async function expandSearchQuery(query: string): Promise<string[]> {
         } catch (error) {
                 console.error('[AI] Search expansion error:', error);
                 return [query];
+        }
+}
+
+// =============================================================================
+// TAG NORMALIZATION ("Gardener Bot")
+// =============================================================================
+
+/**
+ * Normalizes generated tags against existing tags in the database.
+ * Prevents tag fragmentation by remapping similar tags (e.g., "Building" -> "Architecture").
+ * 
+ * @param generatedTags - New tags from AI classification
+ * @param existingTags - Tags already in the user's database
+ * @returns Normalized tags that reuse existing ones where appropriate
+ */
+export async function normalizeTagsToExisting(
+        generatedTags: string[],
+        existingTags: string[]
+): Promise<string[]> {
+        // If no existing tags or no API, return as-is
+        if (!ZHIPU_API_KEY || existingTags.length === 0 || generatedTags.length === 0) {
+                return generatedTags;
+        }
+
+        try {
+                const response = await callGLM(TEXT_MODEL, [
+                        {
+                                role: 'system',
+                                content: `You are a tag curator for a visual knowledge system. Your job is to consolidate tags to prevent fragmentation.
+
+Given NEW tags and EXISTING tags, remap any semantically similar new tags to existing ones.
+- "building" should become "architecture" if "architecture" exists
+- "photo" should become "photography" if "photography" exists
+- "video" should become "film" if "film" exists but "video" doesn't
+
+Output a JSON array of the final tags (same length as input, preserving order).
+Keep new tags unchanged if no good match exists.`,
+                        },
+                        {
+                                role: 'user',
+                                content: `NEW: ${JSON.stringify(generatedTags)}
+EXISTING: ${JSON.stringify(existingTags.slice(0, 50))}
+
+Return only the JSON array.`,
+                        },
+                ]);
+
+                const content = response.choices[0]?.message?.content;
+                if (content) {
+                        const match = content.match(/\[[\s\S]*\]/);
+                        if (match) {
+                                const normalized = JSON.parse(match[0]) as string[];
+                                // Validate: must return same number of tags
+                                if (normalized.length === generatedTags.length) {
+                                        console.log('[AI] Tags normalized:', generatedTags, '->', normalized);
+                                        return normalized;
+                                }
+                        }
+                }
+
+                return generatedTags;
+        } catch (error) {
+                console.error('[AI] Tag normalization error:', error);
+                return generatedTags;
         }
 }

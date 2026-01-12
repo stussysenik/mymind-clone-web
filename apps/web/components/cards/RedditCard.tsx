@@ -20,6 +20,7 @@ import type { Card } from '@/lib/types';
 interface RedditCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }
@@ -31,7 +32,7 @@ interface RedditCardProps {
 /**
  * Reddit style card for posts.
  */
-export function RedditCard({ card, onDelete, onRestore, onClick }: RedditCardProps) {
+export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: RedditCardProps) {
         const [imageError, setImageError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
         const subreddit = card.metadata.subreddit || extractSubreddit(card.url);

@@ -42,8 +42,21 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
         const [error, setError] = useState<string | null>(null);
         const [isDragOver, setIsDragOver] = useState(false);
 
+        // Batch link upload state
+        const [batchProgress, setBatchProgress] = useState<{ current: number, total: number } | null>(null);
+
         const textareaRef = useRef<HTMLTextAreaElement>(null);
         const fileInputRef = useRef<HTMLInputElement>(null);
+
+        // Extract all URLs from text (for batch upload)
+        const extractLinks = (text: string): string[] => {
+                const urlRegex = /https?:\/\/[^\s<>"{}|\^\[\]`\n]+/gi;
+                const matches = text.match(urlRegex) || [];
+                return [...new Set(matches)]; // dedupe
+        };
+
+        const detectedLinks = extractLinks(content);
+        const isMultiMode = detectedLinks.length > 1;
 
         // Auto-detect mode based on content
         useEffect(() => {
@@ -145,16 +158,55 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                 if (isSubmitting) return;
 
                 // Corrections before submitting
-                let finalType = mode;
                 let payload: any = {};
                 let finalContent = content.trim();
 
-                if (mode === 'auto' && !finalContent) return; // Nothing to save
+                if (mode === 'auto' && !finalContent && !imagePreview) return; // Nothing to save
 
                 setIsSubmitting(true);
                 setError(null);
 
                 try {
+                        // BATCH MODE: Multiple links detected
+                        if (isMultiMode) {
+                                const links = detectedLinks;
+                                setBatchProgress({ current: 0, total: links.length });
+
+                                let successCount = 0;
+                                for (let i = 0; i < links.length; i++) {
+                                        setBatchProgress({ current: i + 1, total: links.length });
+                                        try {
+                                                const response = await fetch('/api/save', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ url: links[i], type: 'auto' }),
+                                                });
+                                                const data = await response.json();
+                                                if (response.ok && data.card?.id) {
+                                                        successCount++;
+                                                        // Trigger AI Enrichment (Background)
+                                                        fetch('/api/enrich', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ cardId: data.card.id }),
+                                                                keepalive: true
+                                                        }).catch(console.error);
+                                                }
+                                        } catch (err) {
+                                                console.error(`[AddModal] Failed to save ${links[i]}:`, err);
+                                        }
+                                }
+
+                                setBatchProgress(null);
+                                if (successCount === 0) {
+                                        throw new Error('Failed to save any links');
+                                }
+                                onClose();
+                                router.refresh();
+                                return;
+                        }
+
+                        // SINGLE MODE: Original logic
                         if (mode === 'image' && imagePreview) {
                                 payload = {
                                         type: 'image',
@@ -205,6 +257,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                         setError(err instanceof Error ? err.message : 'Something went wrong');
                 } finally {
                         setIsSubmitting(false);
+                        setBatchProgress(null);
                 }
         };
 
@@ -256,14 +309,41 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                                                 ref={textareaRef}
                                                                 value={content}
                                                                 onChange={(e) => setContent(e.target.value)}
-                                                                placeholder="Save something..."
+                                                                placeholder="Save something... (paste multiple links to batch import)"
                                                                 className="w-full text-2xl font-serif text-gray-800 placeholder:text-gray-300 bg-transparent border-none resize-none focus:ring-0 leading-relaxed custom-scrollbar"
-                                                                rows={mode === 'link' ? 2 : 5}
+                                                                rows={isMultiMode ? 6 : (mode === 'link' ? 2 : 5)}
                                                                 disabled={isSubmitting}
                                                         />
 
-                                                        {/* Link Detected Badge */}
-                                                        {mode === 'link' && platformInfo && (
+                                                        {/* Batch Mode Badge */}
+                                                        {isMultiMode && !batchProgress && (
+                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                                                        <Upload className="w-4 h-4" />
+                                                                        <span className="text-sm font-medium">📦 {detectedLinks.length} links detected - will save all</span>
+                                                                        <Sparkles className="w-3 h-3 ml-auto animate-pulse" />
+                                                                </div>
+                                                        )}
+
+                                                        {/* Batch Progress */}
+                                                        {batchProgress && (
+                                                                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                                        <div className="flex items-center justify-between mb-2">
+                                                                                <span className="text-sm font-medium text-gray-700">
+                                                                                        Saving {batchProgress.current} of {batchProgress.total}...
+                                                                                </span>
+                                                                                <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-primary)]" />
+                                                                        </div>
+                                                                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                                                <div
+                                                                                        className="h-full bg-[var(--accent-primary)] transition-all duration-300"
+                                                                                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                                                                                />
+                                                                        </div>
+                                                                </div>
+                                                        )}
+
+                                                        {/* Single Link Detected Badge */}
+                                                        {mode === 'link' && !isMultiMode && platformInfo && (
                                                                 <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
                                                                         <Globe className="w-4 h-4" />
                                                                         <span className="text-sm font-medium">Link detected: {platformInfo.name}</span>

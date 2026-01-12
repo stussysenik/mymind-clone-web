@@ -17,3 +17,5 @@ export { CardGridClient } from './CardGridClient';
 export { UserMenu } from './UserMenu';
 export { SpaceCard } from './SpaceCard';
 export { SpacesGridClient } from './SpacesGridClient';
+export { TrashBulkActions } from './TrashBulkActions';
+

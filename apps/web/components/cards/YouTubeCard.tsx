@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Play, ExternalLink, Trash2 } from 'lucide-react';
+import { Play, ExternalLink, Trash2, Archive } from 'lucide-react';
 import type { Card } from '@/lib/types';
 
 // =============================================================================
@@ -20,6 +20,7 @@ import type { Card } from '@/lib/types';
 interface YouTubeCardProps {
         card: Card;
         onDelete?: () => void;
+        onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }
@@ -31,7 +32,7 @@ interface YouTubeCardProps {
 /**
  * YouTube style card for videos.
  */
-export function YouTubeCard({ card, onDelete, onRestore, onClick }: YouTubeCardProps) {
+export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: YouTubeCardProps) {
         const [imageError, setImageError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
         const channelName = card.metadata.author || 'YouTube';
@@ -101,6 +102,15 @@ export function YouTubeCard({ card, onDelete, onRestore, onClick }: YouTubeCardP
                                                                 <ExternalLink className="h-4 w-4 text-gray-600" />
                                                         </a>
                                                 )}
+                                                {onArchive && (
+                                                        <button
+                                                                onClick={(e) => { e.stopPropagation(); onArchive(); }}
+                                                                className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
+                                                                aria-label="Archive card"
+                                                        >
+                                                                <Archive className="h-4 w-4 text-gray-600 hover:text-amber-500" />
+                                                        </button>
+                                                )}
                                                 {onDelete && (
                                                         <button
                                                                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -108,6 +118,18 @@ export function YouTubeCard({ card, onDelete, onRestore, onClick }: YouTubeCardP
                                                                 aria-label="Delete card"
                                                         >
                                                                 <Trash2 className="h-4 w-4 text-gray-600 hover:text-red-500" />
+                                                        </button>
+                                                )}
+                                                {onRestore && (
+                                                        <button
+                                                                onClick={(e) => { e.stopPropagation(); onRestore(); }}
+                                                                className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
+                                                                aria-label="Restore card"
+                                                        >
+                                                                <svg className="h-4 w-4 text-gray-600 hover:text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                                                        <path d="M3 3v5h5" />
+                                                                </svg>
                                                         </button>
                                                 )}
                                         </div>

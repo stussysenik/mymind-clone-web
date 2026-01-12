@@ -26,6 +26,8 @@ export interface CardMetadata {
         summary?: string;
         /** Dominant colors extracted from images (hex values) */
         colors?: string[];
+        /** Additional images (for carousels/galleries) */
+        images?: string[];
         /** Objects detected in images via Google Vision */
         objects?: string[];
         /** OCR text extracted from images */
@@ -36,6 +38,8 @@ export interface CardMetadata {
         author?: string;
         /** Estimated reading time in minutes */
         readingTime?: number;
+        /** Original publication date (ISO string) */
+        publishedAt?: string;
 
         // Platform-specific fields
         /** Source platform (twitter, instagram, youtube, etc.) */
@@ -157,7 +161,16 @@ export interface ImageAnalysisResult {
         objects: string[];
         /** Extracted text via OCR */
         ocrText: string | null;
+        /** Texture quality: smooth, textured, geometric, organic */
+        texture?: string;
+        /** Composition style: centered, grid, asymmetric, minimal, complex */
+        composition?: string;
+        /** Visual elements detected: typography, logo, icon, photograph, illustration, etc */
+        visualElements?: string[];
+        /** Color palette type: monochrome, vibrant, muted, high-contrast, pastel */
+        paletteType?: string;
 }
+
 
 // =============================================================================
 // API TYPES

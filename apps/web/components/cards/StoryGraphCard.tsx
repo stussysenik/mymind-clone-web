@@ -17,6 +17,7 @@ import type { Card } from '@/lib/types';
 interface StoryGraphCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }

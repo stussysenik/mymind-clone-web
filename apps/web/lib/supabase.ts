@@ -517,6 +517,7 @@ export async function fetchArchivedCards(userId?: string): Promise<CardRow[] | n
 
 /**
  * Gets unique tags for a user.
+ * Only counts tags from active (non-deleted, non-archived) cards.
  * 
  * @param userId - The user ID
  */
@@ -524,13 +525,42 @@ export async function getUniqueTags(userId?: string): Promise<{ tag: string; cou
         const client = getSupabaseClient(true);
         if (!client) return null;
 
-        let query = client.from('cards').select('tags');
+        // Only count tags from active cards (not deleted, not archived)
+        let query = client
+                .from('cards')
+                .select('tags')
+                .is('deleted_at', null)
+                .is('archived_at', null);
 
         if (userId) {
                 query = query.eq('user_id', userId);
         }
 
         const { data, error } = await query;
+
+        // Fallback for missing migration (missing archived_at or deleted_at columns)
+        if (error && (error.message?.includes('deleted_at') || error.message?.includes('archived_at'))) {
+                console.warn('[Supabase] Migration missing. Falling back to basic query for tags.');
+                let fallbackQuery = client.from('cards').select('tags');
+                if (userId) fallbackQuery = fallbackQuery.eq('user_id', userId);
+                const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+                if (fallbackError) {
+                        console.error('[Supabase] Error fetching tags:', fallbackError.message);
+                        return null;
+                }
+                // Aggregate tags from fallback
+                const tagCounts: Record<string, number> = {};
+                fallbackData.forEach((row: { tags: string[] | null }) => {
+                        if (row.tags) {
+                                row.tags.forEach(tag => {
+                                        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                                });
+                        }
+                });
+                return Object.entries(tagCounts)
+                        .map(([tag, count]) => ({ tag, count }))
+                        .sort((a, b) => b.count - a.count);
+        }
 
         if (error) {
                 console.error('[Supabase] Error fetching tags:', error.message);
@@ -556,16 +586,38 @@ export async function getUniqueTags(userId?: string): Promise<{ tag: string; cou
 /**
  * Fetches random cards for serendipity.
  * Strategy: Fetch IDs, pick random ones, fetch content.
+ * Only returns active cards (non-deleted, non-archived).
  */
 export async function fetchRandomCards(userId?: string, limit: number = 5): Promise<CardRow[] | null> {
         const client = getSupabaseClient(true);
         if (!client) return null;
 
-        // 1. Fetch all IDs (lightweight)
-        let query = client.from('cards').select('id').is('deleted_at', null); // Exclude deleted
+        // 1. Fetch all IDs (lightweight) - exclude both deleted AND archived
+        let query = client
+                .from('cards')
+                .select('id')
+                .is('deleted_at', null)
+                .is('archived_at', null);
         if (userId) query = query.eq('user_id', userId);
 
         const { data: allIds, error } = await query;
+
+        // Fallback for missing archived_at column
+        if (error && error.message?.includes('archived_at')) {
+                console.warn('[Supabase] Migration missing (archived_at). Falling back to deleted_at only.');
+                let fallbackQuery = client.from('cards').select('id').is('deleted_at', null);
+                if (userId) fallbackQuery = fallbackQuery.eq('user_id', userId);
+                const { data: fallbackIds, error: fallbackError } = await fallbackQuery;
+                if (fallbackError || !fallbackIds || fallbackIds.length === 0) return [];
+
+                const randomIds = fallbackIds
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, limit)
+                        .map(row => row.id);
+
+                const { data: cards } = await client.from('cards').select('*').in('id', randomIds);
+                return (cards as CardRow[]) || [];
+        }
 
         if (error || !allIds || allIds.length === 0) return [];
 

@@ -33,9 +33,10 @@ yarn-error.log*
 # tests
 test-results/
 playwright-report/
-tests/.auth/
+# Commented out to track Playwright auth state for testing
+# tests/.auth/
 
-# env files
-.env
-.env.local
-.env.*
+# env files (commented out to allow tracking for testing)
+# .env
+# .env.local
+# .env.*

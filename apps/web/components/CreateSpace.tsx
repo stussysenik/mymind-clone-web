@@ -45,7 +45,7 @@ export function CreateSpace() {
                                 className="flex items-center gap-2 px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg hover:opacity-90 transition-opacity font-medium text-sm"
                         >
                                 <Plus className="w-4 h-4" />
-                                <span>Create Smart Space</span>
+                                <span>Create Space</span>
                         </button>
                 );
         }

@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS cards (
   metadata jsonb DEFAULT '{}'::jsonb,
   tags text[] DEFAULT '{}',
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  deleted_at timestamptz DEFAULT NULL,
+  archived_at timestamptz DEFAULT NULL
 );
 
 -- Indexes for performance
@@ -26,6 +28,8 @@ CREATE INDEX IF NOT EXISTS idx_cards_type ON cards(type);
 CREATE INDEX IF NOT EXISTS idx_cards_tags ON cards USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_cards_metadata ON cards USING GIN(metadata);
 CREATE INDEX IF NOT EXISTS idx_cards_created ON cards(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cards_deleted_at ON cards(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_cards_archived_at ON cards(archived_at);
 
 -- Full-text search index
 CREATE INDEX IF NOT EXISTS idx_cards_search ON cards USING GIN(

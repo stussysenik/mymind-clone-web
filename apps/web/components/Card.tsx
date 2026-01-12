@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2, Twitter, Volume2, MessageSquare } from 'lucide-react';
+import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2, Twitter, Volume2, MessageSquare, Archive } from 'lucide-react';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
 
@@ -35,6 +35,8 @@ interface CardProps {
         card: CardType;
         /** Optional delete handler */
         onDelete?: () => void;
+        /** Optional archive handler */
+        onArchive?: () => void;
         /** Optional restore handler (for Trash) */
         onRestore?: () => void;
         /** Optional click handler (for Detail View) */
@@ -65,31 +67,31 @@ const TYPE_ICONS = {
 /**
  * Smart card component that routes to platform-specific renderers.
  */
-export function Card({ card, onDelete, onRestore, onClick }: CardProps) {
+export function Card({ card, onDelete, onArchive, onRestore, onClick }: CardProps) {
         const platform = detectPlatform(card.url);
 
         // Route to platform-specific cards
         switch (platform) {
                 case 'twitter':
-                        return <TwitterCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <TwitterCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'instagram':
-                        return <InstagramCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <InstagramCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'youtube':
-                        return <YouTubeCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <YouTubeCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'reddit':
-                        return <RedditCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <RedditCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'letterboxd':
-                        return <LetterboxdCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <LetterboxdCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'imdb':
-                        return <MovieCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <MovieCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'goodreads':
-                        return <GoodreadsCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <GoodreadsCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'amazon':
-                        return <AmazonCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <AmazonCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 case 'storygraph':
-                        return <StoryGraphCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <StoryGraphCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
                 default:
-                        return <GenericCard card={card} onDelete={onDelete} onRestore={onRestore} onClick={onClick} />;
+                        return <GenericCard card={card} onDelete={onDelete} onArchive={onArchive} onRestore={onRestore} onClick={onClick} />;
         }
 }
 
@@ -100,7 +102,7 @@ export function Card({ card, onDelete, onRestore, onClick }: CardProps) {
 /**
  * Generic card for non-platform-specific content.
  */
-function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
+function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProps) {
         const [imageError, setImageError] = useState(false);
         const [screenshotError, setScreenshotError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
@@ -207,6 +209,8 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
 
         return (
                 <article
+                        data-testid="card"
+                        data-card-id={card.id}
                         onClick={onClick}
                         className={`
         group relative flex flex-col overflow-hidden rounded-lg
@@ -304,6 +308,18 @@ function GenericCard({ card, onDelete, onRestore, onClick }: CardProps) {
                                                 >
                                                         <ExternalLink className="h-3.5 w-3.5" />
                                                 </a>
+                                        )}
+                                        {onArchive && (
+                                                <button
+                                                        onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onArchive();
+                                                        }}
+                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-amber-600 transition-colors"
+                                                        aria-label="Archive card"
+                                                >
+                                                        <Archive className="h-3.5 w-3.5" />
+                                                </button>
                                         )}
                                         {onDelete && (
                                                 <button

@@ -105,10 +105,13 @@ export async function PATCH(
                         .single();
 
                 if (!existing || existing.user_id !== user.id) {
+                        console.error('[API] Patch failed: Not found/Forbidden', { id, userId: user.id });
                         return NextResponse.json({ success: false, error: 'Not found or forbidden' }, { status: 404 });
                 }
 
+                console.log('[API] Patching card', id, 'Updates:', JSON.stringify(body));
                 const updated = await updateCard(id, body);
+                console.log('[API] Patch result:', !!updated);
                 return NextResponse.json({ success: true, card: updated });
         } catch (error) {
                 console.error('[API] Update error:', error);

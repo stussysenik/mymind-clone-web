@@ -4,7 +4,7 @@
  * Top navigation matching mymind.com with:
  * - Brand logo on left
  * - Navigation tabs in center: Everything | Spaces | Serendipity
- * - User menu on right
+ * - User menu on right with Archive and Trash links
  * 
  * Enhanced with tactile micro-interactions (Don Norman's design principles)
  * 
@@ -15,7 +15,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, LayoutGrid, Shuffle, Archive } from 'lucide-react';
+import { Sparkles, LayoutGrid, Shuffle, Archive, Trash2 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { useState } from 'react';
 
@@ -62,7 +62,7 @@ export function Header() {
                                                 </div>
                                                 <span className="font-serif text-xl font-bold text-[var(--foreground)] tracking-tight 
                                                                group-hover:text-[var(--accent-primary)] transition-colors hidden sm:inline">
-                                                        Creative Brain
+                                                        digital consumption experiment.
                                                 </span>
                                         </Link>
                                 </div>
@@ -122,20 +122,36 @@ export function Header() {
                                         })}
                                 </nav>
 
-                                {/* Right: User Menu & Trash */}
-                                <div className="flex items-center min-w-[120px] justify-end gap-2">
+                                {/* Right: Archive, Trash & User Menu */}
+                                <div className="flex items-center justify-end gap-1 shrink-0">
+                                        {/* Archive Link */}
+                                        <Link
+                                                href="/archive"
+                                                className={`
+                                                        p-2 rounded-lg text-[var(--foreground-muted)] 
+                                                        tactile-btn
+                                                        hover:text-amber-600 hover:bg-amber-50
+                                                        ${pathname === '/archive' ? 'text-amber-600 bg-amber-50' : ''}
+                                                `}
+                                                title="Archive - Saved for later"
+                                        >
+                                                <Archive className="h-5 w-5" />
+                                        </Link>
+
+                                        {/* Trash Link */}
                                         <Link
                                                 href="/trash"
                                                 className={`
                                                         p-2 rounded-lg text-[var(--foreground-muted)] 
                                                         tactile-btn
-                                                        hover:text-[var(--foreground)] hover:bg-gray-100
-                                                        ${pathname === '/trash' ? 'text-[var(--foreground)] bg-gray-100' : ''}
+                                                        hover:text-red-500 hover:bg-red-50
+                                                        ${pathname === '/trash' ? 'text-red-500 bg-red-50' : ''}
                                                 `}
-                                                title="Archive / Recently Deleted"
+                                                title="Trash - Items to be deleted"
                                         >
-                                                <Archive className="h-5 w-5" />
+                                                <Trash2 className="h-5 w-5" />
                                         </Link>
+
                                         <UserMenu />
                                 </div>
                         </div>
@@ -144,3 +160,4 @@ export function Header() {
 }
 
 export default Header;
+

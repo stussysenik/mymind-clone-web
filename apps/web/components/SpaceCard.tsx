@@ -1,40 +1,48 @@
 /**
  * MyMind Clone - Space Card Component
  * 
- * Displays a single space card with hover delete functionality.
- * Uses localStorage to persist hidden spaces (non-destructive deletion).
+ * Displays a single space card with hover hide/delete functionality.
+ * Hide = non-destructive (cards keep their tags)
+ * Delete = destructive (deletes all cards in space)
  * 
- * @fileoverview Client component for space cards with delete
+ * @fileoverview Client component for space cards with hide/delete
  */
 
 'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Hash, X } from 'lucide-react';
+import { Hash, X, Trash2, EyeOff } from 'lucide-react';
 
 interface SpaceCardProps {
         tag: string;
         count: number;
-        onDelete: (tag: string) => void;
+        onHide?: (tag: string) => void;
+        onDelete?: () => void;
 }
 
-export function SpaceCard({ tag, count, onDelete }: SpaceCardProps) {
+export function SpaceCard({ tag, count, onHide, onDelete }: SpaceCardProps) {
         const [showConfirm, setShowConfirm] = useState(false);
 
-        const handleDelete = (e: React.MouseEvent) => {
+        const handleHide = (e: React.MouseEvent) => {
                 e.preventDefault();
                 e.stopPropagation();
 
                 if (showConfirm) {
-                        onDelete(tag);
+                        onHide?.(tag);
                         setShowConfirm(false);
                 } else {
                         setShowConfirm(true);
                 }
         };
 
-        const handleCancelDelete = (e: React.MouseEvent) => {
+        const handleDelete = (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete?.();
+        };
+
+        const handleCancelConfirm = (e: React.MouseEvent) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setShowConfirm(false);
@@ -45,36 +53,52 @@ export function SpaceCard({ tag, count, onDelete }: SpaceCardProps) {
                         href={`/?q=%23${encodeURIComponent(tag)}`}
                         className="group relative aspect-square bg-white rounded-xl shadow-sm border border-[var(--border)] hover:shadow-md transition-all p-6 flex flex-col justify-between"
                 >
-                        {/* Delete Button (appears on hover) */}
-                        <button
-                                onClick={handleDelete}
-                                className={`absolute top-3 right-3 p-1.5 rounded-full transition-all z-10 ${showConfirm
-                                        ? 'bg-red-500 text-white opacity-100'
-                                        : 'bg-gray-100 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500'
-                                        }`}
-                                title={showConfirm ? 'Click again to confirm' : 'Hide this space'}
-                        >
-                                <X className="w-4 h-4" />
-                        </button>
+                        {/* Action Buttons (appear on hover) */}
+                        <div className="absolute top-3 right-3 flex gap-1.5 z-10">
+                                {/* Hide Button */}
+                                {onHide && (
+                                        <button
+                                                onClick={handleHide}
+                                                className={`p-1.5 rounded-full transition-all ${showConfirm
+                                                        ? 'bg-amber-500 text-white opacity-100'
+                                                        : 'bg-gray-100 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-amber-100 hover:text-amber-500'
+                                                        }`}
+                                                title={showConfirm ? 'Click again to confirm' : 'Hide this space'}
+                                        >
+                                                <EyeOff className="w-4 h-4" />
+                                        </button>
+                                )}
 
-                        {/* Confirmation overlay */}
+                                {/* Delete Button */}
+                                {onDelete && (
+                                        <button
+                                                onClick={handleDelete}
+                                                className="p-1.5 rounded-full bg-gray-100 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500 transition-all"
+                                                title="Delete space and all its posts"
+                                        >
+                                                <Trash2 className="w-4 h-4" />
+                                        </button>
+                                )}
+                        </div>
+
+                        {/* Hide Confirmation overlay */}
                         {showConfirm && (
                                 <div
-                                        className="absolute inset-0 bg-red-50/90 rounded-xl flex flex-col items-center justify-center z-5 backdrop-blur-sm"
-                                        onClick={handleCancelDelete}
+                                        className="absolute inset-0 bg-amber-50/95 rounded-xl flex flex-col items-center justify-center z-5 backdrop-blur-sm"
+                                        onClick={handleCancelConfirm}
                                 >
-                                        <p className="text-sm font-medium text-red-600 mb-3 text-center px-4">
-                                                Hide "{tag}" space?
+                                        <p className="text-sm font-medium text-amber-700 mb-3 text-center px-4">
+                                                Hide &quot;{tag}&quot; space?
                                         </p>
                                         <div className="flex gap-2">
                                                 <button
-                                                        onClick={handleDelete}
-                                                        className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                                                        onClick={handleHide}
+                                                        className="px-3 py-1.5 text-xs font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600"
                                                 >
                                                         Hide
                                                 </button>
                                                 <button
-                                                        onClick={handleCancelDelete}
+                                                        onClick={handleCancelConfirm}
                                                         className="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50"
                                                 >
                                                         Cancel
@@ -103,3 +127,4 @@ export function SpaceCard({ tag, count, onDelete }: SpaceCardProps) {
 }
 
 export default SpaceCard;
+

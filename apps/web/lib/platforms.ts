@@ -15,6 +15,7 @@
  */
 export type Platform =
         | 'twitter'
+        | 'mastodon'
         | 'instagram'
         | 'youtube'
         | 'reddit'
@@ -57,6 +58,13 @@ export const PLATFORMS: Record<Platform, PlatformInfo> = {
                 color: '#000000',
                 bgColor: 'rgba(0, 0, 0, 0.05)',
                 icon: 'twitter',
+        },
+        mastodon: {
+                id: 'mastodon',
+                name: 'Mastodon',
+                color: '#6364FF',
+                bgColor: 'rgba(99, 100, 255, 0.08)',
+                icon: 'atSign',
         },
         instagram: {
                 id: 'instagram',
@@ -189,6 +197,19 @@ export function detectPlatform(url: string | null | undefined): Platform {
                 return 'twitter';
         }
 
+        // Mastodon instances (various popular servers)
+        if (urlLower.includes('mastodon') ||
+                urlLower.includes('mathstodon') ||
+                urlLower.includes('fosstodon') ||
+                urlLower.includes('hachyderm.io') ||
+                urlLower.includes('mas.to') ||
+                urlLower.includes('mstdn.social') ||
+                urlLower.includes('mstdn.jp') ||
+                urlLower.includes('infosec.exchange') ||
+                urlLower.includes('sigmoid.social')) {
+                return 'mastodon';
+        }
+
         // Instagram
         if (urlLower.includes('instagram.com')) {
                 return 'instagram';
@@ -301,5 +322,5 @@ export function isVideoPlatform(url: string | null | undefined): boolean {
  */
 export function isSocialPlatform(url: string | null | undefined): boolean {
         const platform = detectPlatform(url);
-        return ['twitter', 'instagram', 'reddit', 'tiktok', 'linkedin'].includes(platform);
+        return ['twitter', 'mastodon', 'instagram', 'reddit', 'tiktok', 'linkedin'].includes(platform);
 }

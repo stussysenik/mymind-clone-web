@@ -88,6 +88,39 @@ export function unarchiveLocalCard(id: string): boolean {
                 return false;
         }
 }
+
+/**
+ * Updates a local card with partial data.
+ * Use for updating tags, metadata, title, etc.
+ */
+export function updateLocalCard(id: string, updates: Partial<Card>): boolean {
+        if (typeof window === 'undefined') return false;
+
+        try {
+                const existing = getLocalCards();
+                let found = false;
+                const updated = existing.map(card => {
+                        if (card.id === id) {
+                                found = true;
+                                return { ...card, ...updates, updatedAt: new Date().toISOString() };
+                        }
+                        return card;
+                });
+
+                if (!found) {
+                        console.warn('[LocalStorage] Card not found for update:', id);
+                        return false;
+                }
+
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                console.log('[LocalStorage] Card updated:', id, updates);
+                return true;
+        } catch (error) {
+                console.error('[LocalStorage] Error updating card:', error);
+                return false;
+        }
+}
+
 /**
  * Saves a new card to localStorage.
  * Prepends to existing cards (newest first).
@@ -103,6 +136,7 @@ export function saveLocalCard(card: Card): void {
                 console.error('[LocalStorage] Error saving card:', error);
         }
 }
+
 
 /**
  * Deletes a card from localStorage by ID.

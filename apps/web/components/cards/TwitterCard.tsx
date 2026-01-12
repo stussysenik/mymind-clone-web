@@ -20,6 +20,7 @@ import type { Card } from '@/lib/types';
 interface TwitterCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }
@@ -31,7 +32,7 @@ interface TwitterCardProps {
 /**
  * Twitter/X style card for tweets.
  */
-export function TwitterCard({ card, onDelete, onRestore, onClick }: TwitterCardProps) {
+export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: TwitterCardProps) {
         const [isHovered, setIsHovered] = useState(false);
         const author = card.metadata.author || '@user';
         const tweetText = card.content || card.title || '';

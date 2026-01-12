@@ -20,6 +20,7 @@ import type { Card } from '@/lib/types';
 interface InstagramCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }
@@ -31,7 +32,7 @@ interface InstagramCardProps {
 /**
  * Instagram style card for posts and reels.
  */
-export function InstagramCard({ card, onDelete, onRestore, onClick }: InstagramCardProps) {
+export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }: InstagramCardProps) {
         const [imageError, setImageError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
         const isReel = card.url?.includes('/reel/') || card.url?.includes('/reels/');

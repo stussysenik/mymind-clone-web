@@ -13,6 +13,8 @@ import { expandSearchQuery } from '@/lib/ai';
 import { getDemoCards } from '@/lib/demo-data';
 import { rowToCard } from '@/lib/types';
 import type { Card } from '@/lib/types';
+import { querySimilar, isPineconeConfigured } from '@/lib/pinecone';
+import { getUser } from '@/lib/supabase-server';
 
 // =============================================================================
 // TYPES
@@ -104,5 +106,92 @@ export async function GET(request: NextRequest): Promise<NextResponse<SearchResp
                         },
                         { status: 500 }
                 );
+        }
+}
+
+export async function POST(request: NextRequest) {
+        try {
+                // Check if Pinecone is configured
+                if (!isPineconeConfigured()) {
+                        return NextResponse.json({
+                                success: false,
+                                error: 'Vector search not configured',
+                                matches: [],
+                                cards: [],
+                        });
+                }
+
+                const user = await getUser();
+                if (!user) {
+                        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+                }
+
+                const body = await request.json();
+                const { query, mode = 'smart', topK = 30 } = body;
+
+                if (!query) {
+                        return NextResponse.json({
+                                success: false,
+                                error: 'Query is required',
+                        }, { status: 400 });
+                }
+
+                // Query Pinecone for similar records based on TEXT
+                const matches = await querySimilar(query, topK);
+
+                // Fetch full card data for the matches from Supabase
+                const matchIds = matches.map(m => m.id);
+
+                if (matchIds.length === 0) {
+                        return NextResponse.json({ success: true, matches: [], cards: [] });
+                }
+
+                // Import supabase dynamically
+                const { getSupabaseClient } = await import('@/lib/supabase');
+                const client = getSupabaseClient(true);
+
+                if (!client) {
+                        return NextResponse.json({
+                                success: true,
+                                matches: matches.map(m => ({
+                                        id: m.id,
+                                        score: m.score,
+                                        ...m.metadata
+                                })),
+                                cards: []
+                        });
+                }
+
+                const { data: cards, error: dbError } = await client
+                        .from('cards')
+                        .select('*')
+                        .in('id', matchIds);
+
+                if (dbError) {
+                        console.error('[Search API] DB Error:', dbError);
+                        return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
+                }
+
+                // Sort cards by similarity score (Pinecone order)
+                const sortedCards = cards?.sort((a, b) => {
+                        const scoreA = matches.find(m => m.id === a.id)?.score || 0;
+                        const scoreB = matches.find(m => m.id === b.id)?.score || 0;
+                        return scoreB - scoreA;
+                }) || [];
+
+                return NextResponse.json({
+                        success: true,
+                        mode,
+                        query,
+                        matches: matches,    // Raw pinecone matches with scores
+                        cards: sortedCards,  // Full card objects
+                });
+
+        } catch (error) {
+                console.error('[Search API] Error:', error);
+                return NextResponse.json({
+                        success: false,
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                }, { status: 500 });
         }
 }

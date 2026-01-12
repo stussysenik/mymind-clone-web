@@ -17,6 +17,7 @@ import type { Card } from '@/lib/types';
 interface AmazonCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }

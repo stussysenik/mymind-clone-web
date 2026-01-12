@@ -100,12 +100,13 @@ export function TagScroller({
                 if (tagId && tagId !== 'all') {
                         // Map UI tags to DB types
                         let dbType = tagId;
-                        if (tagId === 'webpages') dbType = 'article';
+                        if (tagId === 'webpages') dbType = 'article'; // Web pages are essentially articles/content
+                        if (tagId === 'articles') dbType = 'article'; // Explicit articles
                         if (tagId === 'images') dbType = 'image';
                         if (tagId === 'products') dbType = 'product';
                         if (tagId === 'books') dbType = 'book';
                         if (tagId === 'videos') dbType = 'video';
-                        if (tagId === 'posts') dbType = 'twitter';
+                        if (tagId === 'posts') dbType = 'twitter'; // Posts can be twitter, bluesky, etc.
 
                         params.set('type', dbType);
                 } else {
@@ -154,8 +155,9 @@ export function TagScroller({
                         <div
                                 ref={scrollRef}
                                 onScroll={handleScroll}
-                                className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-1"
+                                className="flex items-center gap-3 overflow-x-auto hide-scrollbar px-1 pb-1"
                         >
+
                                 {tags.map((tag) => {
                                         const Icon = tag.icon;
                                         const isSelected = selectedTag === tag.id;
@@ -169,7 +171,7 @@ export function TagScroller({
                                                         onMouseUp={() => setPressedTag(null)}
                                                         onMouseLeave={() => setPressedTag(null)}
                                                         className={`
-                                                                group relative inline-flex items-center gap-2 px-4 py-2
+                                                                group relative inline-flex items-center gap-1.5 px-3.5 py-2
                                                                 rounded-full text-sm font-medium whitespace-nowrap
                                                                 select-none cursor-pointer
                                                                 transition-all duration-150
@@ -178,10 +180,11 @@ export function TagScroller({
                                                                         : 'hover:-translate-y-0.5'
                                                                 }
                                                                 ${isSelected
-                                                                        ? 'bg-white text-black shadow-md ring-1 ring-black/5'
-                                                                        : 'bg-transparent text-gray-500 hover:bg-white hover:text-black hover:shadow-sm'
+                                                                        ? 'bg-white text-black shadow-md ring-1 ring-black/10 border-b-2 border-[var(--accent-primary)]'
+                                                                        : 'bg-transparent text-gray-500 hover:bg-white/80 hover:text-black hover:shadow-sm'
                                                                 }
                                                         `}
+
                                                         style={{
                                                                 // Spring animation on release
                                                                 transitionTimingFunction: isPressed

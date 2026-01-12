@@ -14,10 +14,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateCard, getSupabaseClient } from '@/lib/supabase';
-import { classifyContent } from '@/lib/ai';
+import { updateCard, getSupabaseClient, getUniqueTags } from '@/lib/supabase';
+import { classifyContent, normalizeTagsToExisting, analyzeImage } from '@/lib/ai';
 import { getUser } from '@/lib/supabase-server';
 import { scrapeUrl } from '@/lib/scraper';
+import { upsertRecord, buildEmbeddingText } from '@/lib/pinecone';
 
 // =============================================================================
 // RETRY CONFIGURATION
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
 
                 // 2. Ensure we have content (scrape if missing)
                 let contentToAnalyze = card.content;
+                let scrapedDate: string | undefined;
 
                 // If no content but we have a URL, try scraping it now
                 if (!contentToAnalyze && card.url) {
@@ -112,6 +114,7 @@ export async function POST(request: NextRequest) {
                                 console.log(`[Enrich API] Content missing, re-scraping URL: ${card.url}`);
                                 const scraped = await scrapeUrl(card.url);
                                 contentToAnalyze = scraped.content;
+                                scrapedDate = scraped.publishedAt;
 
                                 // Update card with scraped content for future
                                 if (contentToAnalyze) {
@@ -119,7 +122,8 @@ export async function POST(request: NextRequest) {
                                                 content: contentToAnalyze,
                                                 // Also update title/image if scraper found better ones
                                                 title: (!card.title || card.title === 'Link') ? scraped.title : card.title,
-                                                image_url: (!card.image_url) ? scraped.imageUrl : card.image_url
+                                                image_url: (!card.image_url) ? scraped.imageUrl : card.image_url,
+                                                // We don't update metadata here to avoid race conditions, we'll do it in the final update
                                         });
                                 }
                         } catch (scrapeError) {
@@ -127,30 +131,85 @@ export async function POST(request: NextRequest) {
                         }
                 }
 
-                // 3. Run AI Classification with retry logic
-                const classification = await withRetry(async () => {
-                        return await classifyContent(
-                                card.url,
-                                contentToAnalyze,
-                                card.image_url
-                        );
-                });
+                // 3. Run AI Classification & Image Analysis (parallel)
+                const [classification, imageAnalysis] = await Promise.all([
+                        withRetry(async () => {
+                                return await classifyContent(
+                                        card.url,
+                                        contentToAnalyze,
+                                        card.image_url
+                                );
+                        }),
+                        // Analyze image if we have one (and it's not a placeholder/falback)
+                        card.image_url ? analyzeImage(card.image_url).catch((err: unknown) => {
+                                console.warn('[Enrich API] Image analysis failed:', err);
+                                return null;
+                        }) : Promise.resolve(null)
+                ]);
 
-                // 3. Update Card with successful enrichment
+                // 4. Normalize tags against existing database tags ("Gardener Bot")
+                let finalTags = classification.tags;
+                try {
+                        const existingTags = await getUniqueTags(userId);
+                        const existingTagNames = (existingTags ?? []).map(t => t.tag);
+                        if (existingTagNames.length > 0) {
+                                finalTags = await normalizeTagsToExisting(classification.tags, existingTagNames);
+                        }
+                } catch (normError) {
+                        console.warn('[Enrich API] Tag normalization skipped:', normError);
+                }
+
+                // 5. Update Card with successful enrichment
+                // CRITICAL: Re-fetch latest metadata to prevent overwriting concurrent user updates (e.g. notes)
+                const { data: latestCard } = await client
+                        .from('cards')
+                        .select('metadata, tags')
+                        .eq('id', cardId)
+                        .single();
+
+                const currentMetadata = latestCard?.metadata || card.metadata;
+                const currentTags = latestCard?.tags || card.tags || [];
+                const mergedTags = Array.from(new Set([...currentTags, ...finalTags]));
+
                 await updateCard(cardId, {
                         type: classification.type,
                         title: classification.title,
-                        tags: classification.tags,
+                        tags: mergedTags,
                         metadata: {
-                                ...card.metadata,
+                                ...currentMetadata,
                                 summary: classification.summary,
-                                platform: classification.platform || card.metadata.platform, // Updates platform if AI found one
+                                platform: classification.platform || currentMetadata.platform,
+                                publishedAt: scrapedDate || currentMetadata.publishedAt,
+                                colors: imageAnalysis?.colors,
+                                objects: imageAnalysis?.objects,
+                                ocrText: imageAnalysis?.ocrText,
                                 processing: false,
                                 enrichmentError: null,
                                 enrichmentFailedAt: null,
                                 enrichedAt: new Date().toISOString()
                         }
                 });
+
+                // 6. Upsert to Pinecone for semantic similarity (non-blocking)
+                const embeddingText = buildEmbeddingText({
+                        title: classification.title,
+                        tags: finalTags,
+                        metadata: { summary: classification.summary },
+                });
+
+                // Truncate URL and ensure metadata size safety for Pinecone
+                const safeImageUrl = (card.image_url && card.image_url.length < 1000) ? card.image_url : null;
+
+                upsertRecord({
+                        id: cardId,
+                        text: embeddingText,
+                        metadata: {
+                                title: classification.title || '',
+                                type: classification.type,
+                                tags: finalTags,
+                                image_url: safeImageUrl || '', // Prevent oversized metadata
+                        },
+                }).catch(err => console.warn('[Enrich API] Pinecone upsert failed:', err));
 
                 console.log(`[Enrich API] Success for card: ${cardId}`);
 

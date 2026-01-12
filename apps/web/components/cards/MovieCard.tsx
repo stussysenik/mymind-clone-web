@@ -21,6 +21,7 @@ import { detectPlatform } from '@/lib/platforms';
 interface MovieCardProps {
         card: Card;
         onDelete?: () => void;
+	onArchive?: () => void;
         onRestore?: () => void;
         onClick?: () => void;
 }
@@ -32,7 +33,7 @@ interface MovieCardProps {
 /**
  * Movie/Film card for IMDB and Letterboxd.
  */
-export function MovieCard({ card, onDelete, onRestore, onClick }: MovieCardProps) {
+export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: MovieCardProps) {
         const [imageError, setImageError] = useState(false);
         const [isHovered, setIsHovered] = useState(false);
         const platform = detectPlatform(card.url);

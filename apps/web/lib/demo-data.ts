@@ -101,7 +101,7 @@ export const DEMO_CARDS: Card[] = [
         {
                 id: 'youtube-001',
                 userId: DEMO_USER_ID,
-                type: 'article',
+                type: 'video',
                 title: 'New Year\'s Eve at Stereo Montreal',
                 content: 'An immersive night of electronic music at one of the world\'s best clubs',
                 url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -120,7 +120,7 @@ export const DEMO_CARDS: Card[] = [
         {
                 id: 'youtube-002',
                 userId: DEMO_USER_ID,
-                type: 'article',
+                type: 'video',
                 title: 'Building a Second Brain - Full Course',
                 content: 'The complete guide to personal knowledge management with Tiago Forte',
                 url: 'https://youtu.be/ABCD1234',

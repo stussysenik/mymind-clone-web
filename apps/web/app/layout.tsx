@@ -31,7 +31,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Creative Brain - Your visual mind, organized',
+    default: 'digital consumption, make connection, recall anything.',
     template: '%s | Creative Brain',
   },
   description:

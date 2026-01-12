@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, X, PackagePlus, Loader2 } from 'lucide-react';
+import { Search, X, PackagePlus, Loader2, Sparkles } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 
 // =============================================================================
@@ -40,7 +40,10 @@ export function SearchBar({
         const searchParams = useSearchParams();
 
         const initialQuery = searchParams.get('q') ?? '';
+        const initialMode = searchParams.get('mode') === 'smart' ? 'smart' : 'exact';
+
         const [query, setQuery] = useState(initialQuery);
+        const [mode, setMode] = useState<'exact' | 'smart'>(initialMode);
         const [isFocused, setIsFocused] = useState(false);
         const [isSaving, setIsSaving] = useState(false);
 
@@ -54,6 +57,15 @@ export function SearchBar({
                 // This prevents the race condition where debounced URL update reverts local state
                 if (!isFocused && urlQuery !== query) {
                         setQuery(urlQuery);
+                }
+                if (!isFocused && urlQuery !== query) {
+                        setQuery(urlQuery);
+                }
+
+                // Sync mode if changed externally
+                const urlMode = searchParams.get('mode') === 'smart' ? 'smart' : 'exact';
+                if (urlMode !== mode) {
+                        setMode(urlMode);
                 }
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [searchParams, isFocused]); // query excluded to avoid cycle, verify logic
@@ -70,14 +82,21 @@ export function SearchBar({
                         } else {
                                 params.delete('q');
                         }
-                        console.log('[SearchBar] Updating URL:', debouncedQuery);
+                        if (mode === 'smart') {
+                                params.set('mode', 'smart');
+                        } else {
+                                params.delete('mode');
+                        }
+
+                        console.log('[SearchBar] Updating URL:', debouncedQuery, mode);
                         router.push(`?${params.toString()}`, { scroll: false });
                 }
 
 
+
                 onSearch?.(debouncedQuery);
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [debouncedQuery, router, onSearch]); // Exclude searchParams to avoid loop when URL changes externally
+        }, [debouncedQuery, mode, router, onSearch]); // Exclude searchParams to avoid loop when URL changes externally
 
         // Clean up: Removed separate updateUrl callback to simplify recursion risk
 
@@ -126,7 +145,10 @@ export function SearchBar({
                         } else {
                                 params.delete('q');
                         }
-                        console.log('[SearchBar] Enter pressed, immediate URL update:', query.trim());
+                        if (mode === 'smart') {
+                                params.set('mode', 'smart');
+                        }
+                        console.log('[SearchBar] Enter pressed, immediate URL update:', query.trim(), mode);
                         router.push(`?${params.toString()}`, { scroll: false });
                         onSearch?.(query.trim());
                 } else if (e.key === 'Enter' && e.shiftKey) {
@@ -142,18 +164,20 @@ export function SearchBar({
                         <div
                                 className={`
 					flex items-center gap-3 py-3 px-4 rounded-xl
-					transition-all duration-200 border
-					${isFocused
-                                                ? 'bg-white shadow-md border-transparent ring-1 ring-black/5'
-                                                : 'bg-gray-50 border-transparent hover:bg-white hover:shadow-sm'
+					transition-all duration-300 ease-out border
+                                        ${isFocused
+                                                ? 'bg-white shadow-xl ring-1 ring-black/5 transform -translate-y-0.5'
+                                                : 'bg-white/50 border border-gray-100 hover:bg-white hover:shadow-md'
                                         }
+                                        ${mode === 'smart' ? 'ring-1 ring-purple-500/30 shadow-[0_4px_20px_-12px_rgba(168,85,247,0.4)]' : ''}
 				`}
                         >
+
                                 {/* Search Icon */}
                                 <Search
                                         className={`
             h-5 w-5 flex-shrink-0 transition-colors
-            ${isFocused ? 'text-[var(--accent-primary)]' : 'text-[var(--foreground-muted)]'}
+            ${isFocused ? (mode === 'smart' ? 'text-purple-600' : 'text-gray-900') : 'text-gray-400'}
           `}
                                 />
 
@@ -175,6 +199,35 @@ export function SearchBar({
                                         style={{ fontFamily: 'var(--font-serif)' }}
                                         aria-label="Search cards"
                                 />
+
+                                {/* Smart Toggle */}
+                                <button
+                                        onClick={() => {
+                                                const newMode = mode === 'exact' ? 'smart' : 'exact';
+                                                const params = new URLSearchParams(searchParams.toString());
+                                                if (newMode === 'smart') {
+                                                        params.set('mode', 'smart');
+                                                } else {
+                                                        params.delete('mode');
+                                                }
+                                                // Removed optimistic update to prevent race with useEffect sync
+                                                // setMode(newMode); 
+                                                router.push(`?${params.toString()}`, { scroll: false });
+                                        }}
+                                        className={`
+                                                flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-all
+                                                ${mode === 'smart'
+                                                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                }
+                                        `}
+                                        title={mode === 'smart' ? "Disable Smart Search" : "Enable Smart Search (AI)"}
+                                        aria-label="Toggle Search Mode"
+                                        type="button"
+                                >
+                                        <Sparkles className={`w-3 h-3 ${mode === 'smart' ? 'fill-purple-400' : ''}`} />
+                                        {mode === 'smart' ? 'Smart' : 'Exact'}
+                                </button>
 
                                 {/* Actions */}
                                 {query && (

@@ -3,14 +3,16 @@
  * 
  * Client component that wraps the space cards and handles hiding/deletion.
  * Uses localStorage to persist hidden spaces (non-destructive).
+ * Now also supports permanent deletion (destructive) with confirmation.
  * 
- * @fileoverview Client wrapper for spaces grid with hide functionality
+ * @fileoverview Client wrapper for spaces grid with hide/delete functionality
  */
 
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PackageOpen, Eye } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { PackageOpen, Eye, Trash2 } from 'lucide-react';
 import { SpaceCard } from './SpaceCard';
 
 const HIDDEN_SPACES_KEY = 'mymind_hidden_spaces';
@@ -20,9 +22,12 @@ interface SpacesGridClientProps {
 }
 
 export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
+        const router = useRouter();
         const [hiddenSpaces, setHiddenSpaces] = useState<string[]>([]);
         const [showHidden, setShowHidden] = useState(false);
         const [mounted, setMounted] = useState(false);
+        const [deleteConfirmTag, setDeleteConfirmTag] = useState<string | null>(null);
+        const [isDeleting, setIsDeleting] = useState(false);
 
         // Load hidden spaces from localStorage on mount
         useEffect(() => {
@@ -63,6 +68,35 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                 saveHiddenSpaces([]);
         };
 
+        // Permanently delete all cards in a space
+        const handleDeleteSpace = async (tag: string) => {
+                setIsDeleting(true);
+                try {
+                        const response = await fetch('/api/spaces/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ tag }),
+                        });
+
+                        if (response.ok) {
+                                // Also remove from hidden list if it was there
+                                const updated = hiddenSpaces.filter(t => t !== tag);
+                                setHiddenSpaces(updated);
+                                saveHiddenSpaces(updated);
+
+                                router.refresh();
+                        } else {
+                                const data = await response.json();
+                                console.error('[SpacesGrid] Delete failed:', data.error);
+                        }
+                } catch (err) {
+                        console.error('[SpacesGrid] Delete error:', err);
+                } finally {
+                        setIsDeleting(false);
+                        setDeleteConfirmTag(null);
+                }
+        };
+
         // Don't render until mounted to avoid hydration mismatch
         if (!mounted) {
                 return <SpacesGridSkeleton />;
@@ -95,7 +129,8 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                                                         key={tag}
                                                         tag={tag}
                                                         count={count}
-                                                        onDelete={handleHideSpace}
+                                                        onHide={handleHideSpace}
+                                                        onDelete={() => setDeleteConfirmTag(tag)}
                                                 />
                                         ))}
                                 </div>
@@ -139,17 +174,76 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                                                                         <div className="text-gray-400 capitalize text-sm">{tag}</div>
                                                                         <div className="flex justify-between items-end">
                                                                                 <span className="text-xs text-gray-400">{count} items</span>
-                                                                                <button
-                                                                                        onClick={() => handleRestoreSpace(tag)}
-                                                                                        className="text-xs text-[var(--accent-primary)] hover:underline"
-                                                                                >
-                                                                                        Restore
-                                                                                </button>
+                                                                                <div className="flex gap-2">
+                                                                                        <button
+                                                                                                onClick={() => handleRestoreSpace(tag)}
+                                                                                                className="text-xs text-[var(--accent-primary)] hover:underline"
+                                                                                        >
+                                                                                                Restore
+                                                                                        </button>
+                                                                                        <button
+                                                                                                onClick={() => setDeleteConfirmTag(tag)}
+                                                                                                className="text-xs text-red-500 hover:underline"
+                                                                                        >
+                                                                                                Delete
+                                                                                        </button>
+                                                                                </div>
                                                                         </div>
                                                                 </div>
                                                         ))}
                                                 </div>
                                         )}
+                                </div>
+                        )}
+
+                        {/* Delete Confirmation Dialog */}
+                        {deleteConfirmTag && (
+                                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                                        <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl animate-in fade-in zoom-in-95">
+                                                <div className="flex items-center gap-3 mb-4">
+                                                        <div className="p-2 bg-red-100 rounded-full">
+                                                                <Trash2 className="w-5 h-5 text-red-500" />
+                                                        </div>
+                                                        <h3 className="text-lg font-bold text-gray-900">Delete Space?</h3>
+                                                </div>
+
+                                                <p className="text-sm text-gray-600 mb-2">
+                                                        You are about to delete the space <strong className="text-gray-900 capitalize">&quot;{deleteConfirmTag}&quot;</strong>.
+                                                </p>
+
+                                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
+                                                        <p className="text-sm text-red-600 font-medium">
+                                                                ⚠️ This will permanently delete ALL {spaces.find(s => s.tag === deleteConfirmTag)?.count || 0} posts in this space.
+                                                        </p>
+                                                        <p className="text-xs text-red-500 mt-1">
+                                                                This action cannot be undone.
+                                                        </p>
+                                                </div>
+
+                                                <div className="flex gap-3">
+                                                        <button
+                                                                onClick={() => setDeleteConfirmTag(null)}
+                                                                disabled={isDeleting}
+                                                                className="flex-1 py-2.5 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                                        >
+                                                                Cancel
+                                                        </button>
+                                                        <button
+                                                                onClick={() => handleDeleteSpace(deleteConfirmTag)}
+                                                                disabled={isDeleting}
+                                                                className="flex-1 py-2.5 px-4 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                        >
+                                                                {isDeleting ? (
+                                                                        <>
+                                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                Deleting...
+                                                                        </>
+                                                                ) : (
+                                                                        'Delete All Posts'
+                                                                )}
+                                                        </button>
+                                                </div>
+                                        </div>
                                 </div>
                         )}
                 </div>
