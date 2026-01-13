@@ -62,17 +62,44 @@ echo ""
 # Check prerequisites
 echo "Checking prerequisites..."
 
-# Check if dev-browser server should be started
-if ! pgrep -f "dev-browser.*server" > /dev/null 2>&1; then
-  echo "  Starting dev-browser server..."
-  "$SCRIPT_DIR/start-dev-browser.sh" &
-  sleep 5
-else
-  echo "  dev-browser server: running"
-fi
-
 # Create logs directory
 mkdir -p "$PROJECT_DIR/logs/ralph"
+SERVICES_LOG="$PROJECT_DIR/logs/ralph/services.log"
+
+# Start Next.js dev server if not running
+if ! pgrep -f "next dev" > /dev/null 2>&1; then
+  echo "  Starting Next.js dev server..."
+  cd "$PROJECT_DIR/apps/web" 2>/dev/null || cd "$PROJECT_DIR"
+  nohup npm run dev > "$SERVICES_LOG" 2>&1 &
+  DEV_PID=$!
+  echo "  Dev server PID: $DEV_PID"
+  cd "$PROJECT_DIR"
+  sleep 5
+else
+  echo "  Next.js dev server: already running"
+fi
+
+# Start Chromium with remote debugging for chrome-devtools MCP
+if ! pgrep -f "remote-debugging-port=9222" > /dev/null 2>&1; then
+  echo "  Starting Chromium with remote debugging..."
+  nohup chromium --remote-debugging-port=9222 --no-first-run --no-default-browser-check > /dev/null 2>&1 &
+  CHROME_PID=$!
+  echo "  Chromium PID: $CHROME_PID"
+  sleep 3
+else
+  echo "  Chromium (remote debugging): already running"
+fi
+
+# Start dev-browser server if not running
+if ! pgrep -f "dev-browser.*server" > /dev/null 2>&1; then
+  echo "  Starting dev-browser server..."
+  "$SCRIPT_DIR/start-dev-browser.sh" >> "$SERVICES_LOG" 2>&1 &
+  sleep 5
+else
+  echo "  dev-browser server: already running"
+fi
+
+echo "  All services started. Logs: $SERVICES_LOG"
 
 echo ""
 echo "=============================================="
