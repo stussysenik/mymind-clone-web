@@ -48,3 +48,6 @@ supabase/.temp
 
 # Vercel
 .vercel
+
+# Autonomous development logs
+logs/ralph/
