@@ -69,12 +69,16 @@ SERVICES_LOG="$PROJECT_DIR/logs/ralph/services.log"
 # Start Next.js dev server if not running
 if ! pgrep -f "next dev" > /dev/null 2>&1; then
   echo "  Starting Next.js dev server..."
-  cd "$PROJECT_DIR/apps/web" 2>/dev/null || cd "$PROJECT_DIR"
-  nohup npm run dev > "$SERVICES_LOG" 2>&1 &
+  cd "$PROJECT_DIR"
+  # Use bun if available, fallback to npm
+  if command -v bun &> /dev/null; then
+    nohup bun run dev > "$SERVICES_LOG" 2>&1 &
+  else
+    nohup npm run dev > "$SERVICES_LOG" 2>&1 &
+  fi
   DEV_PID=$!
   echo "  Dev server PID: $DEV_PID"
-  cd "$PROJECT_DIR"
-  sleep 5
+  sleep 8  # Give dev server more time to start
 else
   echo "  Next.js dev server: already running"
 fi

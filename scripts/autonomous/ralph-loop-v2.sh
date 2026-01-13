@@ -200,6 +200,8 @@ Read the state file first to understand where you left off."
 
 iteration=0
 completed=false
+consecutive_failures=0
+MAX_CONSECUTIVE_FAILURES=5
 
 while [[ $iteration -lt $MAX_ITERATIONS ]] && [[ "$completed" != "true" ]]; do
   iteration=$((iteration + 1))
@@ -212,12 +214,27 @@ while [[ $iteration -lt $MAX_ITERATIONS ]] && [[ "$completed" != "true" ]]; do
   # Replace iteration placeholder
   CURRENT_PROMPT="${VISION_PROMPT//ITERATION_PLACEHOLDER/$iteration}"
 
-  # Run Claude with the vision prompt
-  OUTPUT=$(claude --dangerously-skip-permissions -p "$CURRENT_PROMPT" 2>&1) || true
+  # Run Claude with the vision prompt (15 min timeout per iteration)
+  OUTPUT=$(timeout 900 claude --dangerously-skip-permissions -p "$CURRENT_PROMPT" 2>&1) || true
+  EXIT_CODE=$?
 
   # Save iteration output
   echo "$OUTPUT" > "$ITER_FILE"
   echo "$OUTPUT" >> "$LOG_FILE"
+
+  # Circuit breaker: detect repeated failures
+  if [[ $EXIT_CODE -ne 0 ]] || [[ -z "$OUTPUT" ]] || echo "$OUTPUT" | grep -qE "(error|Error|ERROR|rate.limit|timeout)"; then
+    consecutive_failures=$((consecutive_failures + 1))
+    echo "WARNING: Potential failure detected (consecutive: $consecutive_failures)" | tee -a "$LOG_FILE"
+
+    if [[ $consecutive_failures -ge $MAX_CONSECUTIVE_FAILURES ]]; then
+      echo "CIRCUIT BREAKER: $MAX_CONSECUTIVE_FAILURES consecutive failures. Pausing for 5 minutes..." | tee -a "$LOG_FILE"
+      sleep 300
+      consecutive_failures=0
+    fi
+  else
+    consecutive_failures=0  # Reset on success
+  fi
 
   # Check for vision achieved
   if echo "$OUTPUT" | grep -q "$COMPLETION_PROMISE"; then
@@ -231,12 +248,12 @@ while [[ $iteration -lt $MAX_ITERATIONS ]] && [[ "$completed" != "true" ]]; do
 
   # Update state file with iteration count
   if command -v jq &> /dev/null; then
-    jq ".iteration = $iteration" "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+    jq ".iteration = $iteration | .consecutive_failures = $consecutive_failures" "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
   fi
 
-  # Brief pause between iterations
+  # Brief pause between iterations (longer pause to avoid rate limits)
   if [[ "$completed" != "true" ]] && [[ $iteration -lt $MAX_ITERATIONS ]]; then
-    sleep 3
+    sleep 5
   fi
 done
 
