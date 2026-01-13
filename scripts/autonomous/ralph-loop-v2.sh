@@ -175,6 +175,26 @@ Read it at the start of each iteration to remember:
 4. ALWAYS commit working code frequently
 5. ALWAYS update state file after major actions
 6. ALWAYS create a new spec when you discover missing functionality
+7. ALWAYS generate documentation before marking vision complete
+
+---
+
+## DOCUMENTATION PHASE (Before Completion)
+
+When all code is implemented and tests pass, you MUST:
+
+1. **Update README.md** - Add section for the new feature with:
+   - Brief description
+   - How to use it
+   - Link to detailed docs
+
+2. **Create feature docs** in docs/features/ with:
+   - Overview and architecture
+   - Setup instructions
+   - API reference (if applicable)
+   - Troubleshooting guide
+
+3. **Commit docs** with message: docs: Add documentation for [feature-name]
 
 ---
 
@@ -186,6 +206,8 @@ Output exactly '$COMPLETION_PROMISE' ONLY when:
 - [ ] Performance within budget
 - [ ] Code committed and clean
 - [ ] No known blockers or gaps
+- [ ] README.md updated with new feature
+- [ ] Feature documentation created in docs/
 
 If ANY of these are false, create the next spec and continue.
 

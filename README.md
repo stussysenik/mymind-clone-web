@@ -106,10 +106,22 @@ As of **January 2026**, the project is a **feature-rich MVP** with core function
 - [ ] Bidirectional linking with `[[wiki-style]]` syntax
 
 #### Phase 6: Platform Extensions
+- [x] **iOS Share Sheet** - Save from any iOS app via Share Extension
 - [ ] Chrome extension for one-click saves
 - [ ] Web clipper for articles
 - [ ] Mobile-responsive PWA
 - [ ] Offline support with IndexedDB
+
+### 📱 iOS Share Sheet (NEW)
+
+Save content to MyMind directly from any iOS app:
+
+1. **Share Extension** - Native Swift integration (~50 LOC core logic)
+2. **Capacitor Bridge** - Web app wrapped for iOS with native capabilities
+3. **Keychain Auth** - Secure token sharing between app and extension
+4. **Instant Save** - URLs saved in <500ms with visual feedback
+
+[📖 Full Documentation →](docs/features/ios-share-sheet.md)
 
 #### Phase 7: Data & Export
 - [ ] Export to CSV/JSON
@@ -182,7 +194,12 @@ mymind-clone/
 │       │   ├── supabase.ts           # Supabase client configuration
 │       │   └── types.ts              # TypeScript type definitions
 │       ├── tests/
-│       │   └── mymind.spec.ts        # Playwright E2E tests
+│       │   ├── mymind.spec.ts        # Playwright E2E tests
+│       │   └── ios-share-api.spec.ts # iOS Share Extension API tests
+│       ├── ios/                      # Capacitor iOS project
+│       │   ├── App/                  # Main Xcode project
+│       │   │   └── ShareExtension/   # iOS Share Extension (Swift)
+│       │   └── SETUP.md              # iOS setup guide
 │       └── public/                   # Static assets
 └── supabase/
     ├── migrations/                   # Database migration files
@@ -444,6 +461,7 @@ MIT License - feel free to use this project for your own visual knowledge base.
 - **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide with troubleshooting
 - **[VERCEL_SETUP.md](VERCEL_SETUP.md)** - Detailed Vercel configuration
 - **[QUICK_DEPLOY.md](QUICK_DEPLOY.md)** - Fast deployment reference
+- **[docs/features/ios-share-sheet.md](docs/features/ios-share-sheet.md)** - iOS Share Sheet integration guide
 
 ---
 
