@@ -10,10 +10,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /**
-   * Image optimization configuration.
-   * Allows loading images from external domains.
-   */
+  // Static export for Capacitor builds
+  output: process.env.STATIC_EXPORT === 'true' ? 'export' : undefined,
+
   images: {
     remotePatterns: [
       {
@@ -21,8 +20,8 @@ const nextConfig: NextConfig = {
         hostname: '**',
       },
     ],
-    // Use modern formats for better performance
     formats: ['image/avif', 'image/webp'],
+    unoptimized: process.env.STATIC_EXPORT === 'true',
   },
 
   /**
