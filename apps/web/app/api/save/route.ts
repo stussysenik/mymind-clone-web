@@ -11,13 +11,51 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
-import type { SaveCardRequest, SaveCardResponse, CardRow } from '@/lib/types';
+import type { SaveCardRequest, SaveCardResponse, CardRow, SaveSource } from '@/lib/types';
 
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Validate auth token and return user ID.
+ * Used for iOS Share Extension authentication.
+ */
+async function validateAuthToken(authToken: string): Promise<{ userId: string | null; error: string | null }> {
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+                return { userId: null, error: 'Supabase not configured' };
+        }
+
+        try {
+                // Create a Supabase client with the provided token
+                const supabase = createClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL,
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+                        {
+                                global: {
+                                        headers: {
+                                                Authorization: `Bearer ${authToken}`,
+                                        },
+                                },
+                        }
+                );
+
+                // Verify the token by getting the user
+                const { data: { user }, error } = await supabase.auth.getUser(authToken);
+
+                if (error || !user) {
+                        return { userId: null, error: 'Invalid or expired authentication token' };
+                }
+
+                return { userId: user.id, error: null };
+        } catch (error) {
+                console.error('[Auth] Token validation error:', error);
+                return { userId: null, error: 'Token validation failed' };
+        }
+}
 
 /**
  * Extract basic metadata from URL (without AI)
@@ -120,9 +158,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
         try {
                 // Parse request body
                 const body = (await request.json()) as SaveCardRequest;
-                const { url, type: rawType, title, content, imageUrl, tags } = body;
+                const { url, type: rawType, title, content, imageUrl, tags, source, auth_token } = body;
                 // If type is 'auto', treat it as undefined so we autodetect
                 const type = (rawType as string) === 'auto' ? undefined : rawType;
+
+                // Log request source for analytics
+                const requestSource: SaveSource = source ?? 'manual';
+                console.log(`[Save] Request from source: ${requestSource}`);
 
                 // Validate: at least one of url, content, or imageUrl is required
                 if (!url && !content && !imageUrl) {
@@ -157,9 +199,33 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         });
                 }
 
-                // Get authenticated user
-                const user = await getUser();
-                const userId = user?.id ?? 'demo-user';
+                // Authenticate user based on request source
+                let userId: string;
+
+                if (requestSource === 'ios-share-extension') {
+                        // iOS Share Extension: Validate auth_token from request body
+                        if (!auth_token) {
+                                return NextResponse.json(
+                                        { success: false, error: 'Authentication token required for share extension' },
+                                        { status: 401 }
+                                );
+                        }
+
+                        const { userId: tokenUserId, error: tokenError } = await validateAuthToken(auth_token);
+                        if (tokenError || !tokenUserId) {
+                                return NextResponse.json(
+                                        { success: false, error: tokenError ?? 'Invalid or expired authentication token' },
+                                        { status: 401 }
+                                );
+                        }
+
+                        userId = tokenUserId;
+                        console.log(`[Save] iOS Share Extension authenticated user: ${userId}`);
+                } else {
+                        // Web/Chrome Extension: Use cookie-based auth
+                        const user = await getUser();
+                        userId = user?.id ?? 'demo-user';
+                }
 
                 // STEP 1: Quick metadata (no AI)
                 const quickMeta = extractQuickMetadata(url ?? null, content ?? null);

@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
+    }
+  },
+  "skills": {
+    "dev-browser": {
+      "url": "https://github.com/SawyerHood/dev-browser",
+      "command": "npm",
+      "args": [
+        "install",
+        "-g",
+        "dev-browser"
+      ]
+    }
+  }
+}

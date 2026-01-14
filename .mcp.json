@@ -1,0 +1,23 @@
+{
+        "mcpServers": {
+                "chrome-devtools": {
+                        "type": "stdio",
+                        "command": "npx",
+                        "args": ["-y", "chrome-devtools-mcp@latest", "--isolated"],
+                        "env": {
+                                "CHROME_PATH": "/snap/chromium/current/usr/lib/chromium-browser/chrome"
+                        }
+                },
+                "brave-search": {
+                        "type": "stdio",
+                        "command": "npx",
+                        "args": [
+                                "-y",
+                                "@modelcontextprotocol/server-brave-search"
+                        ],
+                        "env": {
+                                "BRAVE_API_KEY": "BSAszxO5fkUdVgZfSwNYajcz9nsEJcy"
+                        }
+                }
+        }
+}

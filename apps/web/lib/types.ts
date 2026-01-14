@@ -177,8 +177,13 @@ export interface ImageAnalysisResult {
 // =============================================================================
 
 /**
+ * Source of save request - used for analytics and auth routing.
+ */
+export type SaveSource = 'ios-share-extension' | 'web-share-api' | 'chrome-extension' | 'manual';
+
+/**
  * Request body for POST /api/save endpoint.
- * Sent from Chrome extension or manual save.
+ * Sent from Chrome extension, iOS Share Extension, or manual save.
  */
 export interface SaveCardRequest {
         /** Source URL (required for web saves) */
@@ -193,6 +198,10 @@ export interface SaveCardRequest {
         imageUrl?: string;
         /** User-defined tags */
         tags?: string[];
+        /** Source of the save request (for analytics and auth routing) */
+        source?: SaveSource;
+        /** Auth token for iOS Share Extension (Supabase JWT from Keychain) */
+        auth_token?: string;
 }
 
 /**
