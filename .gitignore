@@ -51,3 +51,4 @@ supabase/.temp
 
 # Autonomous development logs
 logs/ralph/
+.claude/settings.local.json

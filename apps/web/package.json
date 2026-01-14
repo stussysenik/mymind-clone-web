@@ -41,5 +41,8 @@
     "playwright": "^1.57.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "lightningcss-darwin-x64": "^1.30.2"
   }
 }
