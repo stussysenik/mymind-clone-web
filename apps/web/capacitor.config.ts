@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
         server: {
                 // For development: connect to local dev server
                 // Comment this out for production builds
-                url: process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : undefined,
+                url: 'http://10.72.17.240:3000',
                 cleartext: true,
         },
         ios: {
