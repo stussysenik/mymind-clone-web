@@ -14,6 +14,16 @@
         # ══════════════════════════════════════════════════════════════════
         # CORE: Always included (Security + MCPs + DX)
         # ══════════════════════════════════════════════════════════════════
+        # ─── Platform-specific packages ───
+        browserPkgs = with pkgs; if pkgs.stdenv.isDarwin then [
+          # macOS: Chromium not available on ARM, use system browser
+          playwright-driver.browsers
+        ] else [
+          # Linux: Full browser support
+          playwright-driver.browsers
+          chromium
+        ];
+
         corePkgs = with pkgs; [
           # ─── Session & Terminal ───
           tmux
@@ -69,11 +79,7 @@
           # ─── Stacked Diffs (Modern Git Workflow) ───
           git-branchless    # stacked commits, undo, smartlog
           git-absorb        # auto-fixup commits to right place
-
-          # ─── Browser Automation (MCPs) ───
-          playwright-driver.browsers
-          chromium
-        ];
+        ] ++ browserPkgs;
 
         # ══════════════════════════════════════════════════════════════════
         # LANGUAGE PACKS
@@ -243,7 +249,17 @@
 
           # ─── Environment ───
           export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
-          export CHROME_PATH=${pkgs.chromium}/bin/chromium
+          ${if pkgs.stdenv.isDarwin then ''
+            # macOS: Use system Chrome/Chromium
+            if [ -d "/Applications/Google Chrome.app" ]; then
+              export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            elif [ -d "/Applications/Chromium.app" ]; then
+              export CHROME_PATH="/Applications/Chromium.app/Contents/MacOS/Chromium"
+            fi
+          '' else ''
+            # Linux: Use Nix-provided Chromium
+            export CHROME_PATH=${pkgs.chromium}/bin/chromium
+          ''}
           export CC_SETUP_DIR="${self}"
 
           # ─── Direnv ───
