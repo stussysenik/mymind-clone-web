@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { User, LogOut, LogIn, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase-browser';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { clearAuthTokenOnLogout } from '@/lib/capacitor/keychain';
 
 export function UserMenu() {
         const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -38,6 +39,8 @@ export function UserMenu() {
         }, [supabase.auth]);
 
         const handleSignOut = async () => {
+                // Clear iOS Keychain token before signing out
+                await clearAuthTokenOnLogout();
                 await supabase.auth.signOut();
                 router.push('/login');
                 router.refresh();
