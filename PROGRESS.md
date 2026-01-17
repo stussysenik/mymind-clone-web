@@ -1,0 +1,145 @@
+# MyMind Development Progress
+
+## Current Status: Web Production-Ready, iOS In Development
+
+| Platform | Status | Repo |
+|----------|--------|------|
+| **Web PWA** | ✅ Production | This repo |
+| **iOS Native** | 🔄 In Development | [mymind-clone-ios](https://github.com/stussysenik/mymind-clone-ios) |
+
+---
+
+## Timeline
+
+### January 2026
+
+#### Week 3 (Jan 15-17)
+
+**iOS Strategy Pivot**
+- Started with Capacitor WebView approach
+- Implemented Share Extension with native-to-WebView bridge
+- Encountered performance and complexity issues
+- **Decision:** Pivot to fully native Swift app
+
+**Key Commits:**
+- `chore(ios): Archive Capacitor experiment, pivot to native Swift`
+- `docs: Reorganize project structure and documentation`
+
+**Artifacts:**
+- `apps/web/ios-capacitor-archive/` — Archived Capacitor code
+- `docs/capacitor-build-logs/` — Build evidence
+- `openspec/changes/005-pivot-native-ios-swift/` — Decision rationale
+
+#### Week 2 (Jan 9-14)
+
+**iOS Share Sheet Foundation**
+- Implemented `/api/save` endpoint with iOS support
+- Added Capacitor iOS project
+- Created Share Extension target
+- Wrote Playwright E2E tests
+
+**OpenSpec Changes:**
+- `001-add-ios-share-api-support` — API endpoint spec
+- `002-add-capacitor-ios-setup` — Capacitor setup
+- `003-add-ios-share-extension` — Share Extension spec
+- `004-add-share-flow-tests` — E2E test spec
+
+#### Week 1 (Jan 1-8)
+
+**Core PWA Development**
+- Masonry grid with 12+ card types
+- AI-powered save pipeline (GLM-4.7)
+- Full-text search with filters
+- Supabase auth with RLS
+- Vercel deployment
+
+---
+
+## Feature Completion
+
+### Web App
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Masonry grid layout | ✅ Done | Pinterest-style, responsive |
+| Card types (12+) | ✅ Done | Articles, videos, tweets, etc. |
+| AI classification | ✅ Done | GLM-4.7 integration |
+| Auto-tagging | ✅ Done | AI-generated tags |
+| Summaries | ✅ Done | AI-generated summaries |
+| Full-text search | ✅ Done | With type/tag filters |
+| Supabase auth | ✅ Done | OAuth + RLS |
+| Archive/Trash | ✅ Done | Full lifecycle |
+| Vercel deployment | ✅ Done | Edge functions |
+
+### iOS App
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Project setup | ✅ Done | SwiftUI + MVVM |
+| Share Extension | 🔄 In Progress | Native implementation |
+| Supabase integration | 📋 Pending | Direct SDK |
+| Masonry grid | 📋 Pending | LazyVGrid |
+| Auth flow | 📋 Pending | Apple Sign In |
+
+---
+
+## Technical Decisions Log
+
+### 2026-01-17: Native iOS over Capacitor
+
+**Problem:** Capacitor WebView approach had:
+- WebView cold start exceeding 500ms target
+- Complex Keychain bridge for Share Extension
+- Difficulty achieving native iOS feel
+
+**Solution:** Fully native Swift app with:
+- Direct Supabase SDK connection
+- Native Keychain for auth sharing
+- SwiftUI for native UX
+
+**Evidence:** See `docs/capacitor-build-logs/`
+
+### 2026-01-09: GLM-4.7 over GPT-4
+
+**Problem:** Need cost-effective AI for classification
+
+**Solution:** Zhipu GLM-4.7 provides:
+- Good classification accuracy
+- Lower cost than OpenAI
+- Fast response times
+
+---
+
+## Next Steps
+
+1. **iOS App** — Complete Supabase integration and auth flow
+2. **Share Extension** — Test with live Supabase backend
+3. **Chrome Extension** — Design and implement
+4. **Smart Spaces** — Query-based collections
+
+---
+
+## Metrics
+
+### Performance Targets
+
+| Metric | Target | Current |
+|--------|--------|---------|
+| Save response | <200ms | ✅ ~150ms |
+| Search response | <300ms | ✅ ~200ms |
+| Grid render | <100ms | ✅ ~80ms |
+| Share Extension cold start | <500ms | 🔄 TBD (native) |
+
+### Code Stats
+
+```
+apps/web/
+├── Components: 25+
+├── API routes: 8
+├── Card types: 12
+└── E2E tests: 15+
+```
+
+---
+
+*Last updated: 2026-01-17*

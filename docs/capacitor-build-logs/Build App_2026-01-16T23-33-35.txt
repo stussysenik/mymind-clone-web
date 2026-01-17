@@ -1,0 +1,16 @@
+
+Showing Recent Issues
+Resolving package dependencies…
+x-xcode-log://2FBDFFBD-6345-4F4D-B9D3-85F0512703DB: Failed to resolve package dependencies
+
+
+Build target App of project App with configuration Debug
+/Users/s3nik/Desktop/mymind-clone/apps/web/ios/App/App.xcodeproj: error: Missing package product 'CapApp-SPM' (in target 'App' from project 'App')
+    x-xcode-log://2FBDFFBD-6345-4F4D-B9D3-85F0512703DB: note: Package resolution errors must be fixed before building
+
+
+/Users/s3nik/Desktop/mymind-clone/apps/web/ios/App/App.xcodeproj: Missing package product 'CapApp-SPM'
+
+
+
+Build failed    1/16/26, 11:33 PM    0.4 seconds
