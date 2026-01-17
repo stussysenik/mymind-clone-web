@@ -20,25 +20,26 @@
     <string>1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>ApiEndpoint</key>
+    <string>https://mymind.app/api/save</string>
+    <key>ApiEndpointDev</key>
+    <string>http://127.51.68.120:3000/api/save</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionAttributes</key>
         <dict>
             <key>NSExtensionActivationRule</key>
             <dict>
-                <!-- Only activate for URLs -->
                 <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
                 <integer>1</integer>
                 <key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
                 <integer>1</integer>
             </dict>
         </dict>
-        <key>NSExtensionMainStoryboard</key>
-        <string>MainInterface</string>
-        <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.share-services</string>
         <key>NSExtensionPrincipalClass</key>
         <string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.share-services</string>
     </dict>
 </dict>
 </plist>

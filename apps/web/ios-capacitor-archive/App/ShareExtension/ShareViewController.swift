@@ -1,14 +1,28 @@
+//
+//  ShareViewController.swift
+//  ShareExtension
+//
+//  Created by senik on 1/16/26.
+//
+
 import UIKit
 import Social
 import UniformTypeIdentifiers
 
 /// MyMind Share Extension - Saves URLs to MyMind knowledge base
-/// Target: <50 lines of core logic
+/// Shares the same Keychain access group as main app for auth token access
 class ShareViewController: UIViewController {
 
     // MARK: - Properties
-    private let apiEndpoint = "https://mymind.app/api/save" // TODO: Configure for environment
+
+    /// App Group for Keychain sharing - MUST match KeychainBridge.swift
     private let appGroupID = "group.com.mymind.app"
+
+    /// Keychain service identifier - MUST match KeychainBridge.swift
+    private let keychainService = "com.mymind.app.auth"
+
+    /// Keychain account identifier - MUST match KeychainBridge.swift
+    private let keychainAccount = "supabase_token"
 
     // UI Elements
     private var statusLabel: UILabel!
@@ -19,6 +33,32 @@ class ShareViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         processSharedContent()
+    }
+
+    // MARK: - Configuration
+
+    /// Get API endpoint from Info.plist with environment awareness
+    private var apiEndpoint: String {
+        // Read from Info.plist
+        if let plist = Bundle.main.infoDictionary {
+            #if DEBUG
+            // Use dev endpoint in debug builds if available
+            if let devEndpoint = plist["ApiEndpointDev"] as? String, !devEndpoint.isEmpty {
+                print("[ShareExtension] Using dev API endpoint: \(devEndpoint)")
+                return devEndpoint
+            }
+            #endif
+
+            // Fall back to production endpoint
+            if let prodEndpoint = plist["ApiEndpoint"] as? String, !prodEndpoint.isEmpty {
+                print("[ShareExtension] Using production API endpoint: \(prodEndpoint)")
+                return prodEndpoint
+            }
+        }
+
+        // Ultimate fallback (should not happen if Info.plist is configured)
+        print("[ShareExtension] WARNING: No API endpoint configured, using default")
+        return "https://mymind.app/api/save"
     }
 
     // MARK: - UI Setup
@@ -48,6 +88,8 @@ class ShareViewController: UIViewController {
 
     // MARK: - Content Processing
     private func processSharedContent() {
+        print("[ShareExtension] Processing shared content...")
+
         guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
               let attachments = extensionItem.attachments else {
             showError("No content to share")
@@ -60,8 +102,10 @@ class ShareViewController: UIViewController {
                 attachment.loadItem(forTypeIdentifier: UTType.url.identifier) { [weak self] item, error in
                     DispatchQueue.main.async {
                         if let url = item as? URL {
+                            print("[ShareExtension] Extracted URL: \(url.absoluteString)")
                             self?.saveURL(url.absoluteString)
                         } else if let urlData = item as? Data, let url = URL(dataRepresentation: urlData, relativeTo: nil) {
+                            print("[ShareExtension] Extracted URL from data: \(url.absoluteString)")
                             self?.saveURL(url.absoluteString)
                         } else {
                             self?.showError("Could not extract URL")
@@ -77,14 +121,20 @@ class ShareViewController: UIViewController {
 
     // MARK: - API Request
     private func saveURL(_ urlString: String) {
+        print("[ShareExtension] Attempting to save URL: \(urlString)")
+
         // Get auth token from Keychain
         guard let authToken = getAuthToken() else {
+            print("[ShareExtension] ERROR: No auth token found in Keychain")
             showError("Please log in to MyMind app first")
             return
         }
 
+        print("[ShareExtension] Auth token retrieved (length: \(authToken.count) chars)")
+
         // Prepare request
         guard let apiURL = URL(string: apiEndpoint) else {
+            print("[ShareExtension] ERROR: Invalid API endpoint URL")
             showError("Invalid API endpoint")
             return
         }
@@ -103,28 +153,41 @@ class ShareViewController: UIViewController {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
+            print("[ShareExtension] ERROR: Failed to serialize request body")
             showError("Failed to prepare request")
             return
         }
+
+        print("[ShareExtension] Sending request to: \(apiURL.absoluteString)")
 
         // Send request
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
+                    print("[ShareExtension] Network error: \(error.localizedDescription)")
                     self?.showError("Network error: \(error.localizedDescription)")
                     return
                 }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
+                    print("[ShareExtension] ERROR: Invalid response type")
                     self?.showError("Invalid response")
                     return
                 }
 
+                print("[ShareExtension] Response status: \(httpResponse.statusCode)")
+
                 if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+                    print("[ShareExtension] SUCCESS: URL saved")
                     self?.showSuccess()
                 } else if httpResponse.statusCode == 401 {
+                    print("[ShareExtension] ERROR: Unauthorized (401) - token may be expired")
                     self?.showError("Please log in to MyMind app first")
                 } else {
+                    // Try to extract error message from response
+                    if let data = data, let errorBody = String(data: data, encoding: .utf8) {
+                        print("[ShareExtension] ERROR response body: \(errorBody)")
+                    }
                     self?.showError("Save failed (code: \(httpResponse.statusCode))")
                 }
             }
@@ -132,11 +195,19 @@ class ShareViewController: UIViewController {
     }
 
     // MARK: - Keychain Access
+
+    /// Retrieve auth token from shared Keychain
+    /// Query parameters MUST match KeychainBridge.swift exactly
     private func getAuthToken() -> String? {
+        print("[ShareExtension] Querying Keychain...")
+        print("[ShareExtension] - Service: \(keychainService)")
+        print("[ShareExtension] - Account: \(keychainAccount)")
+        print("[ShareExtension] - Access Group: \(appGroupID)")
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.mymind.app.auth",
-            kSecAttrAccount as String: "supabase_token",
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
             kSecAttrAccessGroup as String: appGroupID,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
@@ -146,7 +217,17 @@ class ShareViewController: UIViewController {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         if status == errSecSuccess, let data = result as? Data {
-            return String(data: data, encoding: .utf8)
+            let token = String(data: data, encoding: .utf8)
+            print("[ShareExtension] Token found in Keychain")
+            return token
+        } else if status == errSecItemNotFound {
+            print("[ShareExtension] No token found in Keychain (errSecItemNotFound)")
+        } else {
+            print("[ShareExtension] Keychain query failed with status: \(status)")
+            // Common error codes:
+            // -25291 (errSecNotAvailable) - No trust result
+            // -25300 (errSecItemNotFound) - Item not found
+            // -34018 - Missing entitlement
         }
 
         return nil
