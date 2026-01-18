@@ -231,7 +231,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                 const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
 
                 // Get URL preview (OG image/title/content) - fast parallel fetch
-                let preview: { title?: string; imageUrl?: string; content?: string; description?: string } = {};
+                let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[] } = {};
                 if (url) {
                         // We use the scraper to get rich metadata
                         const scraped = await scrapeUrl(url);
@@ -245,7 +245,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                                 title: scraped.title,
                                 imageUrl: scraped.imageUrl ?? fallbackImage,
                                 content: scraped.content,
-                                description: scraped.description
+                                description: scraped.description,
+                                images: scraped.images
                         };
                 }
 
@@ -269,6 +270,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
                         image_url: finalImageUrl ?? preview.imageUrl ?? null,
                         metadata: {
                                 processing: !tags, // Flag as processing if we need AI
+                                images: preview.images, // Store carousel images
                         },
                         tags: tags ?? [], // Empty tags, will be filled by AI
                 };
