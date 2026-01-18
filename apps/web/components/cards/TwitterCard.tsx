@@ -147,18 +147,6 @@ export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: T
                                                         </div>
                                                 </button>
                                         )}
-                                        {onArchive && (
-                                                <button
-                                                        onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onArchive();
-                                                        }}
-                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-amber-600 transition-colors"
-                                                        aria-label="Archive card"
-                                                >
-                                                        <Archive className="h-3.5 w-3.5" />
-                                                </button>
-                                        )}
                                         {onDelete && (
                                                 <button
                                                         onClick={(e) => {
