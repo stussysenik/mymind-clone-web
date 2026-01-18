@@ -985,25 +985,41 @@ function AIThinkingIndicator({
                 );
         }
 
-        // Processing State
-        const getStatusText = () => {
-                if (isReAnalyzing) return "Refining analysis...";
-                if (elapsed < 3000) return "Reading content...";
-                if (elapsed < 8000) return "Analyzing...";
-                if (elapsed < 20000) return "Finishing up...";
-                return "Taking a moment...";
+        // Processing State with Stage Icons
+        const getStageInfo = (): { icon: string; text: string; stage: number } => {
+                if (isReAnalyzing) return { icon: '🔄', text: 'Refining analysis...', stage: 2 };
+                if (elapsed < 3000) return { icon: '🔍', text: 'Reading content...', stage: 1 };
+                if (elapsed < 8000) return { icon: '🧠', text: 'Analyzing...', stage: 2 };
+                if (elapsed < 20000) return { icon: '✨', text: 'Generating summary...', stage: 3 };
+                return { icon: '⏳', text: 'Finishing up...', stage: 4 };
         };
 
+        const stageInfo = getStageInfo();
+
         return (
-                <div className="mb-8 p-5 bg-gray-50/30 rounded-xl border border-gray-100/50">
+                <div className="mb-8 p-5 bg-gray-50/30 rounded-xl border border-gray-100/50 animate-in fade-in">
                         <div className="flex items-center gap-3">
+                                {/* Stage Icon */}
+                                <span className="text-base animate-pulse">{stageInfo.icon}</span>
+
+                                {/* Pulsing Dot */}
                                 <div className="relative flex h-2.5 w-2.5">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--accent-primary)]"></span>
                                 </div>
-                                <span className={`text-xs font-medium bg-gradient-to-r from-gray-600 to-gray-400 bg-clip-text text-transparent animate-pulse`}>
-                                        {getStatusText()}
+
+                                {/* Status Text */}
+                                <span className={`text-xs font-medium bg-gradient-to-r from-gray-600 to-gray-400 bg-clip-text text-transparent`}>
+                                        {stageInfo.text}
                                 </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="mt-3 h-1 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                        className="h-full bg-gradient-to-r from-[var(--accent-primary)] to-orange-400 transition-all duration-1000 ease-out"
+                                        style={{ width: `${Math.min((stageInfo.stage / 4) * 100, 95)}%` }}
+                                />
                         </div>
                 </div>
         );
