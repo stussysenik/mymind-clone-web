@@ -70,6 +70,69 @@
   --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
+/* Dark Mode Theme */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Core Colors - Dark Theme */
+    --background: #1A1A1A;
+    /* Dark Charcoal */
+    --background-secondary: #252525;
+    /* Slightly lighter for contrast */
+    --foreground: #E0E0E0;
+    /* Light gray text */
+    --foreground-muted: #A0A0A0;
+    /* Muted light gray */
+    --card-bg: #252525;
+    /* Dark cards */
+    --border: rgba(255, 255, 255, 0.08);
+    /* Subtle light borders */
+    --border-hover: rgba(255, 255, 255, 0.15);
+
+    /* Accent Colors - Brighter for dark mode */
+    --accent-primary: #FF7F63;
+    /* Lighter orange for better contrast */
+    --accent-hover: #FF6B4A;
+    --accent-light: rgba(255, 127, 99, 0.15);
+
+    /* Tag Colors - Adjusted for dark mode visibility */
+    --tag-green: #00C2B5;
+    --tag-red: #FF6BC7;
+    --tag-blue: #4A90E2;
+    --tag-orange: #FF7F63;
+    --tag-purple: #B88FE0;
+    --tag-pink: #FF8FCC;
+    --tag-cyan: #00C2B5;
+    --tag-amber: #FFE600;
+  }
+}
+
+/* Manual dark mode override */
+[data-theme="dark"] {
+  /* Core Colors - Dark Theme */
+  --background: #1A1A1A;
+  --background-secondary: #252525;
+  --foreground: #E0E0E0;
+  --foreground-muted: #A0A0A0;
+  --card-bg: #252525;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+
+  /* Accent Colors */
+  --accent-primary: #FF7F63;
+  --accent-hover: #FF6B4A;
+  --accent-light: rgba(255, 127, 99, 0.15);
+
+  /* Tag Colors */
+  --tag-green: #00C2B5;
+  --tag-red: #FF6BC7;
+  --tag-blue: #4A90E2;
+  --tag-orange: #FF7F63;
+  --tag-purple: #B88FE0;
+  --tag-pink: #FF8FCC;
+  --tag-cyan: #00C2B5;
+  --tag-amber: #FFE600;
+}
+
 /* =============================================================================
    TAILWIND THEME CUSTOMIZATION
    ============================================================================= */
