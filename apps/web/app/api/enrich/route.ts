@@ -132,12 +132,16 @@ export async function POST(request: NextRequest) {
                 }
 
                 // 3. Run AI Classification & Image Analysis (parallel)
+                // For Instagram carousels, pass image count for better prompt generation
+                const imageCount = card.metadata?.images?.length || 1;
+
                 const [classification, imageAnalysis] = await Promise.all([
                         withRetry(async () => {
                                 return await classifyContent(
                                         card.url,
                                         contentToAnalyze,
-                                        card.image_url
+                                        card.image_url,
+                                        imageCount
                                 );
                         }),
                         // Analyze image if we have one (and it's not a placeholder/falback)
