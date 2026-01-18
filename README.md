@@ -66,6 +66,9 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | AI-powered save pipeline | ✅ Production |
 | 12+ card types (articles, videos, tweets...) | ✅ Production |
 | Full-text search with filters | ✅ Production |
+| Instagram carousels | ✅ Production |
+| Dark mode | ✅ Production |
+| Platform-specific AI | ✅ Production |
 | iOS Share Sheet | 🔄 [Native app](https://github.com/stussysenik/mymind-clone-ios) |
 | Chrome extension | 📋 Planned |
 
@@ -80,6 +83,27 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | Database | Supabase (PostgreSQL + Auth + RLS) |
 | AI | Zhipu GLM-4.7 |
 | Testing | Playwright |
+
+---
+
+## Visual Features
+
+### Instagram Support
+- **Multi-image carousels**: All images accessible with navigation
+- **Carousel indicators**: "1/X" badge on multi-image posts
+- **Hashtag extraction**: Instagram hashtags become searchable tags
+
+### Twitter/X Support
+- **Visual fidelity**: Preserves line breaks and formatting
+- **Thread detection**: Identifies threaded conversations
+- **Hashtag highlighting**: Blue hashtags for visual recognition
+
+### Dark Mode
+- **Auto detection**: Follows system preference
+- **Manual toggle**: Settings modal for user control
+- **WCAG AA compliant**: Accessible color contrast
+
+Access dark mode via Settings (gear icon in header).
 
 ---
 

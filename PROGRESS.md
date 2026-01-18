@@ -13,22 +13,36 @@
 
 ### January 2026
 
-#### Week 3 (Jan 15-17)
+#### Week 3 (Jan 15-19)
 
-**iOS Strategy Pivot**
+**iOS Strategy Pivot (Jan 15-17)**
 - Started with Capacitor WebView approach
 - Implemented Share Extension with native-to-WebView bridge
 - Encountered performance and complexity issues
 - **Decision:** Pivot to fully native Swift app
 
+**Visual Enhancements (Jan 18-19)**
+- Fixed Instagram carousel image extraction
+- Added platform-specific AI prompts (Instagram, Twitter, website)
+- Enhanced AI processing feedback with stage-based indicators
+- Implemented dark mode with settings modal
+- Added E2E tests for visual features
+
 **Key Commits:**
 - `chore(ios): Archive Capacitor experiment, pivot to native Swift`
 - `docs: Reorganize project structure and documentation`
+- `fix(instagram): Store carousel images in metadata`
+- `feat(ai): Add platform-specific prompt templates`
+- `feat(theme): Add dark mode with settings modal`
+- `test: Add E2E tests for visual enhancements`
 
 **Artifacts:**
 - `apps/web/ios-capacitor-archive/` — Archived Capacitor code
 - `docs/capacitor-build-logs/` — Build evidence
 - `openspec/changes/005-pivot-native-ios-swift/` — Decision rationale
+- `FIX_SUMMARY_INSTAGRAM_CAROUSEL.md` — Technical analysis
+- `IMPLEMENTATION_SUMMARY.md` — Complete overview
+- `openspec/changes/006-enhance-visual-recall-experience/` — Design docs
 
 #### Week 2 (Jan 9-14)
 
@@ -70,6 +84,10 @@
 | Supabase auth | ✅ Done | OAuth + RLS |
 | Archive/Trash | ✅ Done | Full lifecycle |
 | Vercel deployment | ✅ Done | Edge functions |
+| Instagram carousels | ✅ Done | Multi-image support with navigation |
+| Platform-specific AI | ✅ Done | Instagram, Twitter, website prompts |
+| Dark mode | ✅ Done | Auto + manual with settings modal |
+| AI feedback UX | ✅ Done | Stage-based progress indicators |
 
 ### iOS App
 
@@ -142,4 +160,4 @@ apps/web/
 
 ---
 
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-19*
