@@ -69,6 +69,18 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
                                         <span className="text-xs font-medium text-white">Instagram</span>
                                 </div>
 
+                                {/* Carousel Indicator Badge */}
+                                {card.metadata.images && card.metadata.images.length > 1 && (
+                                        <div className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 backdrop-blur-sm z-10">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                                                        <path d="M7 3v18" />
+                                                        <path d="M17 3v18" />
+                                                </svg>
+                                                <span className="text-xs font-medium text-white">1/{card.metadata.images.length}</span>
+                                        </div>
+                                )}
+
                                 {/* Play Button for Reels */}
                                 {isReel && (
                                         <div className="absolute inset-0 flex items-center justify-center">
@@ -80,59 +92,6 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 
                                 {/* Gradient Overlay */}
                                 <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent" />
-
-                                {/* Hover Actions */}
-                                {isHovered && (
-                                        <div className="absolute right-2 top-2 flex gap-1 z-20">
-                                                {onArchive && (
-                                                        <button
-                                                                onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        onArchive();
-                                                                }}
-                                                                className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-amber-400 transition-colors"
-                                                                aria-label="Archive card"
-                                                        >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <rect width="20" height="5" x="2" y="3" rx="1" />
-                                                                        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-                                                                        <path d="M10 12h4" />
-                                                                </svg>
-                                                        </button>
-                                                )}
-                                                {onDelete && (
-                                                        <button
-                                                                onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        onDelete();
-                                                                }}
-                                                                className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-red-400 transition-colors"
-                                                                aria-label="Delete card"
-                                                        >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <path d="M3 6h18" />
-                                                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                                                        <path d="M8 6V4c0-1 1-1 1-1h6c1 0 1 1 1 1v2" />
-                                                                </svg>
-                                                        </button>
-                                                )}
-                                                {onRestore && (
-                                                        <button
-                                                                onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        onRestore();
-                                                                }}
-                                                                className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-green-400 transition-colors"
-                                                                aria-label="Restore card"
-                                                        >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                                                                        <path d="M3 3v5h5" />
-                                                                </svg>
-                                                        </button>
-                                                )}
-                                        </div>
-                                )}
 
                                 {/* Hover Actions */}
                                 {isHovered && (
