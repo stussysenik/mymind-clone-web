@@ -1,12 +1,12 @@
 /**
  * MyMind Clone - Save API Route
- * 
+ *
  * POST endpoint for saving new cards to the database.
  * Uses OPTIMISTIC SAVING:
  * 1. Save card immediately with placeholder data
  * 2. Return to client fast (<200ms)
  * 3. Enrich card with AI in background
- * 
+ *
  * @fileoverview Save card API endpoint with async AI processing
  */
 
@@ -25,123 +25,125 @@ import type { SaveCardRequest, SaveCardResponse, CardRow, SaveSource } from '@/l
  * Used for iOS Share Extension authentication.
  */
 async function validateAuthToken(authToken: string): Promise<{ userId: string | null; error: string | null }> {
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-                return { userId: null, error: 'Supabase not configured' };
-        }
+	if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+		return { userId: null, error: 'Supabase not configured' };
+	}
 
-        try {
-                // Create a Supabase client with the provided token
-                const supabase = createClient(
-                        process.env.NEXT_PUBLIC_SUPABASE_URL,
-                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-                        {
-                                global: {
-                                        headers: {
-                                                Authorization: `Bearer ${authToken}`,
-                                        },
-                                },
-                        }
-                );
+	try {
+		// Create a Supabase client with the provided token
+		const supabase = createClient(
+			process.env.NEXT_PUBLIC_SUPABASE_URL,
+			process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+			{
+				global: {
+					headers: {
+						Authorization: `Bearer ${authToken}`,
+					},
+				},
+			}
+		);
 
-                // Verify the token by getting the user
-                const { data: { user }, error } = await supabase.auth.getUser(authToken);
+		// Verify the token by getting the user
+		const { data: { user }, error } = await supabase.auth.getUser(authToken);
 
-                if (error || !user) {
-                        return { userId: null, error: 'Invalid or expired authentication token' };
-                }
+		if (error || !user) {
+			return { userId: null, error: 'Invalid or expired authentication token' };
+		}
 
-                return { userId: user.id, error: null };
-        } catch (error) {
-                console.error('[Auth] Token validation error:', error);
-                return { userId: null, error: 'Token validation failed' };
-        }
+		return { userId: user.id, error: null };
+	} catch (error) {
+		console.error('[Auth] Token validation error:', error);
+		return { userId: null, error: 'Token validation failed' };
+	}
 }
 
 /**
  * Extract basic metadata from URL (without AI)
  */
 function extractQuickMetadata(url: string | null, content: string | null) {
-        let title = 'New Card';
-        let type: 'article' | 'image' | 'note' | 'product' | 'book' = 'article';
+	let title = 'New Card';
+	let type: 'article' | 'image' | 'note' | 'product' | 'book' = 'article';
 
-        if (content && !url) {
-                type = 'note';
-                // Use first line as title (up to 50 chars)
-                const firstLine = content.split('\n')[0].trim();
-                title = firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
-        } else if (url) {
-                try {
-                        const parsed = new URL(url);
-                        // Use domain as title
-                        title = parsed.hostname.replace('www.', '');
-                } catch {
-                        title = 'Link';
-                }
-        }
+	if (content && !url) {
+		type = 'note';
+		// Use first line as title (up to 50 chars)
+		const firstLine = content.split('\n')[0].trim();
+		title = firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
+	} else if (url) {
+		try {
+			const parsed = new URL(url);
+			// Use domain as title
+			title = parsed.hostname.replace('www.', '');
+		} catch {
+			title = 'Link';
+		}
+	}
 
-        return { title, type };
+	return { title, type };
 }
 
 import { scrapeUrl } from '@/lib/scraper';
+import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
+import { uploadScreenshotToStorage } from '@/lib/supabase';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
  */
 async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?: string; content?: string }> {
-        try {
-                const scraped = await scrapeUrl(url);
-                return {
-                        title: scraped.title,
-                        imageUrl: scraped.imageUrl ?? undefined,
-                        content: scraped.content
-                };
-        } catch (error) {
-                console.log('[Save] URL scrape failed:', error);
-                // Fallback to minimal screenshot if scrape fails
-                return {
-                        imageUrl: `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
-                };
-        }
+	try {
+		const scraped = await scrapeUrl(url);
+		return {
+			title: scraped.title,
+			imageUrl: scraped.imageUrl ?? undefined,
+			content: scraped.content
+		};
+	} catch (error) {
+		console.log('[Save] URL scrape failed:', error);
+		// Fallback to minimal screenshot if scrape fails
+		return {
+			imageUrl: `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
+		};
+	}
 }
 
 /**
  * Upload base64 image to Supabase Storage
  */
 async function uploadImageToStorage(base64Data: string, userId: string): Promise<string | null> {
-        try {
-                // Remove data prefix
-                const matches = base64Data.match(/^data:(image\/([a-zA-Z]*));base64,(.*)$/);
-                if (!matches || matches.length !== 4) return null;
+	try {
+		// Remove data prefix
+		const matches = base64Data.match(/^data:(image\/([a-zA-Z]*));base64,(.*)$/);
+		if (!matches || matches.length !== 4) return null;
 
-                const extension = matches[2] === 'jpeg' ? 'jpg' : matches[2];
-                const cleanBase64 = matches[3];
-                const buffer = Buffer.from(cleanBase64, 'base64');
-                const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+		const extension = matches[2] === 'jpeg' ? 'jpg' : matches[2];
+		const cleanBase64 = matches[3];
+		const buffer = Buffer.from(cleanBase64, 'base64');
+		const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
 
-                const client = getSupabaseClient(true);
-                if (!client) return null;
+		const client = getSupabaseClient(true);
+		if (!client) return null;
 
-                const { error } = await client.storage
-                        .from('images')
-                        .upload(fileName, buffer, {
-                                contentType: matches[1],
-                                upsert: false
-                        });
+		const { error } = await client.storage
+			.from('images')
+			.upload(fileName, buffer, {
+				contentType: matches[1],
+				upsert: false
+			});
 
-                if (error) {
-                        console.error('[Storage] Upload failed:', error);
-                        return null;
-                }
+		if (error) {
+			console.error('[Storage] Upload failed:', error);
+			return null;
+		}
 
-                const { data: { publicUrl } } = client.storage
-                        .from('images')
-                        .getPublicUrl(fileName);
+		const { data: { publicUrl } } = client.storage
+			.from('images')
+			.getPublicUrl(fileName);
 
-                return publicUrl;
-        } catch (error) {
-                console.error('[Storage] Error:', error);
-                return null;
-        }
+		return publicUrl;
+	} catch (error) {
+		console.error('[Storage] Error:', error);
+		return null;
+	}
 }
 
 // =============================================================================
@@ -150,173 +152,192 @@ async function uploadImageToStorage(base64Data: string, userId: string): Promise
 
 /**
  * POST /api/save
- * 
+ *
  * Saves a new card to the database with OPTIMISTIC SAVING.
  * Returns immediately, AI enrichment happens in background.
  */
 export async function POST(request: NextRequest): Promise<NextResponse<SaveCardResponse>> {
-        try {
-                // Parse request body
-                const body = (await request.json()) as SaveCardRequest;
-                const { url, type: rawType, title, content, imageUrl, tags, source, auth_token } = body;
-                // If type is 'auto', treat it as undefined so we autodetect
-                const type = (rawType as string) === 'auto' ? undefined : rawType;
+	try {
+		// Parse request body
+		const body = (await request.json()) as SaveCardRequest;
+		const { url, type: rawType, title, content, imageUrl, tags, source, auth_token } = body;
+		// If type is 'auto', treat it as undefined so we autodetect
+		const type = (rawType as string) === 'auto' ? undefined : rawType;
 
-                // Log request source for analytics
-                const requestSource: SaveSource = source ?? 'manual';
-                console.log(`[Save] Request from source: ${requestSource}`);
+		// Log request source for analytics
+		const requestSource: SaveSource = source ?? 'manual';
+		console.log(`[Save] Request from source: ${requestSource}`);
 
-                // Validate: at least one of url, content, or imageUrl is required
-                if (!url && !content && !imageUrl) {
-                        return NextResponse.json(
-                                { success: false, error: 'At least one of url, content, or imageUrl is required' },
-                                { status: 400 }
-                        );
-                }
+		// Validate: at least one of url, content, or imageUrl is required
+		if (!url && !content && !imageUrl) {
+			return NextResponse.json(
+				{ success: false, error: 'At least one of url, content, or imageUrl is required' },
+				{ status: 400 }
+			);
+		}
 
-                // If Supabase is not configured, return mock response (demo mode)
-                if (!isSupabaseConfigured()) {
-                        const mockCard = {
-                                id: `mock-${Date.now()}`,
-                                userId: 'demo-user',
-                                type: type ?? 'note',
-                                title: title ?? 'Demo Card',
-                                content: content ?? null,
-                                url: url ?? null,
-                                imageUrl: imageUrl ?? null,
-                                metadata: {},
-                                tags: tags ?? [],
-                                createdAt: new Date().toISOString(),
-                                updatedAt: new Date().toISOString(),
-                                deletedAt: null,
-                                archivedAt: null,
-                        };
+		// If Supabase is not configured, return mock response (demo mode)
+		if (!isSupabaseConfigured()) {
+			const mockCard = {
+				id: `mock-${Date.now()}`,
+				userId: 'demo-user',
+				type: type ?? 'note',
+				title: title ?? 'Demo Card',
+				content: content ?? null,
+				url: url ?? null,
+				imageUrl: imageUrl ?? null,
+				metadata: {},
+				tags: tags ?? [],
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				deletedAt: null,
+				archivedAt: null,
+			};
 
-                        return NextResponse.json({
-                                success: true,
-                                card: mockCard,
-                                source: 'mock',
-                        });
-                }
+			return NextResponse.json({
+				success: true,
+				card: mockCard,
+				source: 'mock',
+			});
+		}
 
-                // Authenticate user based on request source
-                let userId: string;
+		// Authenticate user based on request source
+		let userId: string;
 
-                if (requestSource === 'ios-share-extension') {
-                        // iOS Share Extension: Validate auth_token from request body
-                        if (!auth_token) {
-                                return NextResponse.json(
-                                        { success: false, error: 'Authentication token required for share extension' },
-                                        { status: 401 }
-                                );
-                        }
+		if (requestSource === 'ios-share-extension') {
+			// iOS Share Extension: Validate auth_token from request body
+			if (!auth_token) {
+				return NextResponse.json(
+					{ success: false, error: 'Authentication token required for share extension' },
+					{ status: 401 }
+				);
+			}
 
-                        const { userId: tokenUserId, error: tokenError } = await validateAuthToken(auth_token);
-                        if (tokenError || !tokenUserId) {
-                                return NextResponse.json(
-                                        { success: false, error: tokenError ?? 'Invalid or expired authentication token' },
-                                        { status: 401 }
-                                );
-                        }
+			const { userId: tokenUserId, error: tokenError } = await validateAuthToken(auth_token);
+			if (tokenError || !tokenUserId) {
+				return NextResponse.json(
+					{ success: false, error: tokenError ?? 'Invalid or expired authentication token' },
+					{ status: 401 }
+				);
+			}
 
-                        userId = tokenUserId;
-                        console.log(`[Save] iOS Share Extension authenticated user: ${userId}`);
-                } else {
-                        // Web/Chrome Extension: Use cookie-based auth
-                        const user = await getUser();
-                        userId = user?.id ?? 'demo-user';
-                }
+			userId = tokenUserId;
+			console.log(`[Save] iOS Share Extension authenticated user: ${userId}`);
+		} else {
+			// Web/Chrome Extension: Use cookie-based auth
+			const user = await getUser();
+			userId = user?.id ?? 'demo-user';
+		}
 
-                // STEP 1: Quick metadata (no AI)
-                const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
+		// STEP 1: Quick metadata (no AI)
+		const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
 
-                // Get URL preview (OG image/title/content) - fast parallel fetch
-                let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[] } = {};
-                if (url) {
-                        // We use the scraper to get rich metadata
-                        const scraped = await scrapeUrl(url);
+		// Get URL preview (OG image/title/content) - fast parallel fetch
+		let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[] } = {};
+		if (url) {
+			// We use the scraper to get rich metadata
+			const scraped = await scrapeUrl(url);
 
-                        // Fallback to Microlink screenshot if no image found in metadata
-                        const fallbackImage = !scraped.imageUrl
-                                ? `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
-                                : undefined;
+			// Fallback to self-hosted Playwright screenshot if no image found in metadata
+			// Uses Playwright (content-focused, zero cost) with fallback to Microlink
+			let fallbackImage: string | undefined;
+			if (!scraped.imageUrl) {
+				try {
+					const result = await captureWithPlaywright(url);
+					if (result.success && result.buffer.length > 0) {
+						// Upload to Supabase Storage
+						const uploadedUrl = await uploadScreenshotToStorage(result.buffer, url);
+						fallbackImage = uploadedUrl ?? undefined;
+					}
 
-                        preview = {
-                                title: scraped.title,
-                                imageUrl: scraped.imageUrl ?? fallbackImage,
-                                content: scraped.content,
-                                description: scraped.description,
-                                images: scraped.images
-                        };
-                }
+					// If Playwright failed or storage upload failed, fallback to Microlink
+					if (!fallbackImage) {
+						console.warn('[Save] Playwright screenshot failed or upload failed, falling back to Microlink');
+						fallbackImage = getMicrolinkFallback(url);
+					}
+				} catch (error) {
+					console.warn('[Save] Screenshot capture failed:', error);
+					// Final fallback to Microlink
+					fallbackImage = getMicrolinkFallback(url);
+				}
+			}
 
-                // Upload image if base64
-                let finalImageUrl = imageUrl;
-                if (imageUrl && imageUrl.startsWith('data:image')) {
-                        const uploaded = await uploadImageToStorage(imageUrl, userId);
-                        if (uploaded) finalImageUrl = uploaded;
-                }
+			preview = {
+				title: scraped.title,
+				imageUrl: scraped.imageUrl ?? fallbackImage,
+				content: scraped.content,
+				description: scraped.description,
+				images: scraped.images
+			};
+		}
 
-                // STEP 2: Insert card immediately with basic data
-                // Use scraped content if user didn't provide any
-                const finalContent = content ?? preview.content ?? preview.description ?? null;
+		// Upload image if base64
+		let finalImageUrl = imageUrl;
+		if (imageUrl && imageUrl.startsWith('data:image')) {
+			const uploaded = await uploadImageToStorage(imageUrl, userId);
+			if (uploaded) finalImageUrl = uploaded;
+		}
 
-                const cardData: Partial<CardRow> = {
-                        user_id: userId,
-                        type: type ?? quickMeta.type,
-                        title: title ?? preview.title ?? quickMeta.title,
-                        content: finalContent,
-                        url: url ?? null,
-                        image_url: finalImageUrl ?? preview.imageUrl ?? null,
-                        metadata: {
-                                processing: !tags, // Flag as processing if we need AI
-                                images: preview.images, // Store carousel images
-                        },
-                        tags: tags ?? [], // Empty tags, will be filled by AI
-                };
+		// STEP 2: Insert card immediately with basic data
+		// Use scraped content if user didn't provide any
+		const finalContent = content ?? preview.content ?? preview.description ?? null;
 
-                const insertedRow = await insertCard(cardData);
+		const cardData: Partial<CardRow> = {
+			user_id: userId,
+			type: type ?? quickMeta.type,
+			title: title ?? preview.title ?? quickMeta.title,
+			content: finalContent,
+			url: url ?? null,
+			image_url: finalImageUrl ?? preview.imageUrl ?? null,
+			metadata: {
+				processing: !tags, // Flag as processing if we need AI
+				images: preview.images, // Store carousel images
+			},
+			tags: tags ?? [], // Empty tags, will be filled by AI
+		};
 
-                if (!insertedRow) {
-                        return NextResponse.json(
-                                { success: false, error: 'Failed to save card to database' },
-                                { status: 500 }
-                        );
-                }
+		const insertedRow = await insertCard(cardData);
 
-                // STEP 3: Return immediately to client (< 200ms)
-                const savedCard = {
-                        id: insertedRow.id,
-                        userId: insertedRow.user_id,
-                        type: insertedRow.type,
-                        title: insertedRow.title,
-                        content: insertedRow.content,
-                        url: insertedRow.url,
-                        imageUrl: insertedRow.image_url,
-                        metadata: insertedRow.metadata,
-                        tags: insertedRow.tags,
-                        createdAt: insertedRow.created_at,
-                        updatedAt: insertedRow.updated_at,
-                        deletedAt: insertedRow.deleted_at,
-                        archivedAt: insertedRow.archived_at ?? null,
-                };
+		if (!insertedRow) {
+			return NextResponse.json(
+				{ success: false, error: 'Failed to save card to database' },
+				{ status: 500 }
+			);
+		}
 
-                return NextResponse.json({
-                        success: true,
-                        card: savedCard,
-                        source: 'db',
-                });
-        } catch (error) {
-                console.error('[API] Save error:', error);
+		// STEP 3: Return immediately to client (< 200ms)
+		const savedCard = {
+			id: insertedRow.id,
+			userId: insertedRow.user_id,
+			type: insertedRow.type,
+			title: insertedRow.title,
+			content: insertedRow.content,
+			url: insertedRow.url,
+			imageUrl: insertedRow.image_url,
+			metadata: insertedRow.metadata,
+			tags: insertedRow.tags,
+			createdAt: insertedRow.created_at,
+			updatedAt: insertedRow.updated_at,
+			deletedAt: insertedRow.deleted_at,
+			archivedAt: insertedRow.archived_at ?? null,
+		};
 
-                return NextResponse.json(
-                        {
-                                success: false,
-                                error: error instanceof Error ? error.message : 'Unknown error occurred'
-                        },
-                        { status: 500 }
-                );
-        }
+		return NextResponse.json({
+			success: true,
+			card: savedCard,
+			source: 'db',
+		});
+	} catch (error) {
+		console.error('[API] Save error:', error);
+
+		return NextResponse.json(
+			{
+				success: false,
+				error: error instanceof Error ? error.message : 'Unknown error occurred'
+			},
+			{ status: 500 }
+		);
+	}
 }
 
 // =============================================================================
@@ -325,16 +346,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 
 /**
  * OPTIONS /api/save
- * 
+ *
  * Handles CORS preflight requests from the Chrome extension.
  */
 export async function OPTIONS(): Promise<NextResponse> {
-        return new NextResponse(null, {
-                status: 200,
-                headers: {
-                        'Access-Control-Allow-Origin': '*',
-                        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                },
-        });
+	return new NextResponse(null, {
+		status: 200,
+		headers: {
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Allow-Methods': 'POST, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+		},
+	});
 }
