@@ -82,6 +82,7 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | UI | React 19 + Tailwind CSS 4 |
 | Database | Supabase (PostgreSQL + Auth + RLS) |
 | AI | Zhipu GLM-4.7 |
+| Screenshots | Self-hosted Playwright (zero cost) |
 | Testing | Playwright |
 
 ---
@@ -105,6 +106,13 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 
 Access dark mode via Settings (gear icon in header).
 
+### Screenshots
+- **Self-hosted**: Zero-cost Playwright-based screenshots
+- **Content-focused**: Intelligent selectors capture main content only (no ads/thumbnails)
+- **Platform-optimized**: Custom viewports per platform (Instagram 375x812, Twitter 1200x800)
+- **Retina/HiDPI**: 2x pixel density for sharp images
+- **Unlimited**: ~720k screenshots/month on Vercel Hobby plan
+
 ---
 
 ## Project Structure
@@ -114,12 +122,14 @@ mymind-clone-web/
 ├── apps/web/                    # Next.js PWA
 │   ├── app/
 │   │   ├── api/save/            # Universal save endpoint
+│   │   ├── api/screenshot/      # Self-hosted screenshot API
 │   │   └── page.tsx             # Main grid view
 │   ├── components/
 │   │   ├── cards/               # Card type renderers
 │   │   └── CardGrid.tsx         # Masonry layout
 │   ├── lib/
 │   │   ├── ai.ts                # GLM integration
+│   │   ├── screenshot-playwright.ts  # Self-hosted screenshots
 │   │   └── supabase.ts          # Database client
 │   └── ios-capacitor-archive/   # Archived Capacitor experiment
 ├── docs/

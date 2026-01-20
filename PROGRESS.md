@@ -28,6 +28,14 @@
 - Implemented dark mode with settings modal
 - Added E2E tests for visual features
 
+**Self-Hosted Screenshot System (Jan 20)**
+- Replaced external ScreenshotOne API with Playwright
+- Implemented content-focused selectors per platform
+- Added Supabase Storage integration for screenshots
+- Created `/api/screenshot` endpoint
+- Zero API costs (~$17/month savings)
+- Unlimited screenshots (~720k/month on Vercel Hobby)
+
 **Key Commits:**
 - `chore(ios): Archive Capacitor experiment, pivot to native Swift`
 - `docs: Reorganize project structure and documentation`
@@ -35,6 +43,12 @@
 - `feat(ai): Add platform-specific prompt templates`
 - `feat(theme): Add dark mode with settings modal`
 - `test: Add E2E tests for visual enhancements`
+- `deps: Add Playwright dependencies for self-hosted screenshots`
+- `feat(screenshot): Add self-hosted Playwright screenshot service`
+- `feat(storage): Add screenshot upload to Supabase Storage`
+- `feat(api): Add /api/screenshot endpoint`
+- `feat(save): Replace ScreenshotOne with Playwright screenshots`
+- `test(screenshot): Add Playwright screenshot service tests`
 
 **Artifacts:**
 - `apps/web/ios-capacitor-archive/` — Archived Capacitor code
@@ -88,6 +102,7 @@
 | Platform-specific AI | ✅ Done | Instagram, Twitter, website prompts |
 | Dark mode | ✅ Done | Auto + manual with settings modal |
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
+| Self-hosted screenshots | ✅ Done | Playwright-based, zero cost, unlimited |
 
 ### iOS App
 

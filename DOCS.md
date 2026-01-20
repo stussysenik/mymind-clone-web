@@ -49,6 +49,7 @@ apps/web/
 ├── app/
 │   ├── api/
 │   │   ├── save/          # Universal save endpoint
+│   │   ├── screenshot/    # Self-hosted screenshot API
 │   │   └── enrich/        # AI enrichment endpoint
 │   └── page.tsx           # Main grid view
 ├── components/
@@ -63,6 +64,7 @@ apps/web/
 │   │   ├── twitter.ts     # Twitter-specific
 │   │   └── website.ts     # General website
 │   ├── scraper.ts         # URL metadata extraction
+│   ├── screenshot-playwright.ts # Self-hosted screenshots
 │   └── supabase.ts        # Database client
 └── tests/                 # Playwright E2E tests
 ```
@@ -361,3 +363,25 @@ npm install
 ---
 
 *For more details, see [README.md](README.md) and [CLAUDE.md](CLAUDE.md)*
+
+### Self-Hosted Screenshots
+
+Zero-cost Playwright screenshots with content-focused selectors.
+
+**API Endpoint:**
+```bash
+POST /api/screenshot
+Body: { "url": "https://example.com" }
+Response: { "success": true, "url": "...", "source": "playwright", "platform": "..." }
+```
+
+**Platform Configs:**
+- Instagram: 375x812 mobile, `article[role="presentation"]`
+- Twitter: 1200x800 desktop, `article[data-testid="tweet"]`  
+- GitHub: 1920x1080, `.repository-content`
+- Generic: Semantic HTML selectors with viewport fallback
+
+**Performance:** 1-2s warm, 3-5s cold, ~720k/month capacity on Vercel Hobby.
+
+**See:** `apps/web/lib/screenshot-playwright.ts`
+
