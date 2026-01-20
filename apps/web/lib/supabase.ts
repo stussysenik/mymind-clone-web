@@ -641,3 +641,56 @@ export async function fetchRandomCards(userId?: string, limit: number = 5): Prom
         return cards as CardRow[];
 }
 
+// =============================================================================
+// STORAGE OPERATIONS
+// =============================================================================
+
+/**
+ * Uploads a screenshot buffer to Supabase Storage.
+ *
+ * @param buffer - Screenshot image buffer (PNG)
+ * @param originalUrl - Original URL (used to generate filename)
+ * @returns Public URL of the uploaded screenshot, or null on error
+ */
+export async function uploadScreenshotToStorage(
+        buffer: Buffer,
+        originalUrl: string
+): Promise<string | null> {
+        try {
+                const domain = new URL(originalUrl).hostname.replace(/\./g, '-');
+                const timestamp = Date.now();
+                const fileName = `screenshots/${domain}-${timestamp}.png`;
+
+                const client = getSupabaseClient(true);
+                if (!client) {
+                        console.warn('[Storage] Supabase not configured, skipping upload');
+                        return null;
+                }
+
+                // Upload to Supabase Storage
+                const { error } = await client.storage
+                        .from('images')
+                        .upload(fileName, buffer, {
+                                contentType: 'image/png',
+                                upsert: false,
+                        });
+
+                if (error) {
+                        console.error('[Storage] Screenshot upload failed:', error.message);
+                        return null;
+                }
+
+                // Get public URL
+                const {
+                        data: { publicUrl },
+                } = client.storage.from('images').getPublicUrl(fileName);
+
+                console.log(`[Storage] Screenshot uploaded successfully: ${fileName}`);
+                return publicUrl;
+        } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error('[Storage] Error uploading screenshot:', errorMsg);
+                return null;
+        }
+}
+
