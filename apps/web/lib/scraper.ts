@@ -755,14 +755,31 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                         const directorName = $('[itemprop="director"] [itemprop="name"]')?.text()?.trim() ||
                                                 $('a[href*="/director/"]')?.first()?.text()?.trim();
 
-                                        // Extract poster - Letterboxd uses different image sources
+                                        // Extract poster - Letterboxd uses different image sources and lazy loading
                                         let posterUrl = ogImage;
-                                        const filmPoster = $('div.film-poster img').attr('src') ||
+
+                                        // Try multiple selectors in priority order for better poster extraction
+                                        const filmPoster =
+                                                $('div.film-poster img').attr('src') ||
+                                                $('div.film-poster img').attr('data-src') ||           // Lazy-loaded
+                                                $('div.really-lazy-load').attr('data-src') ||          // Lazy-load container
+                                                $('img.image[src*="ltrbxd.com"]').attr('src') ||       // Direct image with domain
+                                                $('img[alt*="poster"]').attr('src') ||                 // Alt text hint
+                                                $('.poster img').attr('src') ||                        // Generic poster class
                                                 $('img.image').attr('src');
-                                        if (filmPoster && filmPoster.includes('ltrbxd.com')) {
-                                                // Upgrade to larger size if possible
-                                                posterUrl = filmPoster.replace(/-0-.*\.jpg/, '-0-1000-0-1500-crop.jpg');
+
+                                        if (filmPoster) {
+                                                // Check if it's a Letterboxd CDN image
+                                                if (filmPoster.includes('ltrbxd.com') || filmPoster.includes('letterboxd.com')) {
+                                                        // Upgrade to larger poster size if possible (1000x1500 is a good HD size)
+                                                        posterUrl = filmPoster.replace(/-0-.*\.(jpg|png|webp)/, '-0-1000-0-1500-crop.$1');
+                                                } else if (filmPoster.startsWith('http')) {
+                                                        // Use external image as-is
+                                                        posterUrl = filmPoster;
+                                                }
                                         }
+
+                                        console.log('[Scraper] Letterboxd poster:', posterUrl ? 'found' : 'using OG image');
 
                                         if (movieData) {
                                                 const title = movieData.name || filmTitle || ogTitle || 'Untitled Film';
@@ -806,6 +823,325 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                 console.warn('[Scraper] Letterboxd fetch failed, falling back to generic');
                         } catch (letterboxdErr) {
                                 console.warn('[Scraper] Letterboxd error:', letterboxdErr);
+                        }
+                }
+
+
+                // =============================================================
+                // AMAZON SPECIAL HANDLING (product metadata)
+                // =============================================================
+                if (domain.includes('amazon.com') || domain.includes('amazon.co') || domain.includes('amzn.')) {
+                        try {
+                                console.log('[Scraper] Amazon: Extracting product data');
+
+                                const amazonRes = await fetch(url, {
+                                        headers: {
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                                'Accept-Language': 'en-US,en;q=0.9',
+                                        },
+                                });
+
+                                if (amazonRes.ok) {
+                                        const html = await amazonRes.text();
+                                        const $ = cheerio.load(html);
+
+                                        // Extract product title
+                                        const productTitle = $('#productTitle').text()?.trim() ||
+                                                $('meta[property="og:title"]').attr('content') ||
+                                                $('title').text()?.trim() || 'Amazon Product';
+
+                                        // Extract price
+                                        const price = $('.a-price .a-offscreen').first().text()?.trim() ||
+                                                $('#priceblock_ourprice').text()?.trim() ||
+                                                $('#priceblock_dealprice').text()?.trim() ||
+                                                $('.a-price-whole').first().text()?.trim();
+
+                                        // Extract rating
+                                        const ratingText = $('.a-icon-star-small .a-icon-alt').first().text()?.trim() ||
+                                                $('[data-hook="average-star-rating"] .a-icon-alt').first().text()?.trim();
+                                        const rating = ratingText?.match(/[\d.]+/)?.[0];
+
+                                        // Extract image
+                                        const imageUrl = $('#landingImage').attr('src') ||
+                                                $('#imgBlkFront').attr('src') ||
+                                                $('meta[property="og:image"]').attr('content');
+
+                                        // Extract description
+                                        const description = $('#feature-bullets ul').text()?.trim()?.slice(0, 500) ||
+                                                $('meta[name="description"]').attr('content') ||
+                                                $('meta[property="og:description"]').attr('content') || '';
+
+                                        // Extract ASIN from URL
+                                        const asinMatch = url.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
+                                        const asin = asinMatch?.[1];
+
+                                        // Build a clean title with price
+                                        let title = productTitle;
+                                        if (price) {
+                                                title = `${productTitle} - ${price}`;
+                                        }
+
+                                        // DSPy Enhancement for product summary
+                                        try {
+                                                const dspyTitle = await extractTitleWithDSPy(productTitle, 'Amazon', 'amazon');
+                                                if (dspyTitle.confidence > 0.7) {
+                                                        title = price ? `${dspyTitle.title} - ${price}` : dspyTitle.title;
+                                                        console.log(`[Scraper] DSPy improved Amazon title (confidence: ${dspyTitle.confidence})`);
+                                                }
+                                        } catch {
+                                                // DSPy not available
+                                        }
+
+                                        console.log(`[Scraper] Amazon: "${title.slice(0, 50)}..." - ASIN: ${asin}`);
+
+                                        return {
+                                                title,
+                                                description,
+                                                imageUrl: imageUrl || null,
+                                                content: description,
+                                                author: 'Amazon',
+                                                domain: 'amazon.com',
+                                                url,
+                                                hashtags: rating ? [`rating-${rating}`] : [],
+                                        };
+                                }
+                                console.warn('[Scraper] Amazon fetch failed, falling back to generic');
+                        } catch (amazonErr) {
+                                console.warn('[Scraper] Amazon error:', amazonErr);
+                        }
+                }
+
+
+                // =============================================================
+                // GOODREADS SPECIAL HANDLING (book metadata)
+                // =============================================================
+                if (domain.includes('goodreads.com')) {
+                        try {
+                                console.log('[Scraper] Goodreads: Extracting book data');
+
+                                const goodreadsRes = await fetch(url, {
+                                        headers: {
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                                'Accept-Language': 'en-US,en;q=0.9',
+                                        },
+                                });
+
+                                if (goodreadsRes.ok) {
+                                        const html = await goodreadsRes.text();
+                                        const $ = cheerio.load(html);
+
+                                        // Extract JSON-LD for book data
+                                        let bookData: any = null;
+                                        $('script[type="application/ld+json"]').each((_, el) => {
+                                                try {
+                                                        const json = JSON.parse($(el).html() || '');
+                                                        if (json['@type'] === 'Book') {
+                                                                bookData = json;
+                                                        }
+                                                } catch {}
+                                        });
+
+                                        // Fallback to page selectors
+                                        const bookTitle = bookData?.name ||
+                                                $('h1[data-testid="bookTitle"]').text()?.trim() ||
+                                                $('h1.Text__title1').text()?.trim() ||
+                                                $('meta[property="og:title"]').attr('content')?.split(' by ')?.[0] ||
+                                                'Book';
+
+                                        const authorName = bookData?.author?.name ||
+                                                (Array.isArray(bookData?.author) ? bookData?.author[0]?.name : null) ||
+                                                $('a.ContributorLink').first().text()?.trim() ||
+                                                $('[data-testid="authorName"]').text()?.trim() ||
+                                                $('meta[property="og:title"]').attr('content')?.split(' by ')?.[1];
+
+                                        const ratingValue = bookData?.aggregateRating?.ratingValue ||
+                                                $('[data-testid="ratingsCount"]').attr('aria-label')?.match(/[\d.]+/)?.[0] ||
+                                                $('.RatingStatistics__rating').text()?.trim();
+
+                                        const description = bookData?.description ||
+                                                $('[data-testid="description"]').text()?.trim() ||
+                                                $('meta[property="og:description"]').attr('content') || '';
+
+                                        const imageUrl = bookData?.image ||
+                                                $('img.ResponsiveImage').attr('src') ||
+                                                $('meta[property="og:image"]').attr('content');
+
+                                        // Extract genres
+                                        const genres: string[] = [];
+                                        $('[data-testid="genresList"] a').each((_, el) => {
+                                                const genre = $(el).text()?.trim();
+                                                if (genre) genres.push(genre.toLowerCase().replace(/\s+/g, '-'));
+                                        });
+
+                                        let title = authorName ? `${bookTitle} by ${authorName}` : bookTitle;
+
+                                        // DSPy Enhancement
+                                        try {
+                                                const dspyTitle = await extractTitleWithDSPy(`${bookTitle} by ${authorName}`, authorName || '', 'goodreads');
+                                                if (dspyTitle.confidence > 0.7) {
+                                                        title = dspyTitle.title;
+                                                        console.log(`[Scraper] DSPy improved Goodreads title (confidence: ${dspyTitle.confidence})`);
+                                                }
+                                        } catch {
+                                                // DSPy not available
+                                        }
+
+                                        console.log(`[Scraper] Goodreads: "${title}" - Rating: ${ratingValue}`);
+
+                                        return {
+                                                title,
+                                                description: description.slice(0, 500),
+                                                imageUrl: imageUrl || null,
+                                                content: description,
+                                                author: authorName,
+                                                domain: 'goodreads.com',
+                                                url,
+                                                hashtags: genres.slice(0, 5),
+                                        };
+                                }
+                                console.warn('[Scraper] Goodreads fetch failed, falling back to generic');
+                        } catch (goodreadsErr) {
+                                console.warn('[Scraper] Goodreads error:', goodreadsErr);
+                        }
+                }
+
+
+                // =============================================================
+                // STORYGRAPH SPECIAL HANDLING (book metadata)
+                // =============================================================
+                if (domain.includes('thestorygraph.com') || domain.includes('storygraph.com')) {
+                        try {
+                                console.log('[Scraper] StoryGraph: Extracting book data');
+
+                                const storygraphRes = await fetch(url, {
+                                        headers: {
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                                'Accept-Language': 'en-US,en;q=0.9',
+                                        },
+                                });
+
+                                if (storygraphRes.ok) {
+                                        const html = await storygraphRes.text();
+                                        const $ = cheerio.load(html);
+
+                                        // Extract book title
+                                        const bookTitle = $('h3.book-title-author-and-series a').first().text()?.trim() ||
+                                                $('meta[property="og:title"]').attr('content')?.split(' by ')?.[0] ||
+                                                $('h1').first().text()?.trim() ||
+                                                'Book';
+
+                                        // Extract author
+                                        const authorName = $('h3.book-title-author-and-series a').last().text()?.trim() ||
+                                                $('meta[property="og:title"]').attr('content')?.split(' by ')?.[1];
+
+                                        // Extract cover image
+                                        const imageUrl = $('img.book-cover').attr('src') ||
+                                                $('meta[property="og:image"]').attr('content');
+
+                                        // Extract description
+                                        const description = $('.book-description').text()?.trim() ||
+                                                $('meta[property="og:description"]').attr('content') || '';
+
+                                        // Extract moods/tags
+                                        const moods: string[] = [];
+                                        $('.mood-tag, .pace-tag, .book-pane-tag').each((_, el) => {
+                                                const mood = $(el).text()?.trim();
+                                                if (mood) moods.push(mood.toLowerCase().replace(/\s+/g, '-'));
+                                        });
+
+                                        let title = authorName ? `${bookTitle} by ${authorName}` : bookTitle;
+
+                                        // DSPy Enhancement
+                                        try {
+                                                const dspyTitle = await extractTitleWithDSPy(`${bookTitle} by ${authorName}`, authorName || '', 'storygraph');
+                                                if (dspyTitle.confidence > 0.7) {
+                                                        title = dspyTitle.title;
+                                                        console.log(`[Scraper] DSPy improved StoryGraph title (confidence: ${dspyTitle.confidence})`);
+                                                }
+                                        } catch {
+                                                // DSPy not available
+                                        }
+
+                                        console.log(`[Scraper] StoryGraph: "${title}"`);
+
+                                        return {
+                                                title,
+                                                description: description.slice(0, 500),
+                                                imageUrl: imageUrl || null,
+                                                content: description,
+                                                author: authorName,
+                                                domain: 'storygraph.com',
+                                                url,
+                                                hashtags: moods.slice(0, 5),
+                                        };
+                                }
+                                console.warn('[Scraper] StoryGraph fetch failed, falling back to generic');
+                        } catch (storygraphErr) {
+                                console.warn('[Scraper] StoryGraph error:', storygraphErr);
+                        }
+                }
+
+
+                // =============================================================
+                // WIKIPEDIA SPECIAL HANDLING (article summary)
+                // =============================================================
+                if (domain.includes('wikipedia.org')) {
+                        try {
+                                console.log('[Scraper] Wikipedia: Extracting article data');
+
+                                // Extract article title from URL
+                                const wikiTitleMatch = url.match(/\/wiki\/([^#?]+)/);
+                                const wikiTitle = wikiTitleMatch?.[1] ? decodeURIComponent(wikiTitleMatch[1].replace(/_/g, ' ')) : null;
+
+                                if (wikiTitle) {
+                                        // Use Wikipedia's REST API for clean summary
+                                        const apiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`;
+                                        const wikiRes = await fetch(apiUrl, {
+                                                headers: {
+                                                        'Accept': 'application/json',
+                                                        'User-Agent': 'MyMind/1.0 (Content Archiver)',
+                                                },
+                                        });
+
+                                        if (wikiRes.ok) {
+                                                const wikiData = await wikiRes.json();
+
+                                                const title = wikiData.title || wikiTitle;
+                                                const description = wikiData.extract || '';
+                                                const imageUrl = wikiData.thumbnail?.source || wikiData.originalimage?.source;
+
+                                                // DSPy Enhancement for condensed summary
+                                                let finalTitle = title;
+                                                try {
+                                                        const dspyTitle = await extractTitleWithDSPy(description.slice(0, 500), 'Wikipedia', 'wikipedia');
+                                                        if (dspyTitle.confidence > 0.7) {
+                                                                // Keep original title but DSPy can improve it
+                                                                console.log(`[Scraper] DSPy analyzed Wikipedia content (confidence: ${dspyTitle.confidence})`);
+                                                        }
+                                                } catch {
+                                                        // DSPy not available
+                                                }
+
+                                                console.log(`[Scraper] Wikipedia: "${finalTitle}" - ${description.length} chars`);
+
+                                                return {
+                                                        title: finalTitle,
+                                                        description: description.slice(0, 300),
+                                                        imageUrl: imageUrl || null,
+                                                        content: description,
+                                                        author: 'Wikipedia',
+                                                        domain: 'wikipedia.org',
+                                                        url,
+                                                        hashtags: wikiData.type ? [wikiData.type.toLowerCase()] : [],
+                                                };
+                                        }
+                                }
+                                console.warn('[Scraper] Wikipedia API failed, falling back to HTML');
+                        } catch (wikiErr) {
+                                console.warn('[Scraper] Wikipedia error:', wikiErr);
                         }
                 }
 
