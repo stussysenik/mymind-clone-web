@@ -68,6 +68,22 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* Physics curves - Atomic UI */
+  --ease-gentle-spring: cubic-bezier(0.4, 0.8, 0.74, 1.0);
+  --ease-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+  --ease-anticipate: cubic-bezier(0.38, -0.4, 0.74, 1);
+
+  /* Duration scale */
+  --duration-instant: 75ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* Touch targets */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
 }
 
 /* Dark Mode Theme */
@@ -452,4 +468,201 @@ h3 {
 
 .pulse-ring-active {
   animation: pulse-ring 300ms ease-out;
+}
+
+/* =============================================================================
+   PHYSICS-BASED ANIMATION SYSTEM (Atomic UI)
+   ============================================================================= */
+
+/* Physics press - Tactile button feedback */
+.physics-press {
+  transition: transform var(--duration-fast) var(--ease-snappy),
+    box-shadow var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+  will-change: transform;
+}
+
+.physics-press:active {
+  transform: scale(0.98);
+  transition-duration: var(--duration-instant);
+}
+
+/* Elastic tap - Mobile tap with overshoot */
+.elastic-tap {
+  transition: transform var(--duration-fast) var(--ease-elastic);
+  will-change: transform;
+}
+
+.elastic-tap:active {
+  transform: scale(0.95);
+  transition-duration: var(--duration-instant);
+}
+
+/* Fade up animation - Content entrance */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up var(--duration-normal) var(--ease-snappy) forwards;
+}
+
+/* Scale in animation - Modal/tooltip entrance */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in var(--duration-fast) var(--ease-snappy) forwards;
+}
+
+/* Stagger children - Cascading list animations */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-up var(--duration-normal) var(--ease-snappy) forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+
+/* Physics pulse - Skeleton loading */
+@keyframes physics-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.02);
+  }
+}
+
+.physics-pulse {
+  animation: physics-pulse 2s var(--ease-gentle-spring) infinite;
+}
+
+/* =============================================================================
+   TOUCH TARGET UTILITIES
+   ============================================================================= */
+
+/* Ensure minimum touch target size on mobile */
+@media (max-width: 767px) {
+  .touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+
+  .touch-target-comfortable {
+    min-height: var(--touch-target-comfortable);
+    min-width: var(--touch-target-comfortable);
+  }
+}
+
+/* Touch target hitbox extension */
+.touch-hitbox::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/* =============================================================================
+   ATOMIC WEIGHT VISIBILITY CLASSES
+   ============================================================================= */
+
+/* Weight-based visibility (higher weight = more critical) */
+.atomic-weight-10 { } /* Always visible */
+.atomic-weight-9 { }  /* Always visible */
+.atomic-weight-8 { }  /* Always visible */
+.atomic-weight-7 { }  /* Hidden on xs (≤374px) */
+.atomic-weight-6 { }  /* Hidden on xs, sm */
+.atomic-weight-5 { }  /* Hidden on xs, sm */
+.atomic-weight-4 { }  /* Hidden on xs, sm, md */
+.atomic-weight-3 { }  /* Hidden on xs, sm, md */
+.atomic-weight-2 { }  /* Hidden on xs, sm, md, lg */
+
+@media (max-width: 374px) {
+  .atomic-weight-7,
+  .atomic-weight-6,
+  .atomic-weight-5,
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 375px) and (max-width: 639px) {
+  .atomic-weight-6,
+  .atomic-weight-5,
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .atomic-weight-4,
+  .atomic-weight-3,
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .atomic-weight-2 {
+    display: none !important;
+  }
+}
+
+/* =============================================================================
+   FADE EDGE INDICATORS (for overflow scrolling)
+   ============================================================================= */
+
+.fade-edge-left {
+  mask-image: linear-gradient(to right, transparent, black 24px);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px);
+}
+
+.fade-edge-right {
+  mask-image: linear-gradient(to left, transparent, black 24px);
+  -webkit-mask-image: linear-gradient(to left, transparent, black 24px);
+}
+
+.fade-edge-both {
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
+/* =============================================================================
+   MOMENTUM SCROLL (for touch devices)
+   ============================================================================= */
+
+.momentum-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
 }
