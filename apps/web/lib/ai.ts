@@ -11,6 +11,7 @@ import type { CardType, ClassificationResult, ImageAnalysisResult } from './type
 import { CLASSIFICATION_TOOL, GENERIC_CLASSIFICATION_PROMPT } from './prompts';
 import { getInstagramPrompt, extractInstagramHashtags } from './prompts/instagram';
 import { getTwitterPrompt, detectThreadIntent, extractTwitterHashtags } from './prompts/twitter';
+import { generateSummaryWithDSPy } from './dspy-client';
 
 // =============================================================================
 // CONFIGURATION
@@ -649,87 +650,126 @@ function classifyContentFallback(
 }
 
 // =============================================================================
-// IMAGE ANALYSIS (GLM-4.6V)
+// IMAGE ANALYSIS (KMeans Color Extraction + GLM-4.6V Vision)
 // =============================================================================
 
-/**
- * Analyzes an image using GLM-4.6V for colors, objects, and text.
- * Converts external URLs to base64 before sending to API.
- */
-export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResult> {
-        if (!ZHIPU_API_KEY) {
-                // Return mock data if API not configured
-                return {
-                        colors: ['#3498DB', '#2ECC71', '#9B59B6'],
-                        objects: ['image', 'content'],
-                        ocrText: null,
-                };
-        }
+import { extractColorsFromUrl } from './color-extraction';
 
+/**
+ * Fetches image buffer for processing
+ */
+async function fetchImageBuffer(imageUrl: string): Promise<Buffer | null> {
         try {
-                // Convert image to base64 for API compatibility
-                const base64Url = await fetchImageAsBase64(imageUrl);
-                if (!base64Url) {
-                        console.warn('[AI] Could not fetch image for analysis, returning defaults');
-                        return {
-                                colors: ['#3498DB', '#2ECC71', '#9B59B6'],
-                                objects: ['image'],
-                                ocrText: null,
-                        };
+                if (imageUrl.startsWith('data:')) {
+                        // Convert base64 to buffer
+                        const base64Data = imageUrl.split(',')[1];
+                        return Buffer.from(base64Data, 'base64');
                 }
 
-                const response = await callGLM(VISION_MODEL, [
-                        {
-                                role: 'user',
-                                content: [
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                const response = await fetch(imageUrl, {
+                        signal: controller.signal,
+                        headers: {
+                                'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+                                'Accept': 'image/*',
+                        },
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                        console.warn(`[AI] Image fetch failed: ${response.status}`);
+                        return null;
+                }
+
+                return Buffer.from(await response.arrayBuffer());
+        } catch (error) {
+                console.warn('[AI] Image buffer fetch error:', error);
+                return null;
+        }
+}
+
+/**
+ * Analyzes an image using KMeans for accurate color extraction (8 colors)
+ * and GLM-4.6V for objects, text, and visual analysis.
+ */
+export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResult> {
+        const defaultColors = ['#3498DB', '#2ECC71', '#9B59B6', '#E74C3C', '#F39C12', '#1ABC9C', '#9B59B6', '#34495E'];
+
+        // Run KMeans color extraction and GLM vision in parallel
+        const [kmeansColors, visionAnalysis] = await Promise.all([
+                // KMeans color extraction - accurate pixel-level analysis
+                extractColorsFromUrl(imageUrl).then(colors => {
+                        const hexColors = colors.map(c => c.hex);
+                        console.log(`[AI] KMeans extracted ${hexColors.length} colors:`, hexColors.slice(0, 4).join(', ') + '...');
+                        return hexColors;
+                }).catch(err => {
+                        console.warn('[AI] KMeans color extraction failed:', err);
+                        return defaultColors;
+                }),
+
+                // GLM Vision analysis for objects, OCR, composition
+                (async () => {
+                        if (!ZHIPU_API_KEY) {
+                                return { objects: ['image', 'content'], ocrText: null };
+                        }
+
+                        try {
+                                const base64Url = await fetchImageAsBase64(imageUrl);
+                                if (!base64Url) {
+                                        return { objects: ['image'], ocrText: null };
+                                }
+
+                                const response = await callGLM(VISION_MODEL, [
                                         {
-                                                type: 'text',
-                                                text: `Analyze this image for visual similarity matching. Respond with JSON:
+                                                role: 'user',
+                                                content: [
+                                                        {
+                                                                type: 'text',
+                                                                text: `Analyze this image. Respond with JSON (DO NOT include colors, we extract those separately):
 {
-  "colors": ["#hex1", "#hex2", "#hex3"],  // 3-5 dominant colors as hex
-  "objects": ["object1", "object2"],       // Detected objects/subjects
+  "objects": ["object1", "object2"],       // Detected objects/subjects (5-10 items)
   "ocrText": "visible text or null",       // Any text in image
   "texture": "smooth|textured|geometric|organic",  // Surface/pattern quality
   "composition": "centered|grid|asymmetric|minimal|complex",  // Layout style
   "visualElements": ["typography", "logo", ...],  // From: typography, logo, icon, photograph, illustration, diagram, pattern, product, person, nature, architecture, abstract
-  "paletteType": "monochrome|vibrant|muted|high-contrast|pastel"  // Color scheme
+  "paletteType": "monochrome|vibrant|muted|high-contrast|pastel"  // Color scheme type
 }`,
+                                                        },
+                                                        {
+                                                                type: 'image_url',
+                                                                image_url: { url: base64Url },
+                                                        },
+                                                ],
                                         },
-                                        {
-                                                type: 'image_url',
-                                                image_url: { url: base64Url }, // Using base64!
-                                        },
-                                ],
-                        },
-                ]);
+                                ]);
 
-                const content = response.choices[0]?.message?.content;
-                if (content) {
-                        // Try to parse JSON from response
-                        const jsonMatch = content.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                                const parsed = JSON.parse(jsonMatch[0]);
-                                return {
-                                        colors: parsed.colors || ['#3498DB', '#2ECC71', '#9B59B6'],
-                                        objects: parsed.objects || [],
-                                        ocrText: parsed.ocrText || null,
-                                        texture: parsed.texture,
-                                        composition: parsed.composition,
-                                        visualElements: parsed.visualElements,
-                                        paletteType: parsed.paletteType,
-                                };
+                                const content = response.choices[0]?.message?.content;
+                                if (content) {
+                                        const jsonMatch = content.match(/\{[\s\S]*\}/);
+                                        if (jsonMatch) {
+                                                return JSON.parse(jsonMatch[0]);
+                                        }
+                                }
+                                return { objects: ['image'], ocrText: null };
+                        } catch (error) {
+                                console.warn('[AI] Vision analysis error:', error);
+                                return { objects: ['image'], ocrText: null };
                         }
-                }
+                })()
+        ]);
 
-                throw new Error('Could not parse vision response');
-        } catch (error) {
-                console.error('[AI] Image analysis error:', error);
-                return {
-                        colors: ['#3498DB', '#2ECC71', '#9B59B6'],
-                        objects: ['image'],
-                        ocrText: null,
-                };
-        }
+        return {
+                colors: kmeansColors.length > 0 ? kmeansColors : defaultColors,
+                objects: visionAnalysis.objects || [],
+                ocrText: visionAnalysis.ocrText || null,
+                texture: visionAnalysis.texture,
+                composition: visionAnalysis.composition,
+                visualElements: visionAnalysis.visualElements,
+                paletteType: visionAnalysis.paletteType,
+        };
 }
 
 
@@ -738,34 +778,124 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResul
 // SUMMARY GENERATION
 // =============================================================================
 
+import { getSummaryPrompt, detectPlatformFromUrl, validateSummaryQuality, type SummaryContext } from './prompts/summary';
+
 /**
- * Generates a summary for content using GLM-4.7.
+ * Options for generating a summary
+ */
+export interface GenerateSummaryOptions {
+        content: string;
+        url?: string;
+        author?: string;
+        title?: string;
+        imageCount?: number;
+}
+
+/**
+ * Generates an ANALYTICAL summary for content using GLM-4.7.
+ * Uses platform-specific prompts for higher quality output.
+ *
+ * @param options - Summary generation options
+ * @returns Analytical summary (50-500 chars) or null
  */
 export async function generateSummary(
-        content: string,
-        maxTokens: number = 50
+        options: string | GenerateSummaryOptions,
+        maxTokens: number = 100
 ): Promise<string | null> {
+        // Handle legacy string-only call signature
+        const opts: GenerateSummaryOptions =
+                typeof options === 'string' ? { content: options } : options;
+
+        const { content, url, author, title, imageCount } = opts;
+
+        // Detect platform for specialized prompts
+        const platform = url ? detectPlatformFromUrl(url) : 'unknown';
+
+        // DSPy Enhancement: Try DSPy microservice first for supported platforms
+        if (['instagram', 'twitter', 'reddit'].includes(platform)) {
+                try {
+                        const dspyPlatform = platform as 'instagram' | 'twitter' | 'reddit';
+                        const dspyResult = await generateSummaryWithDSPy(content, dspyPlatform, {
+                                author,
+                                title,
+                                imageCount,
+                        });
+
+                        if (dspyResult.isAnalytical && dspyResult.qualityScore > 0.6) {
+                                console.log(`[AI] DSPy generated ${platform} summary (quality: ${dspyResult.qualityScore})`);
+                                return dspyResult.summary;
+                        }
+                        console.log(`[AI] DSPy summary quality too low (${dspyResult.qualityScore}), falling back to GLM`);
+                } catch (dspyErr) {
+                        console.log('[AI] DSPy unavailable, using GLM for summary generation');
+                }
+        }
+
         if (!ZHIPU_API_KEY) {
                 return content.slice(0, 150).trim() + '...';
         }
 
         try {
+
+                // Build context for prompt generation
+                const context: SummaryContext = {
+                        content,
+                        author,
+                        platform,
+                        imageCount,
+                        url,
+                        title,
+                };
+
+                // Get platform-specific prompt
+                const summaryPrompt = getSummaryPrompt(context);
+
                 const response = await callGLM(TEXT_MODEL, [
                         {
                                 role: 'system',
-                                content: 'Summarize the following content in 1-2 sentences. Be concise and informative.',
+                                content: `You are an expert content analyst for a visual knowledge manager. Your job is to generate ANALYTICAL summaries that help users remember WHY they saved something.
+
+CRITICAL RULES:
+1. NEVER just truncate or paraphrase the original content
+2. ALWAYS provide INSIGHT about the content's value
+3. Keep summaries between 50-200 characters
+4. Be specific, not generic
+5. Focus on memorability and future usefulness`,
                         },
                         {
                                 role: 'user',
-                                content: content.slice(0, 2000),
+                                content: summaryPrompt,
                         },
                 ]);
 
-                return response.choices[0]?.message?.content ?? null;
+                const summary = response.choices[0]?.message?.content?.trim() ?? null;
+
+                // Validate quality
+                if (summary) {
+                        const validation = validateSummaryQuality(summary, content);
+                        if (!validation.valid) {
+                                console.warn('[AI] Summary quality issues:', validation.issues);
+                                // Still return it, but log the issues for improvement
+                        }
+                        console.log(`[AI] Generated ${platform} summary: "${summary.slice(0, 60)}..."`);
+                }
+
+                return summary;
         } catch (error) {
                 console.error('[AI] Summary generation error:', error);
                 return content.slice(0, 150).trim() + '...';
         }
+}
+
+/**
+ * Legacy function signature for backward compatibility
+ * @deprecated Use generateSummary with options object instead
+ */
+export async function generateSummaryLegacy(
+        content: string,
+        maxTokens: number = 50
+): Promise<string | null> {
+        return generateSummary({ content }, maxTokens);
 }
 // =============================================================================
 // SEARCH QUERY EXPANSION
