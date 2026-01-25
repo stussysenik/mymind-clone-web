@@ -15,6 +15,25 @@
 
 #### Week 4 (Jan 20-26)
 
+**Card Consistency & Enrichment Fixes (Jan 25)**
+- Added domain link display to all platform cards (YouTube, Letterboxd, Movie, Goodreads, Amazon, StoryGraph, Reddit, Instagram)
+- Standardized external link button position to bottom-right
+- Fixed Letterboxd poster extraction with multiple selector fallbacks
+- Fixed retry timer not resetting when Retry button clicked
+- Applied IMDB extracted colors to MovieCard gradient background
+- Added shared CardActions component for consistent card UI
+
+**Key Commits:**
+- `feat(cards): add consistent domain link display to all platform cards`
+- `fix(scraper): improve Letterboxd poster extraction`
+- `fix(enrichment): properly reset timer when retry is clicked`
+- `feat(components): add shared UI components and design tokens`
+
+**Artifacts:**
+- `apps/web/components/cards/CardActions.tsx` — Shared card actions
+- `apps/web/lib/design-tokens.ts` — Design system tokens
+- `openspec/changes/archive/2026-01-25-012-fix-card-consistency-enrichment/` — Feature spec
+
 **Serendipity Mode (Jan 25)**
 - Implemented interactive serendipity exploration client
 - Single-card focus view with swipe/keyboard navigation
@@ -142,6 +161,7 @@
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
 | Self-hosted screenshots | ✅ Done | Playwright-based, zero cost, unlimited |
 | Serendipity mode | ✅ Done | Focus view, keyboard nav, shuffle, archive |
+| Card consistency | ✅ Done | Domain links, external buttons, shared CardActions |
 
 ### iOS App
 
@@ -224,10 +244,10 @@
 
 ```
 apps/web/
-├── Components: 27+
+├── Components: 35+
 ├── API routes: 9
 ├── Card types: 12
-└── E2E tests: 15+
+└── E2E tests: 18+
 ```
 
 ---

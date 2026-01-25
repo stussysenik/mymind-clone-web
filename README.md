@@ -85,6 +85,8 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | Instagram carousels | ✅ Production |
 | Dark mode | ✅ Production |
 | Platform-specific AI | ✅ Production |
+| Serendipity mode | ✅ Production |
+| Consistent domain links | ✅ Production |
 | iOS Share Sheet | 🔄 [Native app](https://github.com/stussysenik/mymind-clone-ios) |
 | Chrome extension | 📋 Planned |
 

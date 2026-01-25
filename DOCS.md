@@ -202,6 +202,36 @@ document.documentElement.setAttribute('data-theme', 'dark');
 }
 ```
 
+### CardActions Component
+
+Shared component for consistent card action buttons across all platform cards.
+
+**Usage:**
+```typescript
+import { CardActions } from '@/components/cards/CardActions';
+
+<CardActions
+  url={card.url}
+  domain={getDomain(card.url)}
+  domainColor={card.metadata.accentColor}
+  externalLinkPosition="bottom-right"
+/>
+```
+
+**Features:**
+- Globe icon + accent-colored domain link
+- External link button with consistent positioning
+- Hover states for interactive feedback
+- Responsive sizing
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `url` | `string` | The card's source URL |
+| `domain` | `string` | Display domain (e.g., "youtube.com") |
+| `domainColor` | `string?` | Accent color for domain text |
+| `externalLinkPosition` | `string` | Button position ("bottom-right", "top-right") |
+
 ### AI Processing Feedback
 
 The `CardDetailModal` shows stage-based feedback during AI enrichment:
