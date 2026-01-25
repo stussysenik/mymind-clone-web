@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background circle with warm cream color -->
+  <circle cx="16" cy="16" r="16" fill="#F5F0E8"/>
+
+  <!-- Main sparkle/star - 4-pointed star -->
+  <path d="M16 4 L17.5 13 L16 14.5 L14.5 13 Z" fill="#8B7355"/>
+  <path d="M16 28 L17.5 19 L16 17.5 L14.5 19 Z" fill="#8B7355"/>
+  <path d="M4 16 L13 14.5 L14.5 16 L13 17.5 Z" fill="#8B7355"/>
+  <path d="M28 16 L19 14.5 L17.5 16 L19 17.5 Z" fill="#8B7355"/>
+
+  <!-- Center diamond -->
+  <rect x="14" y="14" width="4" height="4" rx="0.5" transform="rotate(45 16 16)" fill="#6B5344"/>
+
+  <!-- Small accent sparkles -->
+  <circle cx="8" cy="8" r="1.5" fill="#A08060"/>
+  <circle cx="24" cy="8" r="1" fill="#A08060"/>
+  <circle cx="8" cy="24" r="1" fill="#A08060"/>
+  <circle cx="24" cy="24" r="1.5" fill="#A08060"/>
+</svg>

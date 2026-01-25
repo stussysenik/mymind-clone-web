@@ -50,9 +50,12 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Portfolio Project' }],
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32' },
+    ],
     shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    apple: '/apple-icon.svg',
   },
   openGraph: {
     title: 'mymind - Your visual mind, organized',
