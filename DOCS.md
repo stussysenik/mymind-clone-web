@@ -14,7 +14,16 @@ Quick reference for working with the MyMind codebase.
 ## Quick Start
 
 ### Prerequisites
-- Node.js 20+
+
+**Recommended (reproducible):**
+- Nix 2.18+ with flakes enabled
+- direnv (optional, for auto-activation)
+
+**Alternative:**
+- Node.js 20+ (must match Vercel)
+- pnpm or bun
+
+**Required Services:**
 - Supabase account
 - Zhipu AI API key
 
@@ -28,6 +37,56 @@ npm run dev
 ```
 
 Open [localhost:3000](http://localhost:3000)
+
+---
+
+## Nix Development Environment
+
+### Why Nix?
+- **Reproducible**: Same Node/pnpm/Python versions everywhere
+- **Zero drift**: Matches Vercel production (Node 20.x)
+- **Fast onboarding**: `nix develop` and you're ready
+
+### Quick Start
+```bash
+# Enter dev shell (includes all tools)
+nix develop
+
+# Or with direnv (auto-activates on cd)
+direnv allow
+
+# Available shells
+nix develop .#web      # Web development only
+nix develop .#ai       # AI/DSPy development
+nix develop .#default  # Full environment
+```
+
+### What's Included
+| Category | Tools |
+|----------|-------|
+| Web | Node.js 20.x, pnpm, bun, TypeScript, Biome |
+| Testing | Playwright with browsers |
+| AI/ML | Python 3.12, pip, virtualenv |
+| Dev Tools | ripgrep, fd, jq, lazygit, delta, bat |
+| Infrastructure | Supabase CLI, Vercel CLI, GitHub CLI |
+
+### Shell Hooks
+The Nix shell includes helpful aliases:
+- `help-cc` - Show all available commands
+- `lg` - lazygit
+- `verify` - Run formatters and type checks
+- `audit` - Security audit
+
+### Troubleshooting
+
+**"flake not found"**: Enable flakes in `~/.config/nix/nix.conf`:
+```
+experimental-features = nix-command flakes
+```
+
+**Playwright browsers**: On macOS ARM, uses system Chrome. On Linux, browsers are provided by Nix.
+
+**direnv not activating**: Run `direnv allow` after cloning.
 
 ---
 

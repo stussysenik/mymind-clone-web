@@ -48,6 +48,22 @@ bun dev
 
 Open [localhost:3000](http://localhost:3000)
 
+### Recommended: Nix Development Environment
+
+For reproducible development with pinned versions matching production:
+
+```bash
+# One-time setup (if you have Nix with flakes enabled)
+nix develop  # or: direnv allow
+
+# Environment includes:
+# - Node.js 20.x (pinned to match Vercel)
+# - pnpm 9.x
+# - Playwright browsers
+# - Python 3.12 + DSPy dependencies
+# - Dev tools (ripgrep, lazygit, jq, etc.)
+```
+
 ---
 
 ## What is MyMind?
@@ -84,6 +100,7 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | AI | Zhipu GLM-4.7 |
 | Screenshots | Self-hosted Playwright (zero cost) |
 | Testing | Playwright |
+| Dev Environment | Nix Flakes (Node 20.x, pnpm, Python 3.12) |
 
 ---
 

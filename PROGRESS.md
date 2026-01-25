@@ -13,6 +13,25 @@
 
 ### January 2026
 
+#### Week 4 (Jan 20-26)
+
+**Nix Development Environment (Jan 24-25)**
+- Added comprehensive `flake.nix` with pinned Node 20.x (matching Vercel)
+- Configured multiple shells: `web`, `ai`, `rust`, `capacitor`, `default`
+- Integrated direnv for automatic shell activation
+- Added extensive dev tooling: lazygit, ripgrep, fd, bat, delta
+- Included infrastructure CLIs: Supabase, Vercel, GitHub CLI
+- Set up Playwright browser dependencies in Nix
+
+**Key Commits:**
+- `fix(nix): Pin Node.js to 20.x LTS to match Vercel`
+
+**Artifacts:**
+- `flake.nix` — Comprehensive dev environment (~1000 LOC)
+- `flake.lock` — Pinned dependency versions
+- `.envrc` — direnv auto-activation
+- `openspec/changes/011-add-nix-dev-environment/` — Proposal docs
+
 #### Week 3 (Jan 15-19)
 
 **iOS Strategy Pivot (Jan 15-17)**
@@ -118,6 +137,24 @@
 
 ## Technical Decisions Log
 
+### 2026-01-24: Nix Flakes for Development
+
+**Problem:** Node.js version drift between Vercel production (20.x) and local development (22.x/24.x) causing subtle incompatibilities.
+
+**Solution:** Nix Flakes providing:
+- Pinned Node.js 20.x matching Vercel production exactly
+- Reproducible environment across all developer machines
+- direnv integration for automatic shell activation
+- Multiple specialized shells (web, ai, rust, capacitor)
+- Bundled dev tools eliminating separate installation steps
+
+**Trade-offs:**
+- Requires Nix installation (~5 min setup)
+- Larger initial download for Nix store
+- Alternative npm/bun workflow preserved for non-Nix users
+
+**Evidence:** See `flake.nix` and `openspec/changes/011-add-nix-dev-environment/`
+
 ### 2026-01-17: Native iOS over Capacitor
 
 **Problem:** Capacitor WebView approach had:
@@ -175,4 +212,4 @@ apps/web/
 
 ---
 
-*Last updated: 2026-01-19*
+*Last updated: 2026-01-25*
