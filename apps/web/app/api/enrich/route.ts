@@ -19,6 +19,9 @@ import { classifyContent, normalizeTagsToExisting, analyzeImage } from '@/lib/ai
 import { getUser } from '@/lib/supabase-server';
 import { scrapeUrl } from '@/lib/scraper';
 import { upsertRecord, buildEmbeddingText } from '@/lib/pinecone';
+import { cleanMovieTitle, isMoviePlatform } from '@/lib/dspy-client';
+import { createEnrichmentTiming, updateEnrichmentTiming, type EnrichmentTiming } from '@/lib/enrichment-timing';
+import { detectPlatform } from '@/lib/platforms';
 
 // =============================================================================
 // RETRY CONFIGURATION
@@ -104,11 +107,30 @@ export async function POST(request: NextRequest) {
 
                 console.log(`[Enrich API] Starting enrichment for card: ${cardId}`);
 
+                // Initialize timing tracking
+                const platform = detectPlatform(card.url);
+                const imageCount = card.metadata?.images?.length || (card.image_url ? 1 : 0);
+                const contentLength = (card.content?.length || 0) + (card.title?.length || 0);
+                const timing = createEnrichmentTiming(platform, contentLength, !!card.image_url, imageCount);
+
+                // Store initial timing estimate in card metadata for UI
+                await updateCard(cardId, {
+                        metadata: {
+                                ...card.metadata,
+                                enrichmentTiming: {
+                                        startedAt: timing.startedAt,
+                                        estimatedTotalMs: timing.estimatedTotalMs,
+                                        platform: timing.platform,
+                                }
+                        }
+                });
+
                 // 2. Ensure we have content (scrape if missing)
                 let contentToAnalyze = card.content;
                 let scrapedDate: string | undefined;
 
                 // If no content but we have a URL, try scraping it now
+                const scrapeStartTime = Date.now();
                 if (!contentToAnalyze && card.url) {
                         try {
                                 console.log(`[Enrich API] Content missing, re-scraping URL: ${card.url}`);
@@ -132,18 +154,21 @@ export async function POST(request: NextRequest) {
                                 console.warn(`[Enrich API] Re-scrape failed:`, scrapeError);
                         }
                 }
+                const scrapeMs = Date.now() - scrapeStartTime;
+                console.log(`[Enrich API] Scrape completed in ${scrapeMs}ms`);
 
                 // 3. Run AI Classification & Image Analysis (parallel)
                 // For Instagram carousels, pass image count for better prompt generation
-                const imageCount = card.metadata?.images?.length || 1;
+                const finalImageCount = card.metadata?.images?.length || 1;
 
+                const classifyStartTime = Date.now();
                 const [classification, imageAnalysis] = await Promise.all([
                         withRetry(async () => {
                                 return await classifyContent(
                                         card.url,
                                         contentToAnalyze,
                                         card.image_url,
-                                        imageCount
+                                        finalImageCount
                                 );
                         }),
                         // Analyze image if we have one (and it's not a placeholder/falback)
@@ -152,6 +177,8 @@ export async function POST(request: NextRequest) {
                                 return null;
                         }) : Promise.resolve(null)
                 ]);
+                const classifyMs = Date.now() - classifyStartTime;
+                console.log(`[Enrich API] Classification completed in ${classifyMs}ms`);
 
                 // 4. Normalize tags against existing database tags ("Gardener Bot")
                 let finalTags = classification.tags;
@@ -184,6 +211,7 @@ export async function POST(request: NextRequest) {
                 // Smart Title Logic:
                 // - Platforms with explicit titles (YouTube, Reddit, articles, etc.): Keep scraped title
                 // - Caption-only platforms (Instagram, Twitter): Use AI-generated title
+                // - Movie platforms (IMDB, Letterboxd): Clean title to remove metadata cruft
                 const platformsWithExplicitTitles = ['youtube', 'reddit', 'article', 'letterboxd', 'imdb', 'goodreads', 'amazon', 'storygraph'];
                 const detectedPlatform = classification.platform || currentMetadata.platform || '';
                 const hasExplicitTitle = platformsWithExplicitTitles.includes(detectedPlatform.toLowerCase());
@@ -193,13 +221,31 @@ export async function POST(request: NextRequest) {
                 let finalTitle: string | undefined;
                 if (shouldUpdateTitle) {
                         if (hasExplicitTitle && existingTitleIsGood) {
-                                // Platform has explicit title and we already have a good one - keep it
-                                finalTitle = undefined; // Don't update
+                                // Platform has explicit title and we already have a good one
+                                // For movie platforms, clean the title to remove metadata cruft
+                                if (isMoviePlatform(detectedPlatform) && card.title) {
+                                        const cleaned = cleanMovieTitle(card.title);
+                                        finalTitle = cleaned.title;
+                                        // Store extracted year and rating in metadata if available
+                                        if (cleaned.year && !currentMetadata.year) {
+                                                currentMetadata.year = cleaned.year;
+                                        }
+                                        if (cleaned.rating && !currentMetadata.rating) {
+                                                currentMetadata.rating = cleaned.rating;
+                                        }
+                                        console.log(`[Enrich API] Cleaned movie title: "${card.title}" -> "${cleaned.title}"`);
+                                } else {
+                                        finalTitle = undefined; // Don't update
+                                }
                         } else {
                                 // Caption-only platform or no good title - use AI-generated
                                 finalTitle = classification.title;
                         }
                 }
+
+                // Calculate total processing time
+                const totalMs = Date.now() - timing.startedAt;
+                console.log(`[Enrich API] Total enrichment time: ${totalMs}ms (scrape: ${scrapeMs}ms, classify: ${classifyMs}ms)`);
 
                 await updateCard(cardId, {
                         type: classification.type,
@@ -218,7 +264,17 @@ export async function POST(request: NextRequest) {
                                 processing: false,
                                 enrichmentError: null,
                                 enrichmentFailedAt: null,
-                                enrichedAt: new Date().toISOString()
+                                enrichedAt: new Date().toISOString(),
+                                // Store actual timing for historical analysis and ETA improvement
+                                enrichmentTiming: {
+                                        startedAt: timing.startedAt,
+                                        estimatedTotalMs: timing.estimatedTotalMs,
+                                        platform: timing.platform,
+                                        scrapeMs,
+                                        classifyMs,
+                                        totalMs,
+                                        completedAt: Date.now(),
+                                }
                         }
                 });
 

@@ -18,6 +18,7 @@ import { supabaseBrowser } from '@/lib/supabase';
 import { hasMatchingColor } from '@/lib/color-utils';
 import { Card as CardComponent } from './Card';
 import { CardDetailModal } from './CardDetailModal';
+import { TagScroller } from './TagScroller';
 
 // =============================================================================
 // PROPS
@@ -369,6 +370,50 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
         }, [localCards, serverCards, searchQuery, deletedIds, mode, typeFilter, searchParams, similarityId, similarCards, searchMode, smartResults, currentQuery, colorFilter]);
 
 
+        // Calculate type counts for dynamic TagScroller tabs (before type filter is applied)
+        const typeCounts = useMemo(() => {
+                // Merge local and server cards to get all cards
+                let allCards: Card[] = [];
+
+                if (similarityId) {
+                        allCards = similarCards;
+                } else if (searchMode === 'smart' && smartResults.length > 0) {
+                        allCards = smartResults;
+                } else {
+                        allCards = [...localCards, ...serverCards];
+                }
+
+                // Apply color filter if present (but NOT type filter)
+                if (colorFilter) {
+                        allCards = allCards.filter(card =>
+                                hasMatchingColor(card.metadata?.colors, colorFilter, 30)
+                        );
+                }
+
+                // Filter by mode
+                allCards = allCards.filter(card => {
+                        const isArchived = !!card.archivedAt;
+                        if (mode === 'archive') return isArchived;
+                        if (mode === 'trash') return true; // serverCards already filtered
+                        return !isArchived;
+                });
+
+                // Remove duplicates and deleted
+                const seenIds = new Set<string>();
+                const unique = allCards.filter(card => {
+                        if (seenIds.has(card.id) || deletedIds.has(card.id)) return false;
+                        seenIds.add(card.id);
+                        return true;
+                });
+
+                // Count by type
+                const counts: Record<string, number> = {};
+                for (const card of unique) {
+                        counts[card.type] = (counts[card.type] || 0) + 1;
+                }
+                return counts;
+        }, [localCards, serverCards, deletedIds, mode, colorFilter, similarityId, similarCards, searchMode, smartResults]);
+
         // Sync selected card with updated server cards (for realtime/AI updates)
         // Must be AFTER uniqueCards is defined
         useEffect(() => {
@@ -387,6 +432,11 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
 
         return (
                 <div className="w-full" data-testid="card-grid">
+                        {/* Dynamic Category Tabs */}
+                        <div className="border-b border-[var(--border)] mb-6">
+                                <TagScroller typeCounts={typeCounts} />
+                        </div>
+
                         {/* Similarity Mode Banner */}
                         {similarityId && (
                                 <div className="mb-8 p-6 bg-purple-50 rounded-2xl border border-purple-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in slide-in-from-top-4">

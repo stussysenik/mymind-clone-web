@@ -21,6 +21,7 @@ import { usePathname } from 'next/navigation';
 import { Sparkles, LayoutGrid, Shuffle, Archive, Trash2, MoreHorizontal, Settings } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { SettingsModal } from './SettingsModal';
 import { useState, useRef, useEffect } from 'react';
 import { useBreakpoint, useAtomicWeight } from '@/hooks/useMediaQuery';
 
@@ -45,6 +46,7 @@ export function Header() {
 	const pathname = usePathname();
 	const [pressedTab, setPressedTab] = useState<string | null>(null);
 	const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+	const [showSettings, setShowSettings] = useState(false);
 	const overflowMenuRef = useRef<HTMLDivElement>(null);
 	const { isSm, isMd, isLg } = useBreakpoint();
 	const { showDecorative, showTertiary, showContentOptional } = useAtomicWeight();
@@ -151,10 +153,22 @@ export function Header() {
 					})}
 				</nav>
 
-				{/* Right: Theme Toggle, Archive, Trash & User Menu */}
+				{/* Right: Theme Toggle, Settings, Archive, Trash & User Menu */}
 				<div className="flex items-center justify-end gap-1 shrink-0">
 					{/* Theme Toggle - Weight 8: Always visible */}
 					<ThemeToggle />
+
+					{/* Settings Button (Desktop) - Weight 4 */}
+					{showTertiary && (
+						<button
+							onClick={() => setShowSettings(true)}
+							className="p-2.5 rounded-lg text-[var(--foreground-muted)] physics-press touch-target hover:text-[var(--accent-primary)] hover:bg-[var(--accent-light)]"
+							aria-label="Settings"
+							title="Settings - Customize theme, colors & typography"
+						>
+							<Settings className="h-5 w-5" />
+						</button>
+					)}
 
 					{/* Desktop: Show Archive and Trash links directly - Weight 4 */}
 					{showTertiary && (
@@ -216,22 +230,17 @@ export function Header() {
 								<div
 									className="absolute right-0 top-full mt-1 bg-[var(--background)] rounded-xl shadow-lg border border-[var(--border)] py-1 min-w-[180px] z-50 animate-scale-in"
 								>
-									{/* Settings Option - Added for mobile accessibility */}
-									<Link
-										href="/settings"
-										onClick={() => setShowOverflowMenu(false)}
-										className={`
-											w-full px-3 py-3 text-left text-sm flex items-center gap-3
-											hover:bg-black/5
-											${pathname === '/settings'
-												? 'text-[var(--accent-primary)] bg-[var(--accent-light)]'
-												: 'text-[var(--foreground)]'
-											}
-										`}
+									{/* Settings Option - Opens modal instead of page */}
+									<button
+										onClick={() => {
+											setShowOverflowMenu(false);
+											setShowSettings(true);
+										}}
+										className="w-full px-3 py-3 text-left text-sm flex items-center gap-3 hover:bg-black/5 text-[var(--foreground)]"
 									>
 										<Settings className="h-4 w-4" />
 										<span>Settings</span>
-									</Link>
+									</button>
 
 									{/* Divider */}
 									<div className="h-px bg-[var(--border)] my-1" />
@@ -277,6 +286,9 @@ export function Header() {
 					<UserMenu />
 				</div>
 			</div>
+
+			{/* Settings Modal */}
+			<SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 		</header>
 	);
 }

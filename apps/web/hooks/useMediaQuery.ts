@@ -14,6 +14,10 @@ import { useState, useEffect } from 'react';
 /**
  * Hook to detect if a CSS media query matches.
  *
+ * HYDRATION-SAFE: Returns false on server and during initial client render,
+ * then updates to the actual value after hydration. This prevents React
+ * hydration mismatches while still providing responsive behavior.
+ *
  * @param query - CSS media query string (e.g., "(max-width: 767px)")
  * @returns boolean indicating if the media query matches
  *
@@ -21,15 +25,21 @@ import { useState, useEffect } from 'react';
  * const isMobile = useMediaQuery('(max-width: 767px)');
  */
 export function useMediaQuery(query: string): boolean {
+	// Always initialize to false for consistent server/client initial render
 	const [matches, setMatches] = useState(false);
+	// Track if we've hydrated to avoid flash of incorrect content
+	const [hydrated, setHydrated] = useState(false);
 
 	useEffect(() => {
+		// Mark as hydrated
+		setHydrated(true);
+
 		// Check if window is available (SSR safety)
 		if (typeof window === 'undefined') return;
 
 		const media = window.matchMedia(query);
 
-		// Set initial value
+		// Set initial value after hydration
 		setMatches(media.matches);
 
 		// Create listener function
@@ -44,7 +54,9 @@ export function useMediaQuery(query: string): boolean {
 		return () => media.removeEventListener('change', listener);
 	}, [query]);
 
-	return matches;
+	// Return false until hydrated to ensure consistent server/client render
+	// After hydration, return the actual matched value
+	return hydrated ? matches : false;
 }
 
 /**

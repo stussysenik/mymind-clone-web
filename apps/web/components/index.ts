@@ -18,4 +18,9 @@ export { UserMenu } from './UserMenu';
 export { SpaceCard } from './SpaceCard';
 export { SpacesGridClient } from './SpacesGridClient';
 export { TrashBulkActions } from './TrashBulkActions';
+export { AnalyzingIndicator, AnalyzingOverlay } from './AnalyzingIndicator';
+export { VideoPlayer, VideoPlayerCompact } from './VideoPlayer';
+export { ExternalLink, ExternalLinkButton, PlatformLink, getReturnContext, clearReturnContext } from './ExternalLink';
+export { SerendipityClient } from './SerendipityClient';
+export { FocusCard } from './FocusCard';
 

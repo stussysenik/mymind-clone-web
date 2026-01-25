@@ -11,7 +11,7 @@ import type { CardType, ClassificationResult, ImageAnalysisResult } from './type
 import { CLASSIFICATION_TOOL, GENERIC_CLASSIFICATION_PROMPT } from './prompts';
 import { getInstagramPrompt, extractInstagramHashtags } from './prompts/instagram';
 import { getTwitterPrompt, detectThreadIntent, extractTwitterHashtags } from './prompts/twitter';
-import { generateSummaryWithDSPy } from './dspy-client';
+import { generateSummaryWithDSPy, cleanMovieTitle, isMoviePlatform, type DSPyPlatform } from './dspy-client';
 
 // =============================================================================
 // CONFIGURATION
@@ -812,9 +812,11 @@ export async function generateSummary(
         const platform = url ? detectPlatformFromUrl(url) : 'unknown';
 
         // DSPy Enhancement: Try DSPy microservice first for supported platforms
-        if (['instagram', 'twitter', 'reddit'].includes(platform)) {
+        // Now includes IMDB, Letterboxd, and YouTube in addition to social platforms
+        const DSPY_SUPPORTED_PLATFORMS = ['instagram', 'twitter', 'reddit', 'imdb', 'letterboxd', 'youtube'];
+        if (DSPY_SUPPORTED_PLATFORMS.includes(platform)) {
                 try {
-                        const dspyPlatform = platform as 'instagram' | 'twitter' | 'reddit';
+                        const dspyPlatform = platform as DSPyPlatform;
                         const dspyResult = await generateSummaryWithDSPy(content, dspyPlatform, {
                                 author,
                                 title,

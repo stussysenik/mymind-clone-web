@@ -17,7 +17,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2, Twitter, Volume2, MessageSquare, Archive } from 'lucide-react';
+import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Twitter, Volume2, MessageSquare, Archive } from 'lucide-react';
+import { AnalyzingIndicator } from './AnalyzingIndicator';
 import { TagDisplay } from './TagDisplay';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
@@ -141,6 +142,13 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                                 loading="lazy"
                                                 onError={() => setImageError(true)}
                                         />
+                                        {/* Platform/Domain Badge for generic websites */}
+                                        {domain && (
+                                                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
+                                                        <Globe className="w-3 h-3 text-white/80" />
+                                                        <span className="text-xs font-medium text-white truncate max-w-[100px]">{domain}</span>
+                                                </div>
+                                        )}
                                         {/* Video Play Button */}
                                         {isVideo && (
                                                 <div className="absolute inset-0 flex items-center justify-center">
@@ -168,9 +176,10 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                                 unoptimized
                                                 onError={() => setScreenshotError(true)}
                                         />
-                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[9px] font-medium text-gray-500 shadow-sm">
-                                                <Globe className="w-2.5 h-2.5" />
-                                                AUTO-SHOT
+                                        {/* Platform/Domain Badge */}
+                                        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
+                                                <Globe className="w-3 h-3 text-white/80" />
+                                                <span className="text-xs font-medium text-white truncate max-w-[100px]">{domain || 'Website'}</span>
                                         </div>
                                 </div>
                         );
@@ -278,9 +287,12 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
 
                         {/* Processing Indicator - positioned on left to avoid conflicting with hover actions */}
                         {card.metadata?.processing && (
-                                <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium animate-pulse">
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                        Analyzing...
+                                <div className="absolute top-2 left-2 z-10">
+                                        <AnalyzingIndicator
+                                                variant="dark"
+                                                accentColor={platformInfo.color}
+                                                size="sm"
+                                        />
                                 </div>
                         )}
 

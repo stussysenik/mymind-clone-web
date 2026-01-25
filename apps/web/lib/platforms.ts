@@ -324,3 +324,68 @@ export function isSocialPlatform(url: string | null | undefined): boolean {
         const platform = detectPlatform(url);
         return ['twitter', 'mastodon', 'instagram', 'reddit', 'tiktok', 'linkedin'].includes(platform);
 }
+
+// =============================================================================
+// VIDEO URL UTILITIES
+// =============================================================================
+
+/**
+ * Checks if a URL is a playable video URL (YouTube, Vimeo, etc.)
+ */
+export function isVideoUrl(url: string | null | undefined): boolean {
+        if (!url) return false;
+        const urlLower = url.toLowerCase();
+        return (
+                urlLower.includes('youtube.com/watch') ||
+                urlLower.includes('youtu.be/') ||
+                urlLower.includes('youtube.com/shorts') ||
+                urlLower.includes('vimeo.com/') ||
+                urlLower.includes('twitch.tv/')
+        );
+}
+
+/**
+ * Extracts YouTube video ID from various URL formats.
+ */
+export function getYouTubeVideoId(url: string): string | null {
+        if (!url) return null;
+
+        // youtube.com/watch?v=VIDEO_ID
+        const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+        if (watchMatch) return watchMatch[1];
+
+        // youtu.be/VIDEO_ID
+        const shortMatch = url.match(/youtu\.be\/([^?]+)/);
+        if (shortMatch) return shortMatch[1];
+
+        // youtube.com/shorts/VIDEO_ID
+        const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
+        if (shortsMatch) return shortsMatch[1];
+
+        // youtube.com/embed/VIDEO_ID
+        const embedMatch = url.match(/youtube\.com\/embed\/([^?]+)/);
+        if (embedMatch) return embedMatch[1];
+
+        return null;
+}
+
+/**
+ * Converts a video URL to an embeddable format.
+ */
+export function getVideoEmbedUrl(url: string): string | null {
+        if (!url) return null;
+
+        // YouTube
+        const youtubeId = getYouTubeVideoId(url);
+        if (youtubeId) {
+                return `https://www.youtube.com/embed/${youtubeId}`;
+        }
+
+        // Vimeo - extract ID and create embed URL
+        const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+        if (vimeoMatch) {
+                return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+        }
+
+        return null;
+}

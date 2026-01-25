@@ -166,6 +166,14 @@
 
 html {
   scroll-behavior: smooth;
+  /* Smooth theme transitions */
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* Disable transitions on initial load to prevent flash */
+html.no-transition,
+html.no-transition * {
+  transition: none !important;
 }
 
 body {
@@ -173,6 +181,8 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   line-height: 1.6;
+  /* Smooth theme transitions for body */
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 /* Serif headings for that literary feel */
@@ -665,4 +675,164 @@ h3 {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   overscroll-behavior-x: contain;
+}
+
+/* =============================================================================
+   ANALYZING INDICATOR ANIMATIONS
+   ============================================================================= */
+
+/* Fast shimmer for analyzing indicator text */
+@keyframes shimmer-fast {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-fast {
+  animation: shimmer-fast 2s infinite;
+}
+
+/* Analyzing indicator base styling */
+.analyzing-indicator {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient border effect */
+.analyzing-indicator::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  border-radius: inherit;
+  opacity: 0;
+  animation: analyzing-glow 2s ease-in-out infinite;
+}
+
+@keyframes analyzing-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(100%);
+  }
+}
+
+/* Analyzing text animation */
+.analyzing-text {
+  display: inline-block;
+}
+
+.analyzing-text::after {
+  content: '...';
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: analyzing-dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes analyzing-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+/* =============================================================================
+   SERENDIPITY SLIDE ANIMATIONS
+   ============================================================================= */
+
+/* Slide in from right (next card) */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 300ms var(--ease-snappy) forwards;
+}
+
+/* Slide in from left (previous card) */
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 300ms var(--ease-snappy) forwards;
+}
+
+/* Bounce-short for save button */
+@keyframes bounce-short {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-bounce-short {
+  animation: bounce-short 0.6s ease-in-out infinite;
+}
+
+/* Custom scrollbar for card detail modal */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* =============================================================================
+   AI SUMMARY MERGE SEPARATOR
+   ============================================================================= */
+
+/* Style for the "---" separator in merged AI summaries */
+textarea::placeholder,
+.ai-summary-merged hr,
+.ai-summary-separator {
+  /* The separator is rendered in the textarea value itself */
+  /* This doesn't directly style it, but we document the pattern here */
+}
+
+/* For prose content with --- separators rendered as <hr> */
+.prose-summary hr {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 1rem 0;
+  opacity: 0.6;
 }

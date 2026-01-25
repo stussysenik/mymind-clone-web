@@ -12,7 +12,8 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/Toast';
 import { AuthTokenSync } from '@/components/AuthTokenSync';
-import { ThemeProvider, themeScript } from '@/lib/theme/ThemeProvider';
+import { ThemeProvider } from '@/lib/theme/ThemeProvider';
+import { designTokensScript } from '@/lib/design-tokens';
 
 // =============================================================================
 // FONT CONFIGURATION
@@ -85,8 +86,8 @@ export default function RootLayout({
         {/* Preconnect to Google Fonts for faster loading */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Inline script to prevent theme flash */}
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Inline script to prevent theme/design token flash */}
+        <script dangerouslySetInnerHTML={{ __html: designTokensScript }} />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <ThemeProvider>

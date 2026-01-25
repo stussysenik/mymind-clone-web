@@ -97,7 +97,22 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                 }
         };
 
-        // Don't render until mounted to avoid hydration mismatch
+        // If no spaces at all, show empty state immediately (no hydration mismatch possible)
+        if (spaces.length === 0) {
+                return (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <div className="bg-gray-100 p-4 rounded-full mb-4">
+                                        <PackageOpen className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-medium text-[var(--foreground)]">No spaces yet</h3>
+                                <p className="text-[var(--foreground-muted)] max-w-sm mt-1">
+                                        Save some cards with tags to see them appear here as Spaces.
+                                </p>
+                        </div>
+                );
+        }
+
+        // Show skeleton only while waiting for client-side hydration with actual spaces
         if (!mounted) {
                 return <SpacesGridSkeleton />;
         }
@@ -123,7 +138,7 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                 <div>
                         {/* Visible Spaces Grid */}
                         {visibleSpaces.length > 0 ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                                         {visibleSpaces.map(({ tag, count }) => (
                                                 <SpaceCard
                                                         key={tag}
@@ -165,29 +180,31 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
                                         </div>
 
                                         {showHidden && (
-                                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 opacity-60">
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 opacity-60">
                                                         {hiddenSpacesList.map(({ tag, count }) => (
                                                                 <div
                                                                         key={tag}
-                                                                        className="relative aspect-square bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4 flex flex-col justify-between"
+                                                                        className="relative bg-gray-50 rounded-xl border border-dashed border-gray-200 p-3 flex items-center gap-3"
                                                                 >
-                                                                        <div className="text-gray-400 capitalize text-sm">{tag}</div>
-                                                                        <div className="flex justify-between items-end">
+                                                                        {/* Text content */}
+                                                                        <div className="flex-1 min-w-0">
+                                                                                <div className="text-gray-400 capitalize text-sm truncate">{tag}</div>
                                                                                 <span className="text-xs text-gray-400">{count} items</span>
-                                                                                <div className="flex gap-2">
-                                                                                        <button
-                                                                                                onClick={() => handleRestoreSpace(tag)}
-                                                                                                className="text-xs text-[var(--accent-primary)] hover:underline"
-                                                                                        >
-                                                                                                Restore
-                                                                                        </button>
-                                                                                        <button
-                                                                                                onClick={() => setDeleteConfirmTag(tag)}
-                                                                                                className="text-xs text-red-500 hover:underline"
-                                                                                        >
-                                                                                                Delete
-                                                                                        </button>
-                                                                                </div>
+                                                                        </div>
+                                                                        {/* Actions */}
+                                                                        <div className="flex gap-2 shrink-0">
+                                                                                <button
+                                                                                        onClick={() => handleRestoreSpace(tag)}
+                                                                                        className="text-xs text-[var(--accent-primary)] hover:underline"
+                                                                                >
+                                                                                        Restore
+                                                                                </button>
+                                                                                <button
+                                                                                        onClick={() => setDeleteConfirmTag(tag)}
+                                                                                        className="text-xs text-red-500 hover:underline"
+                                                                                >
+                                                                                        Delete
+                                                                                </button>
                                                                         </div>
                                                                 </div>
                                                         ))}
@@ -252,12 +269,12 @@ export function SpacesGridClient({ spaces }: SpacesGridClientProps) {
 
 function SpacesGridSkeleton() {
         return (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                                <div key={i} className="aspect-square bg-white rounded-xl border border-[var(--border)] p-6 space-y-4">
-                                        <div className="w-12 h-12 rounded-lg bg-gray-100 animate-pulse" />
-                                        <div className="space-y-2 pt-8">
-                                                <div className="h-5 w-24 bg-gray-100 animate-pulse rounded" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                        {Array.from({ length: 12 }).map((_, i) => (
+                                <div key={i} className="bg-white rounded-xl border border-[var(--border)] p-3 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-gray-100 animate-pulse shrink-0" />
+                                        <div className="flex-1 space-y-1.5">
+                                                <div className="h-4 w-20 bg-gray-100 animate-pulse rounded" />
                                                 <div className="h-3 w-12 bg-gray-100 animate-pulse rounded" />
                                         </div>
                                 </div>

@@ -32,19 +32,21 @@ interface Tag {
 }
 
 interface TagScrollerProps {
-	/** Tags to display */
+	/** Tags to display (optional - will use dynamic tags if not provided) */
 	tags?: Tag[];
 	/** Currently selected tag */
 	selectedTag?: string | null;
 	/** Callback when tag is selected */
 	onTagSelect?: (tagId: string | null) => void;
+	/** Card type counts for dynamic tab filtering */
+	typeCounts?: Record<string, number>;
 }
 
 // =============================================================================
-// DEFAULT TAGS (Content Types)
+// DEFAULT TAGS (Content Types) - Now dynamically filtered based on content
 // =============================================================================
 
-const DEFAULT_TAGS: Tag[] = [
+const ALL_AVAILABLE_TAGS: Tag[] = [
 	{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles },
 	{ id: 'webpages', label: 'Web Pages', color: '#00A99D' },
 	{ id: 'videos', label: 'Videos', color: '#FF48B0' },
@@ -54,6 +56,47 @@ const DEFAULT_TAGS: Tag[] = [
 	{ id: 'products', label: 'Products', color: '#00A99D' },
 	{ id: 'books', label: 'Books', color: '#FFE800' },
 ];
+
+// Minimum number of items required to show a category tab
+const MIN_ITEMS_FOR_TAB = 1;
+
+// Map card types to UI tag IDs
+const TYPE_TO_TAG: Record<string, string> = {
+	'article': 'webpages',
+	'webpages': 'webpages',
+	'blog': 'webpages',
+	'news': 'webpages',
+	'image': 'images',
+	'images': 'images',
+	'photo': 'images',
+	'screenshot': 'images',
+	'design': 'images',
+	'video': 'videos',
+	'videos': 'videos',
+	'audio': 'videos',
+	'youtube': 'videos',
+	'vimeo': 'videos',
+	'movie': 'videos',
+	'film': 'videos',
+	'tv': 'videos',
+	'product': 'products',
+	'products': 'products',
+	'shopping': 'products',
+	'store': 'products',
+	'book': 'books',
+	'books': 'books',
+	'kindle': 'books',
+	'note': 'articles',
+	'notes': 'articles',
+	'thought': 'articles',
+	'twitter': 'posts',
+	'posts': 'posts',
+	'tweet': 'posts',
+	'social': 'posts',
+	'reddit': 'posts',
+	'instagram': 'posts',
+	'linkedin': 'posts',
+};
 
 // =============================================================================
 // PILL LIMIT BY BREAKPOINT
@@ -71,10 +114,47 @@ const getPillLimit = (isXs: boolean, isSm: boolean, isMd: boolean): number => {
 // =============================================================================
 
 export function TagScroller({
-	tags = DEFAULT_TAGS,
+	tags: propTags,
 	selectedTag: propSelectedTag,
-	onTagSelect
+	onTagSelect,
+	typeCounts
 }: TagScrollerProps) {
+	// Generate dynamic tags based on content counts
+	const dynamicTags = useMemo(() => {
+		if (propTags) return propTags;
+
+		if (!typeCounts || Object.keys(typeCounts).length === 0) {
+			return ALL_AVAILABLE_TAGS;
+		}
+
+		// Count items per tag category
+		const tagCounts: Record<string, number> = {};
+		for (const [type, count] of Object.entries(typeCounts)) {
+			const tagId = TYPE_TO_TAG[type] || 'webpages';
+			tagCounts[tagId] = (tagCounts[tagId] || 0) + count;
+		}
+
+		// Filter tags to only show those with enough items
+		const filteredTags = ALL_AVAILABLE_TAGS.filter(tag => {
+			if (tag.id === 'all') return true; // Always show "All"
+			return (tagCounts[tag.id] || 0) >= MIN_ITEMS_FOR_TAB;
+		});
+
+		// Add counts to tags and sort by count (after "All")
+		const tagsWithCounts = filteredTags.map(tag => ({
+			...tag,
+			count: tag.id === 'all' ? undefined : tagCounts[tag.id] || 0
+		}));
+
+		// Sort: "All" first, then by count descending
+		return tagsWithCounts.sort((a, b) => {
+			if (a.id === 'all') return -1;
+			if (b.id === 'all') return 1;
+			return (b.count || 0) - (a.count || 0);
+		});
+	}, [propTags, typeCounts]);
+
+	const tags = dynamicTags;
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const currentType = searchParams.get('type') || 'all';

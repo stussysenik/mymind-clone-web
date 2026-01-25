@@ -16,14 +16,30 @@ const DSPY_SERVICE_URL = process.env.DSPY_SERVICE_URL || 'http://localhost:8000'
 const DSPY_TIMEOUT = parseInt(process.env.DSPY_TIMEOUT || '10000', 10);
 const DSPY_ENABLED = process.env.DSPY_ENABLED !== 'false';
 
+// Circuit breaker configuration
+const CIRCUIT_FAILURE_THRESHOLD = 3;    // Open circuit after 3 consecutive failures
+const CIRCUIT_RESET_MS = 60000;          // Reset circuit after 60s cooldown
+
 // =============================================================================
 // TYPES
 // =============================================================================
 
+export type DSPyPlatform =
+  | 'instagram'
+  | 'twitter'
+  | 'reddit'
+  | 'imdb'
+  | 'letterboxd'
+  | 'youtube'
+  | 'amazon'
+  | 'goodreads'
+  | 'storygraph'
+  | 'wikipedia';
+
 export interface TitleRequest {
   raw_content: string;
   author: string;
-  platform: 'instagram' | 'twitter' | 'reddit';
+  platform: DSPyPlatform;
 }
 
 export interface TitleResponse {
@@ -35,7 +51,7 @@ export interface TitleResponse {
 
 export interface SummaryRequest {
   content: string;
-  platform: 'instagram' | 'twitter' | 'reddit';
+  platform: DSPyPlatform;
   author?: string;
   title?: string;
   image_count?: number;
@@ -51,7 +67,7 @@ export interface SummaryResponse {
 
 export interface AssetRequest {
   html_content: string;
-  platform: 'instagram' | 'twitter' | 'reddit';
+  platform: DSPyPlatform;
   expected_count?: number;
 }
 
@@ -69,7 +85,7 @@ export interface AssetResponse {
 
 export interface UnifiedRequest {
   url: string;
-  platform: 'instagram' | 'twitter' | 'reddit';
+  platform: DSPyPlatform;
   raw_html?: string;
   raw_caption?: string;
   detected_author?: string;
@@ -104,10 +120,57 @@ class DSPyClient {
   private timeout: number;
   private enabled: boolean;
 
+  // Circuit breaker state
+  private failureCount: number = 0;
+  private lastFailureTime: number = 0;
+  private circuitOpen: boolean = false;
+
   constructor() {
     this.baseUrl = DSPY_SERVICE_URL;
     this.timeout = DSPY_TIMEOUT;
     this.enabled = DSPY_ENABLED;
+  }
+
+  /**
+   * Check if circuit breaker is open (service is down)
+   */
+  private isCircuitOpen(): boolean {
+    if (!this.circuitOpen) return false;
+
+    // Check if cooldown has passed
+    const now = Date.now();
+    if (now - this.lastFailureTime > CIRCUIT_RESET_MS) {
+      console.log('[DSPy] Circuit breaker reset - attempting half-open');
+      this.circuitOpen = false;
+      this.failureCount = 0;
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Record a failure and potentially open the circuit
+   */
+  private recordFailure(): void {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= CIRCUIT_FAILURE_THRESHOLD) {
+      this.circuitOpen = true;
+      console.warn(`[DSPy] Circuit breaker OPEN after ${this.failureCount} failures. Will retry in ${CIRCUIT_RESET_MS / 1000}s`);
+    }
+  }
+
+  /**
+   * Record a success and reset failure count
+   */
+  private recordSuccess(): void {
+    if (this.circuitOpen) {
+      console.log('[DSPy] Circuit breaker CLOSED - service recovered');
+    }
+    this.failureCount = 0;
+    this.circuitOpen = false;
   }
 
   /**
@@ -197,9 +260,14 @@ class DSPyClient {
   }
 
   /**
-   * Internal POST request helper
+   * Internal POST request helper with circuit breaker
    */
   private async post<T>(endpoint: string, body: unknown): Promise<T> {
+    // Check circuit breaker first
+    if (this.isCircuitOpen()) {
+      throw new Error('DSPy circuit breaker is open');
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
@@ -217,12 +285,16 @@ class DSPyClient {
 
       if (!response.ok) {
         const error = await response.text();
+        this.recordFailure();
         throw new Error(`DSPy API error: ${response.status} - ${error}`);
       }
 
+      // Success - reset failure count
+      this.recordSuccess();
       return response.json();
     } catch (error) {
       clearTimeout(timeoutId);
+      this.recordFailure();
       throw error;
     }
   }
@@ -244,7 +316,7 @@ export const dspyClient = new DSPyClient();
 export async function extractTitleWithDSPy(
   rawContent: string,
   author: string,
-  platform: 'instagram' | 'twitter' | 'reddit'
+  platform: DSPyPlatform
 ): Promise<{ title: string; confidence: number }> {
   // Try DSPy first
   const dspyResult = await dspyClient.extractTitle({
@@ -294,7 +366,7 @@ export async function extractTitleWithDSPy(
  */
 export async function generateSummaryWithDSPy(
   content: string,
-  platform: 'instagram' | 'twitter' | 'reddit',
+  platform: DSPyPlatform,
   options: { author?: string; title?: string; imageCount?: number } = {}
 ): Promise<{ summary: string; qualityScore: number; isAnalytical: boolean }> {
   // Try DSPy first
@@ -329,7 +401,7 @@ export async function generateSummaryWithDSPy(
  */
 export async function extractAssetsWithDSPy(
   htmlContent: string,
-  platform: 'instagram' | 'twitter' | 'reddit',
+  platform: DSPyPlatform,
   expectedCount: number = 1
 ): Promise<{ images: string[]; isCarousel: boolean; confidence: number }> {
   // Try DSPy first
@@ -374,7 +446,7 @@ export async function extractAssetsWithDSPy(
  */
 export async function extractContentWithDSPy(
   url: string,
-  platform: 'instagram' | 'twitter' | 'reddit',
+  platform: DSPyPlatform,
   rawData: {
     html?: string;
     caption?: string;
@@ -390,4 +462,63 @@ export async function extractContentWithDSPy(
     detected_author: rawData.author,
     json_data: rawData.json,
   });
+}
+
+// =============================================================================
+// IMDB/MOVIE TITLE CLEANING
+// =============================================================================
+
+/**
+ * Cleans IMDB and movie titles by removing metadata cruft.
+ * Examples:
+ * - "Cyberpunk: Edgerunners (TV Series 2022– )" -> "Cyberpunk: Edgerunners"
+ * - "The Matrix (1999) ⭐ 8.7" -> "The Matrix"
+ * - "Breaking Bad (TV Series 2008–2013)" -> "Breaking Bad"
+ */
+export function cleanMovieTitle(rawTitle: string): { title: string; year?: string; rating?: string } {
+  let title = rawTitle.trim();
+  let year: string | undefined;
+  let rating: string | undefined;
+
+  // Extract star rating (⭐ 8.3)
+  const ratingMatch = title.match(/[⭐★]\s*(\d+\.?\d*)/);
+  if (ratingMatch) {
+    rating = ratingMatch[1];
+    title = title.replace(ratingMatch[0], '').trim();
+  }
+
+  // Extract year patterns:
+  // "(2022)" - single year
+  // "(2022– )" - ongoing series
+  // "(2008–2013)" - completed series
+  // "(TV Series 2022– )" - with TV Series prefix
+  const yearPatterns = [
+    /\s*\(TV Series\s+(\d{4})[–-]\s*\d*\s*\)/i,  // (TV Series 2022– )
+    /\s*\(TV Mini[- ]Series\s+(\d{4})\)/i,        // (TV Mini-Series 2022)
+    /\s*\(Video Game\s+(\d{4})\)/i,               // (Video Game 2022)
+    /\s*\(Short\s+(\d{4})\)/i,                    // (Short 2022)
+    /\s*\((\d{4})[–-]\d*\s*\)/,                   // (2008–2013) or (2022– )
+    /\s*\((\d{4})\)/,                             // (2022)
+  ];
+
+  for (const pattern of yearPatterns) {
+    const match = title.match(pattern);
+    if (match) {
+      year = match[1];
+      title = title.replace(pattern, '').trim();
+      break;
+    }
+  }
+
+  // Clean up any remaining trailing whitespace or dashes
+  title = title.replace(/[\s\-–]+$/, '').trim();
+
+  return { title, year, rating };
+}
+
+/**
+ * Checks if a platform is a movie/film platform that needs title cleaning
+ */
+export function isMoviePlatform(platform: string): boolean {
+  return ['imdb', 'letterboxd', 'tmdb', 'rottentomatoes', 'metacritic'].includes(platform.toLowerCase());
 }

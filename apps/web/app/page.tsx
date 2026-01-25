@@ -8,7 +8,7 @@
  */
 
 import { Suspense } from 'react';
-import { AddButton, Header, CardGrid, SearchBar, TagScroller } from '@/components';
+import { AddButton, Header, CardGrid, SearchBar } from '@/components';
 
 export const revalidate = 0; // Disable caching for realtime updates
 
@@ -59,13 +59,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {/* Search Section */}
         <section className="py-6">
           <SearchBar />
-        </section>
-
-        {/* Tag Scroller */}
-        <section className="border-b border-[var(--border)] mb-6">
-          <Suspense fallback={<div className="h-10 animate-shimmer rounded" />}>
-            <TagScroller />
-          </Suspense>
         </section>
 
         {/* View Title */}

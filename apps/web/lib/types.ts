@@ -93,6 +93,25 @@ export interface CardMetadata {
 	carouselExtractionFailed?: boolean;
 	/** Error message if extraction failed */
 	carouselExtractionError?: string;
+
+	// Enrichment timing for real-time ETA display
+	/** Enrichment timing data for ETA calculation */
+	enrichmentTiming?: {
+		/** Timestamp when enrichment started (ms since epoch) */
+		startedAt?: number;
+		/** Estimated total processing time in ms */
+		estimatedTotalMs?: number;
+		/** Platform being processed */
+		platform?: string;
+		/** Time spent on scraping (ms) */
+		scrapeMs?: number;
+		/** Time spent on classification (ms) */
+		classifyMs?: number;
+		/** Total actual time (ms) */
+		totalMs?: number;
+		/** Timestamp when enrichment completed */
+		completedAt?: number;
+	};
 }
 
 /**
