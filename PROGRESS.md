@@ -15,6 +15,25 @@
 
 #### Week 4 (Jan 20-26)
 
+**Serendipity Mode (Jan 25)**
+- Implemented interactive serendipity exploration client
+- Single-card focus view with swipe/keyboard navigation
+- Keyboard shortcuts: ←/→ arrows, j/k vim-style, Space for details, Escape to close
+- Shuffle functionality with client-side random card fetching
+- Archive/Delete actions in card detail modal
+- Realtime subscription for data sync during AI enrichment
+- FocusCard component with animation states
+
+**Key Commits:**
+- `fix(serendipity): add archive functionality to card detail modal`
+- `feat(serendipity): add realtime subscription for data sync`
+
+**Artifacts:**
+- `apps/web/components/SerendipityClient.tsx` — Interactive serendipity client
+- `apps/web/components/FocusCard.tsx` — Single-card focus component
+- `openspec/changes/014-interactive-serendipity/` — Feature spec
+- `openspec/changes/015-serendipity-sync-archive/` — Bug fix spec
+
 **Nix Development Environment (Jan 24-25)**
 - Added comprehensive `flake.nix` with pinned Node 20.x (matching Vercel)
 - Configured multiple shells: `web`, `ai`, `rust`, `capacitor`, `default`
@@ -122,6 +141,7 @@
 | Dark mode | ✅ Done | Auto + manual with settings modal |
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
 | Self-hosted screenshots | ✅ Done | Playwright-based, zero cost, unlimited |
+| Serendipity mode | ✅ Done | Focus view, keyboard nav, shuffle, archive |
 
 ### iOS App
 
@@ -204,8 +224,8 @@
 
 ```
 apps/web/
-├── Components: 25+
-├── API routes: 8
+├── Components: 27+
+├── API routes: 9
 ├── Card types: 12
 └── E2E tests: 15+
 ```

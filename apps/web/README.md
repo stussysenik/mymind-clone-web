@@ -45,3 +45,4 @@ Access at [http://localhost:3000](http://localhost:3000)
 - **Optimistic UI**: Instant interactions for Save/Delete
 - **Server Components**: Heavy lifting (DB fetch) done on server
 - **Tailwind v4**: Styling engine
+- **Serendipity Mode**: Focused discovery with single-card focus view, keyboard navigation (←/→, j/k), swipe gestures, and shuffle functionality

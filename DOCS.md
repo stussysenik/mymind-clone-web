@@ -220,6 +220,33 @@ The `CardDetailModal` shows stage-based feedback during AI enrichment:
 { icon: '⏳', text: 'Finishing up...', progress: 95 }
 ```
 
+### Serendipity Mode
+
+A focused discovery experience for exploring your saved content one card at a time.
+
+**Navigation:**
+| Key | Action |
+|-----|--------|
+| `→` / `j` | Next card |
+| `←` / `k` | Previous card |
+| `Space` / `Enter` | Open card details |
+| `Escape` | Close detail modal |
+
+**Mobile Gestures:**
+- Swipe left → Next card
+- Swipe right → Previous card
+- Tap card → Open details
+
+**Features:**
+- **Shuffle**: Loads a random set of cards for discovery
+- **Progress dots**: Visual position indicator (max 20 visible)
+- **Archive/Delete**: Available in detail modal
+- **Realtime sync**: Card data updates live during AI enrichment
+
+**Access:**
+- Click "Serendipity" in the sidebar
+- Direct URL: `/serendipity`
+
 ---
 
 ## Testing
