@@ -71,6 +71,28 @@ export interface CardMetadata {
         enrichedAt?: string;
         /** User notes/thought (from detail view) */
         note?: string;
+	/** Timestamp when user last edited note */
+	note_updated_at?: string;
+	/** Timestamp when user last manually edited title (prevents AI overwrite) */
+	titleEditedAt?: string;
+	/** Timestamp when user last manually edited summary (prevents AI overwrite) */
+	summaryEditedAt?: string;
+
+	// Carousel-specific fields (Instagram, etc.)
+	/** Whether this is a carousel/multi-image post */
+	isCarousel?: boolean;
+	/** Number of slides in carousel */
+	slideCount?: number;
+	/** Whether background carousel extraction is pending */
+	carouselPending?: boolean;
+	/** Whether carousel extraction completed */
+	carouselExtracted?: boolean;
+	/** Timestamp when carousel was extracted */
+	carouselExtractedAt?: string;
+	/** Whether carousel extraction failed */
+	carouselExtractionFailed?: boolean;
+	/** Error message if extraction failed */
+	carouselExtractionError?: string;
 }
 
 /**

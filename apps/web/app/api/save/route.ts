@@ -85,6 +85,7 @@ function extractQuickMetadata(url: string | null, content: string | null) {
 import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
+import { scrapeInstagramQuick, scrapeInstagramCarousel } from '@/lib/instagram-scraper';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
@@ -144,6 +145,169 @@ async function uploadImageToStorage(base64Data: string, userId: string): Promise
 		console.error('[Storage] Error:', error);
 		return null;
 	}
+}
+
+/**
+ * Background carousel extraction for Instagram
+ * Runs AFTER initial card is saved, updates card with all images
+ */
+async function extractInstagramCarouselBackground(cardId: string, shortcode: string): Promise<void> {
+	try {
+		console.log(`[Save] Background: Starting carousel extraction for ${shortcode}`);
+
+		const result = await scrapeInstagramCarousel(shortcode);
+
+		if (result && result.images.length > 0) {
+			console.log(`[Save] Background: Extracted ${result.images.length} images, caption: "${result.caption?.slice(0, 50)}..."`);
+
+			// Fetch current card to merge metadata properly
+			const client = getSupabaseClient(true);
+			if (!client) {
+				console.error('[Save] Background: No Supabase client');
+				return;
+			}
+
+			const { data: currentCard } = await client
+				.from('cards')
+				.select('metadata, title, content')
+				.eq('id', cardId)
+				.single();
+
+			const currentMetadata = currentCard?.metadata || {};
+
+			// Generate title from caption (max 80 chars)
+			const generatedTitle = result.caption
+				? result.caption.slice(0, 80).trim() || 'Instagram Post'
+				: 'Instagram Post';
+
+			// Update card with all carousel images and metadata
+			await updateCard(cardId, {
+				image_url: result.images[0], // Primary image
+				// Only update title if it's still the placeholder
+				...(currentCard?.title === 'Instagram Post' || !currentCard?.title
+					? { title: generatedTitle }
+					: {}),
+				// Only update content if empty
+				...((!currentCard?.content || currentCard?.content === '')
+					? { content: result.caption }
+					: {}),
+				metadata: {
+					...currentMetadata,
+					images: result.images,
+					author: result.author,
+					platform: 'instagram',
+					slideCount: result.slideCount,
+					isCarousel: result.images.length > 1,
+					carouselExtracted: true,
+					carouselPending: false,
+					carouselExtractedAt: new Date().toISOString(),
+				}
+			});
+
+			console.log(`[Save] Background: Card ${cardId} updated with ${result.images.length} images`);
+		} else {
+			console.warn(`[Save] Background: No images extracted for ${shortcode}`);
+
+			// Mark as failed so we don't keep retrying
+			const client = getSupabaseClient(true);
+			if (client) {
+				const { data: currentCard } = await client
+					.from('cards')
+					.select('metadata')
+					.eq('id', cardId)
+					.single();
+
+				await updateCard(cardId, {
+					metadata: {
+						...(currentCard?.metadata || {}),
+						carouselPending: false,
+						carouselExtractionFailed: true,
+						carouselExtractionError: 'No images extracted',
+					}
+				});
+			}
+		}
+	} catch (error) {
+		console.error(`[Save] Background carousel extraction failed:`, error);
+
+		// Mark extraction as failed
+		try {
+			const client = getSupabaseClient(true);
+			if (client) {
+				const { data: currentCard } = await client
+					.from('cards')
+					.select('metadata')
+					.eq('id', cardId)
+					.single();
+
+				await updateCard(cardId, {
+					metadata: {
+						...(currentCard?.metadata || {}),
+						carouselPending: false,
+						carouselExtractionFailed: true,
+						carouselExtractionError: error instanceof Error ? error.message : 'Unknown error',
+					}
+				});
+			}
+		} catch (updateErr) {
+			console.error('[Save] Background: Failed to update error status:', updateErr);
+		}
+	}
+}
+
+/**
+ * Quick Instagram extraction - returns immediately with first image
+ * Full carousel is extracted in background
+ */
+async function scrapeInstagramQuickly(url: string): Promise<{
+	title: string;
+	imageUrl: string | null;
+	content: string;
+	author: string;
+	isCarousel: boolean;
+	shortcode: string;
+}> {
+	// Extract shortcode
+	const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+	const shortcode = shortcodeMatch?.[2] || '';
+
+	if (!shortcode) {
+		return {
+			title: 'Instagram Post',
+			imageUrl: null,
+			content: '',
+			author: '',
+			isCarousel: false,
+			shortcode: '',
+		};
+	}
+
+	try {
+		const result = await scrapeInstagramQuick(shortcode);
+
+		if (result) {
+			return {
+				title: result.caption?.slice(0, 80) || 'Instagram Post',
+				imageUrl: result.firstImage,
+				content: result.caption,
+				author: result.author,
+				isCarousel: result.isCarousel,
+				shortcode,
+			};
+		}
+	} catch (error) {
+		console.warn('[Save] Quick Instagram extraction failed:', error);
+	}
+
+	// Fallback
+	return {
+		title: 'Instagram Post',
+		imageUrl: null,
+		content: '',
+		author: '',
+		isCarousel: true, // Assume carousel to trigger background extraction
+		shortcode,
+	};
 }
 
 // =============================================================================
@@ -233,9 +397,36 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
 
 		// Get URL preview (OG image/title/content) - fast parallel fetch
-		let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[] } = {};
-		if (url) {
-			// We use the scraper to get rich metadata
+		let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[]; isCarousel?: boolean; shortcode?: string } = {};
+
+		// Check if this is an Instagram URL - use fast path for immediate response
+		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/'));
+
+		// Extract Instagram shortcode early (needed for background processing)
+		let instagramShortcode: string | undefined;
+		if (isInstagram && url) {
+			const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+			instagramShortcode = shortcodeMatch?.[2];
+		}
+
+		if (url && isInstagram) {
+			// INSTAGRAM ULTRA-FAST PATH: Return immediately with minimal data
+			// Full extraction happens in background - NO Playwright in critical path
+			console.log('[Save] Instagram detected - using ultra-fast path (no Playwright)');
+
+			preview = {
+				title: 'Instagram Post',
+				imageUrl: undefined, // Will be filled by background extraction
+				content: '',
+				description: '',
+				images: undefined,
+				isCarousel: true, // Assume carousel, background will verify
+				shortcode: instagramShortcode,
+			};
+
+			console.log(`[Save] Instagram ultra-fast: shortcode=${instagramShortcode}`);
+		} else if (url) {
+			// Standard path for non-Instagram URLs
 			const scraped = await scrapeUrl(url);
 
 			// Fallback to self-hosted Playwright screenshot if no image found in metadata
@@ -292,6 +483,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			metadata: {
 				processing: !tags, // Flag as processing if we need AI
 				images: preview.images, // Store carousel images
+				isCarousel: preview.isCarousel, // Track if this is a carousel
+				carouselPending: !!(preview.isCarousel && preview.shortcode), // Background extraction pending
 			},
 			tags: tags ?? [], // Empty tags, will be filled by AI
 		};
@@ -303,6 +496,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 				{ success: false, error: 'Failed to save card to database' },
 				{ status: 500 }
 			);
+		}
+
+		// INSTAGRAM BACKGROUND EXTRACTION: Always trigger for Instagram URLs
+		// This runs in the background - we don't wait for it
+		if (isInstagram && instagramShortcode) {
+			console.log(`[Save] Triggering background extraction for Instagram shortcode: ${instagramShortcode}`);
+			// Fire and forget - don't await
+			extractInstagramCarouselBackground(insertedRow.id, instagramShortcode).catch(err => {
+				console.error('[Save] Background carousel extraction failed:', err);
+			});
 		}
 
 		// STEP 3: Return immediately to client (< 200ms)

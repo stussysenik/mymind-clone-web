@@ -118,10 +118,12 @@ export async function POST(request: NextRequest) {
 
                                 // Update card with scraped content for future
                                 if (contentToAnalyze) {
+                                        // Only update title if user hasn't manually edited it
+                                        const shouldUpdateScrapedTitle = !card.metadata?.titleEditedAt && (!card.title || card.title === 'Link');
                                         await updateCard(cardId, {
                                                 content: contentToAnalyze,
-                                                // Also update title/image if scraper found better ones
-                                                title: (!card.title || card.title === 'Link') ? scraped.title : card.title,
+                                                // Also update title/image if scraper found better ones (but preserve user edits)
+                                                ...(shouldUpdateScrapedTitle && scraped.title ? { title: scraped.title } : {}),
                                                 image_url: (!card.image_url) ? scraped.imageUrl : card.image_url,
                                                 // We don't update metadata here to avoid race conditions, we'll do it in the final update
                                         });
@@ -175,13 +177,39 @@ export async function POST(request: NextRequest) {
                 const currentTags = latestCard?.tags || card.tags || [];
                 const mergedTags = Array.from(new Set([...currentTags, ...finalTags]));
 
+                // Check if user has manually edited title/summary - preserve their edits
+                const shouldUpdateTitle = !currentMetadata.titleEditedAt;
+                const shouldUpdateSummary = !currentMetadata.summaryEditedAt;
+
+                // Smart Title Logic:
+                // - Platforms with explicit titles (YouTube, Reddit, articles, etc.): Keep scraped title
+                // - Caption-only platforms (Instagram, Twitter): Use AI-generated title
+                const platformsWithExplicitTitles = ['youtube', 'reddit', 'article', 'letterboxd', 'imdb', 'goodreads', 'amazon', 'storygraph'];
+                const detectedPlatform = classification.platform || currentMetadata.platform || '';
+                const hasExplicitTitle = platformsWithExplicitTitles.includes(detectedPlatform.toLowerCase());
+                const existingTitleIsGood = card.title && card.title !== 'Link' && card.title.length > 3;
+
+                // Determine which title to use
+                let finalTitle: string | undefined;
+                if (shouldUpdateTitle) {
+                        if (hasExplicitTitle && existingTitleIsGood) {
+                                // Platform has explicit title and we already have a good one - keep it
+                                finalTitle = undefined; // Don't update
+                        } else {
+                                // Caption-only platform or no good title - use AI-generated
+                                finalTitle = classification.title;
+                        }
+                }
+
                 await updateCard(cardId, {
                         type: classification.type,
-                        title: classification.title,
+                        // Smart title: only update if we determined a new title should be used
+                        ...(finalTitle ? { title: finalTitle } : {}),
                         tags: mergedTags,
                         metadata: {
                                 ...currentMetadata,
-                                summary: classification.summary,
+                                // Only update summary if user hasn't manually edited it
+                                ...(shouldUpdateSummary ? { summary: classification.summary } : {}),
                                 platform: classification.platform || currentMetadata.platform,
                                 publishedAt: scrapedDate || currentMetadata.publishedAt,
                                 colors: imageAnalysis?.colors,
