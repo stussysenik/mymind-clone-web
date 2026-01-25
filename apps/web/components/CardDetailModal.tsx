@@ -1,11 +1,13 @@
 'use client';
 
-import { X, ExternalLink, Archive, Share2, FolderPlus, Loader2, RotateCcw, Check, Plus, AlertTriangle, RefreshCw, Trash2, Sparkles, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ExternalLink, Archive, FolderPlus, Loader2, RotateCcw, Check, Plus, AlertTriangle, RefreshCw, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import { Card } from '@/lib/types';
-import { extractDomain } from '@/lib/platforms';
+import { extractDomain, isVideoUrl } from '@/lib/platforms';
 import { updateLocalCard } from '@/lib/local-storage';
 import { decodeHtmlEntities } from '@/lib/text-utils';
+import { VideoPlayer } from './VideoPlayer';
+import { getEnrichmentProgress, formatRemainingTime, ENRICHMENT_STAGES } from '@/lib/enrichment-timing';
 
 interface CardDetailModalProps {
         card: Card | null;
@@ -41,6 +43,9 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         const [retryCount, setRetryCount] = useState(0);
         const [title, setTitle] = useState(decodeHtmlEntities(card?.title || ''));
         const [summary, setSummary] = useState(decodeHtmlEntities(card?.metadata?.summary || ''));
+        // Track if user has made local edits to the summary (for AI merge logic)
+        const [hasUserEditedSummary, setHasUserEditedSummary] = useState(false);
+        const originalSummaryRef = useRef<string>(decodeHtmlEntities(card?.metadata?.summary || ''));
         const [isSavingTitle, setIsSavingTitle] = useState(false);
         const [titleSaved, setTitleSaved] = useState(false);
         const [isSavingSummary, setIsSavingSummary] = useState(false);
@@ -50,6 +55,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         // Expandable sections for comfortable reading
         const [summaryExpanded, setSummaryExpanded] = useState(false);
         const [notesExpanded, setNotesExpanded] = useState(false);
+        // Deterministic summary input - when true, always show the textarea
+        const [isEditingSummary, setIsEditingSummary] = useState(false);
 
         // Carousel state
         const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -106,37 +113,32 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         }, [card, isReAnalyzing, router]);
 
         // Sync state when card is refreshed (same ID) from AI updates
+        // Implements AI Summary Merge: combines user text + AI summary with visual separator
         useEffect(() => {
                 if (card) {
-                        // FIX: Only sync tags/summary if the SERVER card data has surprisingly changed
-                        // independent of our local edits.
-                        // We do NOT depend on 'tags' or 'summary' in the dependency array anymore.
-                        // This prevents the infinite loop of: local edit -> state change -> effect run -> prop vs state mismatch -> revert to prop.
-
-                        // 1. Tags Sync
-                        // We only overwrite local tags if the server has *different* tags and we aren't "in the middle" of an optimistic update.
-                        // Actually, without router.refresh() in addTag, 'card.tags' will be stale until next real refresh.
-                        // But if we trust our local state, we only want to sync if 'card' effectively represents a NEW load.
-                        // A simple heuristic: JSON stringify check is fine, BUT we must not run this effect when 'tags' changes.
+                        // 1. Tags Sync - unchanged
                         if (JSON.stringify(card.tags) !== JSON.stringify(tags)) {
-                                // If we assume 'card' is the source of truth from a refresh...
                                 setTags(card.tags || []);
                         }
 
-                        // 2. Summary Sync
-                        // Only update if card summary is different and present.
-                        // We use a ref to track if we are the ones who just saved it?
-                        // No, simpler: Just don't depend on 'summary'.
-                        // This way, this block ONLY runs when 'card' prop updates (e.g. invalidation).
-                        // It does NOT run when user types (updating 'summary' state).
-                        if (card.metadata.summary && card.metadata.summary !== summary) {
-                                // If the user has made local edits that deviate from an *old* card prop, we shouldn't overwrite.
-                                // But if 'card' just updated (fresh fetch), we probably want to show it.
-                                // Ideally we'd check timestamps, but for now, trusting the fresh prop is safer than the current bug.
-                                // The critical fix is ensuring this effect DOES NOT RUN on local summary change.
-                                // Decode HTML entities when syncing from server
-                                setSummary(decodeHtmlEntities(card.metadata.summary));
+                        // 2. Summary Sync with AI Merge Logic
+                        const newAiSummary = decodeHtmlEntities(card.metadata.summary || '');
+                        const userHasContent = hasUserEditedSummary && summary.trim();
+                        const aiHasNewContent = newAiSummary && newAiSummary !== originalSummaryRef.current;
+
+                        if (userHasContent && aiHasNewContent) {
+                                // MERGE: User typed + AI generated
+                                // Combine with visual separator
+                                const merged = `${summary}\n\n---\n\n✨ AI Summary:\n${newAiSummary}`;
+                                setSummary(merged);
+                                originalSummaryRef.current = merged;
+                                setHasUserEditedSummary(false); // Reset after merge
+                        } else if (!userHasContent && aiHasNewContent) {
+                                // No user edits, just show AI summary
+                                setSummary(newAiSummary);
+                                originalSummaryRef.current = newAiSummary;
                         }
+                        // If user has content but no new AI, keep user's version (do nothing)
                 }
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [card]); // CRITICAL FIX: Only run when the card prop itself changes (e.g. from router.refresh or parent re-render)
@@ -197,6 +199,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
         const handleSummaryChange = (val: string) => {
                 setSummary(val);
+                // Track that user has edited the summary (for AI merge logic)
+                setHasUserEditedSummary(val !== originalSummaryRef.current);
                 setSummarySaved(true); // Optimistic UI
                 if (summarySaveTimeoutRef.current) clearTimeout(summarySaveTimeoutRef.current);
                 // Use longer debounce (2.5s) to allow paragraph deletion without interruption
@@ -506,16 +510,28 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                 {/* LEFT: Visual Content - hidden on mobile when showing text */}
                                 <div
                                         data-testid="card-visual"
-                                        className={`w-full md:w-2/3 flex-1 md:h-full flex items-center justify-center relative group overflow-hidden ${card.imageUrl ? 'bg-gray-100' : ''} ${isMobile && mobileView === 'text' ? 'hidden' : ''}`}
+                                        className={`w-full md:w-2/3 flex-1 md:h-full flex items-center justify-center relative group overflow-hidden ${card.imageUrl || isVideoUrl(card.url) ? 'bg-gray-100' : ''} ${isMobile && mobileView === 'text' ? 'hidden' : ''}`}
                                         {...(isMobile ? swipeHandlers : {})}
-                                        style={!card.imageUrl ? {
-                                                background: `linear-gradient(135deg, 
-                                                        hsl(${(card.title?.charCodeAt(0) || 0) % 360}, 70%, 95%) 0%, 
+                                        style={!card.imageUrl && !isVideoUrl(card.url) ? {
+                                                background: `linear-gradient(135deg,
+                                                        hsl(${(card.title?.charCodeAt(0) || 0) % 360}, 70%, 95%) 0%,
                                                         hsl(${((card.title?.charCodeAt(1) || 50) + 120) % 360}, 60%, 90%) 50%,
                                                         hsl(${((card.title?.charCodeAt(2) || 100) + 240) % 360}, 50%, 85%) 100%)`
                                         } : undefined}
                                 >
-                                        {images.length > 0 ? (
+                                        {/* Video Player for YouTube, Vimeo, etc. */}
+                                        {card.url && isVideoUrl(card.url) ? (
+                                                <div className="relative w-full h-full flex items-center justify-center bg-black p-4 md:p-8">
+                                                        <div className="w-full max-w-4xl">
+                                                                <VideoPlayer
+                                                                        url={card.url}
+                                                                        thumbnail={card.imageUrl || undefined}
+                                                                        title={card.title || undefined}
+                                                                        className="shadow-2xl"
+                                                                />
+                                                        </div>
+                                                </div>
+                                        ) : images.length > 0 ? (
                                                 <div className="relative w-full h-full flex items-center justify-center bg-black/5">
                                                         {/* Blurred Backdrop */}
                                                         <div className="absolute inset-0 overflow-hidden">
@@ -559,7 +575,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                         </button>
 
                                                                         {/* Dots */}
-                                                                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 p-2 rounded-full bg-black/20 backdrop-blur-sm">
+                                                                        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 p-2 rounded-full bg-black/20 backdrop-blur-sm">
                                                                                 {images.map((_, idx) => (
                                                                                         <button
                                                                                                 key={idx}
@@ -684,18 +700,14 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 hasFailed={!!card.metadata.enrichmentError}
                                                                 retryCount={retryCount}
                                                                 onRetry={handleReAnalyze}
+                                                                enrichmentTiming={card.metadata.enrichmentTiming}
                                                                 onManual={async () => {
-                                                                        // Clear error locally so we can write summary
-                                                                        // Realistically we might want to PATCH the card to clear error/processing flag?
-                                                                        // But simply focusing the summary might be enough if we hide the indicator.
-                                                                        // Better: Hide indicator, focus summary.
-                                                                        // But indicator is conditional on card.metadata. 
-                                                                        // Let's force update local state to hide it? 
-                                                                        // Or just update the DB to say "processing: false, error: null"
+                                                                        // Set isEditingSummary FIRST to ensure textarea shows
+                                                                        setIsEditingSummary(true);
+                                                                        setSummaryExpanded(true); // Expand for comfortable writing
 
-                                                                        // Simplest hack: Optimistic update
+                                                                        // Clear error flags in database
                                                                         const updated = { ...card.metadata, processing: false, enrichmentError: null };
-                                                                        // Actual update:
                                                                         try {
                                                                                 await fetch(`/api/cards/${card.id}`, {
                                                                                         method: 'PATCH',
@@ -708,7 +720,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                 )}
 
                                                 {/* AI Summary Section - Editable with Comfortable Reading */}
-                                                {(card.metadata.summary || card.metadata.processing || summary) && (
+                                                {(card.metadata.summary || card.metadata.processing || summary || isEditingSummary) && (
                                                         <div className="mb-6 pb-6 border-b border-gray-100">
                                                                 <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 group hover:border-[var(--accent-primary)]/30 transition-all">
                                                                         <div className="flex items-center justify-between mb-3">
@@ -729,10 +741,11 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                 </div>
                                                                         </div>
                                                                         <textarea
+                                                                                autoFocus={isEditingSummary}
                                                                                 value={summary}
                                                                                 onChange={(e) => handleSummaryChange(e.target.value)}
                                                                                 className={`w-full text-gray-700 leading-relaxed bg-transparent border-none p-0 focus:ring-0 resize-none placeholder:text-gray-400 break-words transition-all duration-300 ${summaryExpanded ? 'min-h-[320px] text-base' : 'min-h-[120px] text-sm'}`}
-                                                                                placeholder="Add AI summary..."
+                                                                                placeholder={isEditingSummary ? "Write your summary..." : "Add AI summary..."}
                                                                         />
                                                                 </div>
                                                         </div>
@@ -924,21 +937,6 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 </>
                                                         )}
                                                 </div>
-                                                <button className="p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-gray-900 border border-gray-100 hover:border-gray-300">
-                                                        <Share2 className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                        onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onClose();
-                                                                router.push(`/?similar=${card.id}`);
-                                                        }}
-                                                        className="p-3 rounded-full hover:bg-gray-50 transition-colors text-gray-400 hover:text-purple-500 border border-gray-100 hover:border-purple-200"
-                                                        title="See Similar"
-                                                        aria-label="See Similar"
-                                                >
-                                                        <Sparkles className="w-5 h-5" />
-                                                </button>
                                                 {onArchive && !card.archivedAt && (
                                                         <button
                                                                 onClick={(e) => {
@@ -984,7 +982,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
 
 /**
- * AIThinkingIndicator - Minimalist, premium feedback
+ * AIThinkingIndicator - Real-time ETA feedback with smart timing
  */
 function AIThinkingIndicator({
         createdAt,
@@ -992,7 +990,8 @@ function AIThinkingIndicator({
         hasFailed,
         retryCount,
         onRetry,
-        onManual
+        onManual,
+        enrichmentTiming
 }: {
         createdAt: string;
         isReAnalyzing: boolean;
@@ -1000,25 +999,78 @@ function AIThinkingIndicator({
         retryCount: number;
         onRetry: () => void;
         onManual: () => void;
+        enrichmentTiming?: {
+                startedAt?: number;
+                estimatedTotalMs?: number;
+                platform?: string;
+        };
 }) {
         const [elapsed, setElapsed] = useState(0);
-        const [showLongerMessage, setShowLongerMessage] = useState(false);
+        const [timedOut, setTimedOut] = useState(false);
+        const [retryStartTime, setRetryStartTime] = useState<number | null>(null);
+
+        // Use timing metadata if available, otherwise fallback to createdAt
+        const originalStartTime = enrichmentTiming?.startedAt || new Date(createdAt).getTime();
+        const estimatedTotal = enrichmentTiming?.estimatedTotalMs || 15000; // Default 15s if no timing
+        const TIMEOUT_MS = Math.max(estimatedTotal * 3, 45000); // 3x estimated or 45s minimum
+
+        // Track retry start time when isReAnalyzing becomes true
+        useEffect(() => {
+                if (isReAnalyzing && !retryStartTime) {
+                        setRetryStartTime(Date.now());
+                        setTimedOut(false);
+                } else if (!isReAnalyzing && retryStartTime) {
+                        // Keep retryStartTime after retry completes to show accurate elapsed time
+                }
+        }, [isReAnalyzing, retryStartTime]);
+
+        // Use retry start time if we've retried, otherwise use original start time
+        const effectiveStartTime = retryStartTime || originalStartTime;
 
         useEffect(() => {
-                if (isReAnalyzing) {
-                        setElapsed(1000);
-                        setShowLongerMessage(false);
-                        return;
-                }
-                const start = new Date(createdAt).getTime();
-                const interval = setInterval(() => {
+                // Always create interval to track progress
+                const updateElapsed = () => {
                         const now = Date.now();
-                        const e = now - start;
+                        const e = now - effectiveStartTime;
                         setElapsed(e);
-                        if (e > 15000) setShowLongerMessage(true);
-                }, 100);
+                        if (e > TIMEOUT_MS) {
+                                setTimedOut(true);
+                        }
+                };
+
+                // Initial update
+                updateElapsed();
+
+                const interval = setInterval(updateElapsed, 100);
                 return () => clearInterval(interval);
-        }, [createdAt, isReAnalyzing]);
+        }, [effectiveStartTime, TIMEOUT_MS]);
+
+        // Timeout State - Show options after 45 seconds
+        if (timedOut && !hasFailed) {
+                return (
+                        <div className="mb-6 p-4 rounded-xl bg-amber-50/50 border border-amber-100 flex flex-col gap-3 animate-in fade-in">
+                                <div className="flex items-center gap-2 text-amber-700">
+                                        <AlertTriangle className="w-4 h-4" />
+                                        <span className="text-xs font-medium">AI analysis is taking longer than expected.</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                        <button
+                                                onClick={onRetry}
+                                                className="text-xs font-bold bg-white border border-amber-200 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors shadow-sm flex items-center gap-1.5"
+                                        >
+                                                <RefreshCw className="w-3 h-3" />
+                                                Retry
+                                        </button>
+                                        <button
+                                                onClick={onManual}
+                                                className="text-xs font-bold text-[var(--accent-primary)] hover:underline"
+                                        >
+                                                Write manually instead →
+                                        </button>
+                                </div>
+                        </div>
+                );
+        }
 
         // Failed State
         if (hasFailed) {
@@ -1027,14 +1079,14 @@ function AIThinkingIndicator({
                         return (
                                 <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100 flex flex-col gap-3 animate-in fade-in">
                                         <div className="flex items-center gap-2 text-gray-500">
-                                                <Sparkles className="w-4 h-4 text-gray-400" />
+                                                <AlertTriangle className="w-4 h-4 text-gray-400" />
                                                 <span className="text-xs font-medium">AI couldn't summarize this card.</span>
                                         </div>
                                         <button
                                                 onClick={onManual}
                                                 className="text-xs font-bold text-[var(--accent-primary)] hover:underline self-start"
                                         >
-                                                Write your own summary &rarr;
+                                                Write your own summary →
                                         </button>
                                 </div>
                         );
@@ -1057,40 +1109,55 @@ function AIThinkingIndicator({
                 );
         }
 
+        // Get real-time progress using enrichment timing utilities
+        const progress = getEnrichmentProgress(elapsed, estimatedTotal);
+        const remainingText = formatRemainingTime(progress.remainingMs);
+
         // Processing State with Stage Icons
-        const getStageInfo = (): { icon: string; text: string; stage: number } => {
-                if (isReAnalyzing) return { icon: '🔄', text: 'Refining analysis...', stage: 2 };
-                if (elapsed < 3000) return { icon: '🔍', text: 'Reading content...', stage: 1 };
-                if (elapsed < 8000) return { icon: '🧠', text: 'Analyzing...', stage: 2 };
-                if (elapsed < 20000) return { icon: '✨', text: 'Generating summary...', stage: 3 };
-                return { icon: '⏳', text: 'Finishing up...', stage: 4 };
+        const getStageInfo = (): { icon: string; text: string; stage: number; progress: number } => {
+                if (isReAnalyzing) return { icon: '🔄', text: 'Refining analysis...', stage: 2, progress: 0.5 };
+
+                // Use the progress from enrichment timing
+                return {
+                        icon: progress.stage.icon,
+                        text: progress.stage.label,
+                        stage: progress.stageIndex + 1,
+                        progress: progress.overallProgress
+                };
         };
 
         const stageInfo = getStageInfo();
 
         return (
                 <div className="mb-8 p-5 bg-gray-50/30 rounded-xl border border-gray-100/50 animate-in fade-in">
-                        <div className="flex items-center gap-3">
-                                {/* Stage Icon */}
-                                <span className="text-base animate-pulse">{stageInfo.icon}</span>
+                        <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                        {/* Stage Icon */}
+                                        <span className="text-base animate-pulse">{stageInfo.icon}</span>
 
-                                {/* Pulsing Dot */}
-                                <div className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--accent-primary)]"></span>
+                                        {/* Pulsing Dot */}
+                                        <div className="relative flex h-2.5 w-2.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--accent-primary)]"></span>
+                                        </div>
+
+                                        {/* Status Text */}
+                                        <span className="text-xs font-medium bg-gradient-to-r from-gray-600 to-gray-400 bg-clip-text text-transparent">
+                                                {stageInfo.text}
+                                        </span>
                                 </div>
 
-                                {/* Status Text */}
-                                <span className={`text-xs font-medium bg-gradient-to-r from-gray-600 to-gray-400 bg-clip-text text-transparent`}>
-                                        {stageInfo.text}
+                                {/* ETA Display */}
+                                <span className="text-xs text-gray-400">
+                                        {remainingText}
                                 </span>
                         </div>
 
                         {/* Progress Bar */}
                         <div className="mt-3 h-1 bg-gray-100 rounded-full overflow-hidden">
                                 <div
-                                        className="h-full bg-gradient-to-r from-[var(--accent-primary)] to-orange-400 transition-all duration-1000 ease-out"
-                                        style={{ width: `${Math.min((stageInfo.stage / 4) * 100, 95)}%` }}
+                                        className="h-full bg-gradient-to-r from-[var(--accent-primary)] to-orange-400 transition-all duration-300 ease-out"
+                                        style={{ width: `${Math.min(stageInfo.progress * 100, 95)}%` }}
                                 />
                         </div>
                 </div>
