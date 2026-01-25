@@ -86,7 +86,7 @@
         # ══════════════════════════════════════════════════════════════════
 
         webPkgs = with pkgs; [
-          nodejs_22
+          nodejs_20  # Pin to Node 20.x LTS to match Vercel production
           bun
           deno
           nodePackages.pnpm
