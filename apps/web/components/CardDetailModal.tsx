@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Card } from '@/lib/types';
 import { extractDomain } from '@/lib/platforms';
 import { updateLocalCard } from '@/lib/local-storage';
+import { decodeHtmlEntities } from '@/lib/text-utils';
 
 interface CardDetailModalProps {
         card: Card | null;
@@ -18,8 +19,8 @@ interface CardDetailModalProps {
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef, useCallback } from 'react';
-
-// ... (imports remain)
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useSwipe } from '@/hooks/useSwipe';
 
 export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, onArchive, availableSpaces = [] }: CardDetailModalProps) {
         const router = useRouter();
@@ -38,8 +39,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         const currentNoteRef = useRef<string>(card?.metadata?.note || ''); // Track current note for unmount handling
         const [isReAnalyzing, setIsReAnalyzing] = useState(false);
         const [retryCount, setRetryCount] = useState(0);
-        const [title, setTitle] = useState(card?.title || '');
-        const [summary, setSummary] = useState(card?.metadata?.summary || '');
+        const [title, setTitle] = useState(decodeHtmlEntities(card?.title || ''));
+        const [summary, setSummary] = useState(decodeHtmlEntities(card?.metadata?.summary || ''));
         const [isSavingTitle, setIsSavingTitle] = useState(false);
         const [titleSaved, setTitleSaved] = useState(false);
         const [isSavingSummary, setIsSavingSummary] = useState(false);
@@ -53,6 +54,14 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         // Carousel state
         const [currentImageIndex, setCurrentImageIndex] = useState(0);
         const images = card?.metadata?.images?.length ? card.metadata.images : (card?.imageUrl ? [card.imageUrl] : []);
+
+        // Mobile responsive state
+        const isMobile = useMediaQuery('(max-width: 767px)');
+        const [mobileView, setMobileView] = useState<'visual' | 'text'>('visual');
+        const swipeHandlers = useSwipe(
+                () => setMobileView('text'),   // Swipe left -> show text
+                () => setMobileView('visual')  // Swipe right -> show visual
+        );
 
         const nextImage = (e?: React.MouseEvent) => {
                 e?.stopPropagation();
@@ -125,7 +134,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                 // But if 'card' just updated (fresh fetch), we probably want to show it.
                                 // Ideally we'd check timestamps, but for now, trusting the fresh prop is safer than the current bug.
                                 // The critical fix is ensuring this effect DOES NOT RUN on local summary change.
-                                setSummary(card.metadata.summary);
+                                // Decode HTML entities when syncing from server
+                                setSummary(decodeHtmlEntities(card.metadata.summary));
                         }
                 }
                 // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,7 +150,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                 try {
                         await fetch(`/api/cards/${card.id}`, {
                                 method: 'PATCH',
-                                body: JSON.stringify({ title: newTitle })
+                                body: JSON.stringify({ title: newTitle, metadata: { ...card.metadata, titleEditedAt: new Date().toISOString() } })
                         });
                         setTitleSaved(true);
                         setTimeout(() => setTitleSaved(false), 2000);
@@ -154,9 +164,9 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
         const handleTitleChange = (val: string) => {
                 setTitle(val);
-                setTitleSaved(false);
+                setTitleSaved(true); // Optimistic UI
                 if (titleSaveTimeoutRef.current) clearTimeout(titleSaveTimeoutRef.current);
-                titleSaveTimeoutRef.current = setTimeout(() => saveTitle(val), 1000);
+                titleSaveTimeoutRef.current = setTimeout(() => saveTitle(val), 150) // Fast debounce;
         };
 
         // Debounced save for Summary
@@ -168,6 +178,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                 const updatedMeta = {
                         ...card.metadata,
                         summary: newSummary,
+				summaryEditedAt: new Date().toISOString(),
                 };
 
                 try {
@@ -186,10 +197,10 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
         const handleSummaryChange = (val: string) => {
                 setSummary(val);
-                setSummarySaved(false);
+                setSummarySaved(true); // Optimistic UI
                 if (summarySaveTimeoutRef.current) clearTimeout(summarySaveTimeoutRef.current);
                 // Use longer debounce (2.5s) to allow paragraph deletion without interruption
-                summarySaveTimeoutRef.current = setTimeout(() => saveSummary(val), 2500);
+                summarySaveTimeoutRef.current = setTimeout(() => saveSummary(val), 300) // Fast debounce;
         };
 
 
@@ -228,17 +239,17 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
         const handleNoteChange = (newNote: string) => {
                 setNote(newNote);
                 currentNoteRef.current = newNote;
-                setNoteSaved(false);
+                setNoteSaved(true); // Optimistic UI
 
                 // Clear existing timeout
                 if (saveTimeoutRef.current) {
                         clearTimeout(saveTimeoutRef.current);
                 }
 
-                // Set new debounced save (500ms after typing stops)
+                // Set new debounced save (100ms after typing stops - Fast debounce)
                 saveTimeoutRef.current = setTimeout(() => {
                         saveNote(newNote);
-                }, 500);
+                }, 100);
         };
 
         // Cleanup timeout on unmount AND flush pending save
@@ -432,16 +443,71 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
                         <div className="relative w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
 
-                                {/* Close Button (Absolute) */}
+                                {/* Desktop Close Button (Hidden on mobile - mobile uses header) */}
                                 <button
                                         onClick={onClose}
-                                        className="absolute top-4 right-4 z-[110] p-2 bg-black/10 hover:bg-black/20 md:bg-gray-100 md:hover:bg-gray-200 rounded-full text-white md:text-gray-500 transition-colors"
+                                        className="hidden md:flex absolute top-4 right-4 z-[110] p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
                                 >
                                         <X className="w-5 h-5" />
                                 </button>
 
-                                {/* LEFT: Visual Content */}
-                                <div data-testid="card-visual" className={`w-full md:w-2/3 flex items-center justify-center relative group overflow-hidden ${card.imageUrl ? 'bg-gray-100' : ''}`}
+                                {/* Mobile Sticky Header with Tab Bar + Close Button */}
+                                {isMobile && (
+                                        <div className={`sticky top-0 z-[110] flex items-center justify-between gap-3 px-4 py-3 backdrop-blur-md shrink-0 ${
+                                                mobileView === 'visual'
+                                                        ? 'bg-gradient-to-b from-black/60 via-black/40 to-transparent border-b border-white/10'
+                                                        : 'bg-white/95 border-b border-gray-100'
+                                        }`}>
+                                                {/* Tab Segmented Control */}
+                                                <div className={`flex flex-1 backdrop-blur-sm rounded-lg p-1 max-w-[200px] ${
+                                                        mobileView === 'visual' ? 'bg-black/30' : 'bg-gray-100'
+                                                }`}>
+                                                        <button
+                                                                onClick={() => setMobileView('visual')}
+                                                                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all min-h-[44px] ${
+                                                                        mobileView === 'visual'
+                                                                                ? 'bg-white text-gray-900 shadow-sm'
+                                                                                : mobileView === 'text'
+                                                                                        ? 'text-gray-600 hover:text-gray-900 active:bg-gray-200'
+                                                                                        : 'text-white/80 hover:text-white active:bg-white/10'
+                                                                }`}
+                                                        >
+                                                                Visual
+                                                        </button>
+                                                        <button
+                                                                onClick={() => setMobileView('text')}
+                                                                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all min-h-[44px] ${
+                                                                        mobileView === 'text'
+                                                                                ? 'bg-white text-gray-900 shadow-sm'
+                                                                                : mobileView === 'visual'
+                                                                                        ? 'text-white/80 hover:text-white active:bg-white/10'
+                                                                                        : 'text-gray-600 hover:text-gray-900 active:bg-gray-200'
+                                                                }`}
+                                                        >
+                                                                Details
+                                                        </button>
+                                                </div>
+
+                                                {/* Close Button */}
+                                                <button
+                                                        onClick={onClose}
+                                                        className={`p-3 rounded-full transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 ${
+                                                                mobileView === 'visual'
+                                                                        ? 'bg-black/30 hover:bg-black/40 active:bg-black/50 text-white'
+                                                                        : 'bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-600'
+                                                        }`}
+                                                        aria-label="Close"
+                                                >
+                                                        <X className="w-5 h-5" />
+                                                </button>
+                                        </div>
+                                )}
+
+                                {/* LEFT: Visual Content - hidden on mobile when showing text */}
+                                <div
+                                        data-testid="card-visual"
+                                        className={`w-full md:w-2/3 flex-1 md:h-full flex items-center justify-center relative group overflow-hidden ${card.imageUrl ? 'bg-gray-100' : ''} ${isMobile && mobileView === 'text' ? 'hidden' : ''}`}
+                                        {...(isMobile ? swipeHandlers : {})}
                                         style={!card.imageUrl ? {
                                                 background: `linear-gradient(135deg, 
                                                         hsl(${(card.title?.charCodeAt(0) || 0) % 360}, 70%, 95%) 0%, 
@@ -529,9 +595,9 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                         ) : (
                                                 /* Note/text content - show nicely formatted */
                                                 <div className="p-12 text-center max-w-2xl">
-                                                        <h2 className="text-3xl font-serif text-gray-800 mb-6 leading-tight">{card.title}</h2>
+                                                        <h2 className="text-3xl font-serif text-gray-800 mb-6 leading-tight">{decodeHtmlEntities(card.title || '')}</h2>
                                                         <p className="text-xl text-gray-600 leading-relaxed whitespace-pre-wrap font-serif">
-                                                                {card.content || 'No content provided'}
+                                                                {decodeHtmlEntities(card.content || 'No content provided')}
                                                         </p>
                                                 </div>
                                         )}
@@ -557,25 +623,29 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                 </div>
 
 
-                                {/* RIGHT: Metadata & Notes */}
-                                <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-gray-100">
-                                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                                {/* RIGHT: Metadata & Notes - hidden on mobile when showing visual */}
+                                <div
+                                        className={`w-full md:w-1/3 flex-1 md:h-full bg-white flex flex-col border-l border-gray-100 ${isMobile && mobileView === 'visual' ? 'hidden' : ''}`}
+                                        {...(isMobile ? swipeHandlers : {})}
+                                >
+                                        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
 
                                                 {/* Title + Dates */}
-                                                <div className="mb-4">
+                                                <div className="mb-6 pb-6 border-b border-gray-100">
                                                         <div className="relative">
                                                                 <input
                                                                         type="text"
                                                                         value={title}
                                                                         onChange={(e) => handleTitleChange(e.target.value)}
-                                                                        className="w-full text-xl font-serif font-medium text-gray-900 mb-3 leading-snug bg-transparent focus:outline-none focus:bg-gray-50 rounded px-1 -ml-1 border border-transparent focus:border-gray-200 transition-colors truncate"
+                                                                        className="w-full text-lg md:text-xl font-serif font-medium text-gray-900 mb-3 leading-snug bg-transparent focus:outline-none focus:bg-gray-50 rounded px-2 py-1 -ml-2 border border-transparent focus:border-gray-200 transition-colors min-h-[44px]"
                                                                         placeholder="Untitled"
                                                                         title={title}
+                                                                        style={{ textOverflow: 'ellipsis' }}
                                                                 />
-                                                                {isSavingTitle && <Loader2 className="absolute right-2 top-2 w-4 h-4 animate-spin text-[var(--accent-primary)]" />}
-                                                                {titleSaved && <Check className="absolute right-2 top-2 w-4 h-4 text-green-500" />}
+                                                                {isSavingTitle && <Loader2 className="absolute right-2 top-3 w-4 h-4 animate-spin text-[var(--accent-primary)]" />}
+                                                                {titleSaved && <Check className="absolute right-2 top-3 w-4 h-4 text-green-500" />}
                                                         </div>
-                                                        <div className="flex flex-col gap-1 text-sm text-gray-400 font-medium">
+                                                        <div className="flex flex-col gap-1.5 text-sm text-gray-400 font-medium">
                                                                 {/* Added Date */}
                                                                 <div className="flex items-center gap-2">
                                                                         <span className="text-gray-300">Added</span>
@@ -594,7 +664,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                 href={card.url || '#'}
                                                                                 target="_blank"
                                                                                 rel="noopener noreferrer"
-                                                                                className="flex items-center gap-1 hover:text-[var(--accent-primary)] transition-colors mt-1"
+                                                                                className="inline-flex items-center gap-1.5 hover:text-[var(--accent-primary)] transition-colors mt-1 min-h-[44px] py-2"
                                                                         >
                                                                                 <ExternalLink className="w-3.5 h-3.5" />
                                                                                 {domain}
@@ -639,45 +709,47 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
                                                 {/* AI Summary Section - Editable with Comfortable Reading */}
                                                 {(card.metadata.summary || card.metadata.processing || summary) && (
-                                                        <div className="mb-8 p-5 bg-gray-50/50 rounded-xl border border-gray-100 group hover:border-[var(--accent-primary)]/30 transition-all">
-                                                                <div className="flex items-center justify-between mb-3">
-                                                                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                                                                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]"></span>
-                                                                                AI Summary
-                                                                        </h4>
-                                                                        <div className="flex items-center gap-2">
-                                                                                {isSavingSummary && <Loader2 className="w-3 h-3 animate-spin text-[var(--accent-primary)]" />}
-                                                                                {summarySaved && <Check className="w-3 h-3 text-green-500" />}
-                                                                                <button
-                                                                                        onClick={() => setSummaryExpanded(!summaryExpanded)}
-                                                                                        className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
-                                                                                        title={summaryExpanded ? 'Collapse' : 'Expand for reading'}
-                                                                                >
-                                                                                        {summaryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                                                                </button>
+                                                        <div className="mb-6 pb-6 border-b border-gray-100">
+                                                                <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 group hover:border-[var(--accent-primary)]/30 transition-all">
+                                                                        <div className="flex items-center justify-between mb-3">
+                                                                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                                                                                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]"></span>
+                                                                                        AI Summary
+                                                                                </h4>
+                                                                                <div className="flex items-center gap-1">
+                                                                                        {isSavingSummary && <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-primary)]" />}
+                                                                                        {summarySaved && <Check className="w-4 h-4 text-green-500" />}
+                                                                                        <button
+                                                                                                onClick={() => setSummaryExpanded(!summaryExpanded)}
+                                                                                                className="p-2.5 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2"
+                                                                                                title={summaryExpanded ? 'Collapse' : 'Expand for reading'}
+                                                                                        >
+                                                                                                {summaryExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                                                                        </button>
+                                                                                </div>
                                                                         </div>
+                                                                        <textarea
+                                                                                value={summary}
+                                                                                onChange={(e) => handleSummaryChange(e.target.value)}
+                                                                                className={`w-full text-gray-700 leading-relaxed bg-transparent border-none p-0 focus:ring-0 resize-none placeholder:text-gray-400 break-words transition-all duration-300 ${summaryExpanded ? 'min-h-[320px] text-base' : 'min-h-[120px] text-sm'}`}
+                                                                                placeholder="Add AI summary..."
+                                                                        />
                                                                 </div>
-                                                                <textarea
-                                                                        value={summary}
-                                                                        onChange={(e) => handleSummaryChange(e.target.value)}
-                                                                        className={`w-full text-gray-700 leading-relaxed bg-transparent border-none p-0 focus:ring-0 resize-none placeholder:text-gray-400 break-words transition-all duration-300 ${summaryExpanded ? 'min-h-[320px] text-base' : 'min-h-[160px] text-sm'}`}
-                                                                        placeholder="Add AI summary..."
-                                                                />
                                                         </div>
                                                 )}
 
                                                 {/* Tags Section */}
-                                                <div className="mb-10 w-full">
+                                                <div className="mb-6 pb-6 border-b border-gray-100 w-full">
                                                         <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3">
                                                                 Mind Tags / Spaces
                                                         </h4>
-                                                        <div className="flex flex-wrap gap-2.5 w-full pb-1">
+                                                        <div className="flex flex-wrap gap-2 w-full pb-1">
                                                                 {isAddingTag ? (
                                                                         <div className="flex items-center gap-2">
                                                                                 <input
                                                                                         autoFocus
                                                                                         type="text"
-                                                                                        className="w-32 px-3 py-1.5 rounded-full bg-gray-50 border border-[var(--accent-primary)] text-xs text-gray-900 focus:outline-none"
+                                                                                        className="w-32 px-4 py-2.5 rounded-full bg-gray-50 border border-[var(--accent-primary)] text-sm text-gray-900 focus:outline-none min-h-[44px]"
                                                                                         placeholder="tag-name"
                                                                                         value={newTagVal}
                                                                                         onChange={(e) => setNewTagVal(e.target.value)}
@@ -694,7 +766,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 ) : (
                                                                         <button
                                                                                 onClick={() => setIsAddingTag(true)}
-                                                                                className="px-4 py-1.5 rounded-full bg-[var(--accent-primary)] text-white text-xs font-bold hover:opacity-90 transition-opacity shadow-sm shadow-orange-200 flex items-center gap-1"
+                                                                                className="px-4 py-2.5 rounded-full bg-[var(--accent-primary)] text-white text-sm font-bold hover:opacity-90 active:opacity-80 transition-opacity shadow-sm shadow-orange-200 flex items-center gap-1 min-h-[44px]"
                                                                         >
                                                                                 + Add Tag
                                                                         </button>
@@ -709,7 +781,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                         router.push('/?' + params.toString());
                                                                                         onClose();
                                                                                 }}
-                                                                                className="group relative px-3 py-1.5 rounded-full bg-gray-50 text-gray-600 text-xs font-medium border border-gray-200 hover:bg-gray-100 hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer"
+                                                                                className="group relative px-4 py-2.5 rounded-full bg-gray-50 text-gray-600 text-sm font-medium border border-gray-200 hover:bg-gray-100 hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] active:bg-gray-200 transition-colors cursor-pointer min-h-[44px] flex items-center"
                                                                         >
                                                                                 {tag}
                                                                                 <button
@@ -717,9 +789,9 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                                 e.stopPropagation();
                                                                                                 handleRemoveTag(tag);
                                                                                         }}
-                                                                                        className="ml-1.5 text-gray-400 hover:text-red-500 hidden group-hover:inline-block transition-colors"
+                                                                                        className="ml-2 p-1 -mr-1 text-gray-400 hover:text-red-500 active:text-red-600 hidden group-hover:inline-flex transition-colors rounded-full hover:bg-red-50"
                                                                                 >
-                                                                                        <X className="w-3 h-3" />
+                                                                                        <X className="w-3.5 h-3.5" />
                                                                                 </button>
                                                                         </span>
                                                                 ))}
@@ -734,10 +806,10 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 </h4>
                                                                 <button
                                                                         onClick={() => setNotesExpanded(!notesExpanded)}
-                                                                        className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+                                                                        className="p-2.5 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                                         title={notesExpanded ? 'Collapse' : 'Expand for writing'}
                                                                 >
-                                                                        {notesExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                                        {notesExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                                                 </button>
                                                         </div>
                                                         <textarea
@@ -746,16 +818,16 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 value={note}
                                                                 onChange={(e) => handleNoteChange(e.target.value)}
                                                         />
-                                                        <div className="h-5 mt-1">
+                                                        <div className="h-6 mt-2">
                                                                 {isSavingNote && (
-                                                                        <span className="text-[10px] text-[var(--accent-primary)] font-medium inline-flex items-center gap-1 animate-pulse">
-                                                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                                        <span className="text-xs text-[var(--accent-primary)] font-medium inline-flex items-center gap-1.5 animate-pulse">
+                                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                                                 Saving...
                                                                         </span>
                                                                 )}
                                                                 {noteSaved && !isSavingNote && (
-                                                                        <span className="text-[10px] text-green-500 font-medium inline-flex items-center gap-1">
-                                                                                <Check className="w-3 h-3" />
+                                                                        <span className="text-xs text-green-500 font-medium inline-flex items-center gap-1.5">
+                                                                                <Check className="w-3.5 h-3.5" />
                                                                                 Saved
                                                                         </span>
                                                                 )}
@@ -763,8 +835,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                 </div>
                                         </div>
 
-                                        {/* Bottom Actions Bar */}
-                                        <div className="p-6 border-t border-gray-100 flex items-center justify-center gap-4 bg-white">
+                                        {/* Bottom Actions Bar - Sticky on mobile */}
+                                        <div className="p-4 md:p-6 border-t border-gray-100 flex items-center justify-center gap-3 md:gap-4 bg-white shrink-0">
                                                 {/* Add to Space Button */}
                                                 <div className="relative">
                                                         <button
