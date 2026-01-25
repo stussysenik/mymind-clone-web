@@ -48,6 +48,91 @@ interface PlatformConfig {
 }
 
 // =============================================================================
+// POPUP DISMISSAL CONFIGURATION
+// =============================================================================
+
+/**
+ * Platform-specific popup/modal selectors to dismiss before screenshot
+ * These handle login walls, cookie banners, and other obstructive overlays
+ */
+interface PopupDismissalConfig {
+	/** CSS selectors for close buttons or dismiss elements */
+	selectors: string[];
+	/** Selector to scroll into view after dismissal */
+	scrollToContent?: string;
+	/** Additional wait time after dismissal (ms) */
+	waitAfter?: number;
+}
+
+const POPUP_CONFIGS: Partial<Record<Platform, PopupDismissalConfig>> = {
+	twitter: {
+		selectors: [
+			// "Don't miss what's happening" login modal
+			'[data-testid="sheetDialog"] [aria-label="Close"]',
+			'[role="dialog"] [data-testid="app-bar-close"]',
+			// Bottom signup banner
+			'[data-testid="BottomBar"] button[aria-label="Close"]',
+			// Cookie consent
+			'[data-testid="cookie-policy-banner"] button',
+			// Generic close buttons in dialogs
+			'[role="dialog"] button[aria-label="Close"]',
+		],
+		scrollToContent: 'article[data-testid="tweet"]',
+		waitAfter: 500,
+	},
+	instagram: {
+		selectors: [
+			// "Sign up to see photos" modal close
+			'button[aria-label="Close"]',
+			'svg[aria-label="Close"]',
+			// "Not now" button on login prompts
+			'button:has-text("Not now")',
+			'button:has-text("Not Now")',
+			// Cookie consent
+			'button:has-text("Accept")',
+			'button:has-text("Accept All")',
+			// App download banner
+			'[role="dialog"] button[aria-label="Close"]',
+		],
+		scrollToContent: 'article[role="presentation"]',
+		waitAfter: 500,
+	},
+	reddit: {
+		selectors: [
+			// "Use the app" modal
+			'button[aria-label="Close"]',
+			// Cookie banner
+			'button:has-text("Accept all")',
+			// Login prompt
+			'button:has-text("Continue")',
+		],
+		scrollToContent: 'shreddit-post, .Post',
+		waitAfter: 300,
+	},
+	linkedin: {
+		selectors: [
+			// Login wall
+			'button[aria-label="Dismiss"]',
+			'button:has-text("Sign in")',
+			// Cookie banner
+			'button:has-text("Accept")',
+		],
+		scrollToContent: '.feed-shared-update-v2',
+		waitAfter: 500,
+	},
+	tiktok: {
+		selectors: [
+			// Cookie consent
+			'button:has-text("Accept all")',
+			// Login popup
+			'[data-e2e="modal-close-inner-button"]',
+		],
+		scrollToContent: 'div[data-e2e="browse-video"]',
+		waitAfter: 1000,
+	},
+};
+
+// =============================================================================
 // CONFIGURATION
 // =============================================================================
 
@@ -267,6 +352,64 @@ async function loadPlaywrightDependencies() {
 }
 
 // =============================================================================
+// POPUP DISMISSAL
+// =============================================================================
+
+/**
+ * Dismiss popups, modals, and overlays before taking screenshot
+ * Returns true if any popups were dismissed
+ */
+async function dismissPopups(
+	page: any,
+	platform: Platform
+): Promise<boolean> {
+	const config = POPUP_CONFIGS[platform];
+	if (!config) return false;
+
+	let dismissed = false;
+
+	for (const selector of config.selectors) {
+		try {
+			// Try to find and click the element
+			const element = page.locator(selector).first();
+
+			// Check if visible with short timeout
+			const isVisible = await element.isVisible({ timeout: 1000 }).catch(() => false);
+
+			if (isVisible) {
+				console.log(`[Screenshot] Dismissing popup: ${selector}`);
+				await element.click({ timeout: 2000 }).catch(() => {
+					// Click might fail if element disappears, that's okay
+				});
+				dismissed = true;
+
+				// Brief wait for animation
+				await page.waitForTimeout(300);
+			}
+		} catch {
+			// Selector not found or not visible, continue to next
+		}
+	}
+
+	// Scroll to content if specified and popups were dismissed
+	if (dismissed && config.scrollToContent) {
+		try {
+			const contentElement = page.locator(config.scrollToContent).first();
+			await contentElement.scrollIntoViewIfNeeded({ timeout: 2000 });
+		} catch {
+			// Content element not found, continue anyway
+		}
+	}
+
+	// Additional wait after dismissal
+	if (dismissed && config.waitAfter) {
+		await page.waitForTimeout(config.waitAfter);
+	}
+
+	return dismissed;
+}
+
+// =============================================================================
 // CORE SCREENSHOT FUNCTIONS
 // =============================================================================
 
@@ -325,6 +468,14 @@ export async function captureWithPlaywright(
 		// Wait for specified delay
 		if (config.delay) {
 			await page.waitForTimeout(config.delay);
+		}
+
+		// PHASE 4 FIX: Dismiss popups before screenshot
+		const popupsDismissed = await dismissPopups(page, platform);
+		if (popupsDismissed) {
+			console.log(`[Screenshot] Dismissed popups for ${platform}, waiting for content to stabilize`);
+			// Extra wait after popup dismissal for content to render
+			await page.waitForTimeout(500);
 		}
 
 		let screenshot: Buffer;
