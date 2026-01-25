@@ -10,9 +10,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Play, ExternalLink, Trash2, Archive } from 'lucide-react';
+import { Play, Trash2, Archive, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { CardActions, ExternalLinkButton } from './CardActions';
 
 // =============================================================================
 // TYPES
@@ -80,63 +82,36 @@ export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: Y
 					</div>
 				)}
 
-				{/* YouTube Badge */}
-				<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
-					<svg className="h-3.5 w-3.5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-					</svg>
-					<span className="text-xs font-medium text-white">YouTube</span>
-				</div>
+				{/* Processing Indicator */}
+				{card.metadata?.processing && (
+					<div className="absolute left-2 top-2 z-20">
+						<AnalyzingIndicator variant="dark" accentColor="#FF0000" size="sm" />
+					</div>
+				)}
 
-				{/* Always-visible External Link */}
+				{/* YouTube Badge - only show when not processing */}
+				{!card.metadata?.processing && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<svg className="h-3.5 w-3.5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+						</svg>
+						<span className="text-xs font-medium text-white">YouTube</span>
+					</div>
+				)}
+
+				{/* Always-visible External Link - bottom right for consistency */}
 				{card.url && (
-					<a
-						href={card.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						onClick={(e) => e.stopPropagation()}
-						className="absolute bottom-2 right-12 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
-						aria-label="Open original"
-					>
-						<ExternalLink className="h-3.5 w-3.5" />
-					</a>
+					<ExternalLinkButton url={card.url} variant="dark" position="bottom-right" />
 				)}
 
 				{/* Hover Actions */}
-				{isHovered && (
-					<div className="absolute right-2 top-2 flex gap-1 z-20">
-						{onArchive && (
-							<button
-								onClick={(e) => { e.stopPropagation(); onArchive(); }}
-								className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
-								aria-label="Archive card"
-							>
-								<Archive className="h-4 w-4 text-gray-600 hover:text-amber-500" />
-							</button>
-						)}
-						{onDelete && (
-							<button
-								onClick={(e) => { e.stopPropagation(); onDelete(); }}
-								className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
-								aria-label="Delete card"
-							>
-								<Trash2 className="h-4 w-4 text-gray-600 hover:text-red-500" />
-							</button>
-						)}
-						{onRestore && (
-							<button
-								onClick={(e) => { e.stopPropagation(); onRestore(); }}
-								className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
-								aria-label="Restore card"
-							>
-								<svg className="h-4 w-4 text-gray-600 hover:text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-									<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-									<path d="M3 3v5h5" />
-								</svg>
-							</button>
-						)}
-					</div>
-				)}
+				<CardActions
+					isHovered={isHovered}
+					onArchive={onArchive}
+					onDelete={onDelete}
+					onRestore={onRestore}
+					variant="dark"
+				/>
 			</div>
 
 			{/* Content */}
@@ -160,6 +135,12 @@ export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: Y
 				{/* Added Date */}
 				<div className="mt-1 text-xs text-[var(--foreground-muted)]">
 					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+				</div>
+
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5 mt-1">
+					<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+					<span className="text-xs text-[var(--accent-primary)] truncate">youtube.com</span>
 				</div>
 
 				{/* Tags */}

@@ -10,10 +10,12 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Star, Film, ExternalLink } from 'lucide-react';
+import { Star, Film, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { detectPlatform } from '@/lib/platforms';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { CardActions, ExternalLinkButton } from './CardActions';
 
 // =============================================================================
 // TYPES
@@ -45,6 +47,12 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 	const year = card.metadata.year;
 	const director = card.metadata.director;
 
+	// Extract domain for display
+	const domain = isLetterboxd ? 'letterboxd.com' : isImdb ? 'imdb.com' : null;
+
+	// Extract dominant color from IMDB color extraction
+	const dominantColor = card.metadata?.colors?.[0];
+
 	// Platform-specific colors
 	const borderColor = isLetterboxd ? '#00E054' : '#F5C518';
 	const accentColor = isLetterboxd ? '#00E054' : '#F5C518';
@@ -52,11 +60,24 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 	return (
 		<article
 			className={`relative overflow-hidden rounded-lg bg-white card-shadow ${onClick ? 'cursor-pointer' : ''}`}
-			style={{ borderLeft: `3px solid ${borderColor}` }}
+			style={{
+				borderLeft: `3px solid ${borderColor}`,
+				// Apply subtle gradient from extracted dominant color (IMDB only)
+				background: dominantColor
+					? `linear-gradient(135deg, ${dominantColor}15, transparent 60%)`
+					: undefined
+			}}
 			onClick={onClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
+			{/* Processing Indicator */}
+			{card.metadata?.processing && (
+				<div className="absolute left-2 top-2 z-30">
+					<AnalyzingIndicator variant="dark" accentColor={accentColor} size="sm" />
+				</div>
+			)}
+
 			{/* Poster */}
 			<div className="relative aspect-[2/3] w-full overflow-hidden bg-gray-900">
 				{card.imageUrl && !imageError ? (
@@ -109,19 +130,19 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 				{/* Gradient Overlay */}
 				<div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
 
-				{/* Always-visible External Link */}
+				{/* Always-visible External Link - bottom right for consistency */}
 				{card.url && (
-					<a
-						href={card.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						onClick={(e) => e.stopPropagation()}
-						className="absolute bottom-10 right-2 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
-						aria-label="Open original"
-					>
-						<ExternalLink className="h-3.5 w-3.5" />
-					</a>
+					<ExternalLinkButton url={card.url} variant="dark" position="bottom-right" />
 				)}
+
+				{/* Hover Actions */}
+				<CardActions
+					isHovered={isHovered}
+					onArchive={onArchive}
+					onDelete={onDelete}
+					onRestore={onRestore}
+					variant="dark"
+				/>
 			</div>
 
 			{/* Content */}
@@ -142,6 +163,14 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 				<div className="mt-1 text-xs text-[var(--foreground-muted)]">
 					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 				</div>
+
+				{/* Domain Link */}
+				{domain && (
+					<div className="flex items-center gap-1.5 mt-1">
+						<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+						<span className="text-xs truncate" style={{ color: accentColor }}>{domain}</span>
+					</div>
+				)}
 
 				{/* Summary */}
 				{card.metadata.summary && (

@@ -11,9 +11,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Star, ExternalLink, Trash2, Film } from 'lucide-react';
+import { Star, Film, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { CardActions, ExternalLinkButton } from './CardActions';
 
 interface LetterboxdCardProps {
 	card: Card;
@@ -23,7 +25,7 @@ interface LetterboxdCardProps {
 	onClick?: () => void;
 }
 
-export function LetterboxdCard({ card, onDelete, onClick }: LetterboxdCardProps) {
+export function LetterboxdCard({ card, onDelete, onArchive, onRestore, onClick }: LetterboxdCardProps) {
 	const [imageError, setImageError] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
 
@@ -38,6 +40,13 @@ export function LetterboxdCard({ card, onDelete, onClick }: LetterboxdCardProps)
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
+			{/* Processing Indicator */}
+			{card.metadata?.processing && (
+				<div className="absolute left-2 top-2 z-30">
+					<AnalyzingIndicator variant="dark" accentColor="#00E054" size="sm" />
+				</div>
+			)}
+
 			{/* Poster Image */}
 			<div className="relative aspect-[2/3] w-full overflow-hidden bg-[#2C3440]">
 				{card.imageUrl && !imageError ? (
@@ -74,34 +83,19 @@ export function LetterboxdCard({ card, onDelete, onClick }: LetterboxdCardProps)
 					</div>
 				)}
 
-				{/* Always-visible External Link */}
+				{/* Always-visible External Link - bottom right for consistency */}
 				{card.url && (
-					<a
-						href={card.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						onClick={(e) => e.stopPropagation()}
-						className="absolute bottom-10 right-2 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
-						aria-label="Open original"
-					>
-						<ExternalLink className="h-3.5 w-3.5" />
-					</a>
+					<ExternalLinkButton url={card.url} variant="dark" position="bottom-right" />
 				)}
 
 				{/* Hover Actions */}
-				{isHovered && (
-					<div className="absolute right-2 top-2 flex gap-1 z-20">
-						{onDelete && (
-							<button
-								onClick={(e) => { e.stopPropagation(); onDelete(); }}
-								className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
-								aria-label="Delete card"
-							>
-								<Trash2 className="h-4 w-4 text-gray-600 hover:text-red-500" />
-							</button>
-						)}
-					</div>
-				)}
+				<CardActions
+					isHovered={isHovered}
+					onArchive={onArchive}
+					onDelete={onDelete}
+					onRestore={onRestore}
+					variant="dark"
+				/>
 			</div>
 
 			{/* Content */}
@@ -121,6 +115,11 @@ export function LetterboxdCard({ card, onDelete, onClick }: LetterboxdCardProps)
 				{/* Added Date */}
 				<div className="mt-1 text-xs text-[#9AB]/70">
 					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+				</div>
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5 mt-1">
+					<Globe className="w-3 h-3 text-[#9AB]/70" />
+					<span className="text-xs text-[#00E054] truncate">letterboxd.com</span>
 				</div>
 				{/* Tags */}
 				{card.tags && card.tags.length > 0 && (

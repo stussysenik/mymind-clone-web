@@ -10,9 +10,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { ArrowBigUp, MessageSquare } from 'lucide-react';
+import { ArrowBigUp, MessageSquare, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { CardActions, ExternalLinkButton } from './CardActions';
 
 // =============================================================================
 // TYPES
@@ -48,6 +50,13 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
+			{/* Processing Indicator */}
+			{card.metadata?.processing && (
+				<div className="absolute right-2 top-2 z-20">
+					<AnalyzingIndicator variant="light" accentColor="#FF4500" size="sm" />
+				</div>
+			)}
+
 			{/* Header */}
 			<div className="flex items-center gap-2 p-3 pb-2">
 				{/* Reddit Logo */}
@@ -118,6 +127,11 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 				<div className="text-xs text-[var(--foreground-muted)]">
 					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 				</div>
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5">
+					<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+					<span className="text-xs text-[#FF4500] truncate">reddit.com</span>
+				</div>
 			</div>
 
 			{/* Tags */}
@@ -125,22 +139,18 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 				<TagDisplay tags={card.tags} className="px-3 pb-3" />
 			)}
 
+			{/* Hover Actions */}
+			<CardActions
+				isHovered={isHovered}
+				onArchive={onArchive}
+				onDelete={onDelete}
+				onRestore={onRestore}
+				variant="light"
+			/>
+
 			{/* Always-visible External Link */}
 			{card.url && (
-				<a
-					href={card.url}
-					target="_blank"
-					rel="noopener noreferrer"
-					onClick={(e) => e.stopPropagation()}
-					className="absolute bottom-2 right-2 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
-					aria-label="Open original"
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-						<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-						<polyline points="15 3 21 3 21 9" />
-						<line x1="10" x2="21" y1="14" y2="3" />
-					</svg>
-				</a>
+				<ExternalLinkButton url={card.url} variant="light" position="bottom-right" />
 			)}
 		</article>
 	);

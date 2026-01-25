@@ -11,9 +11,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { ExternalLink, Trash2, Package, Star } from 'lucide-react';
+import { Package, Star, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { CardActions, ExternalLinkButton } from './CardActions';
 
 interface AmazonCardProps {
 	card: Card;
@@ -23,7 +25,7 @@ interface AmazonCardProps {
 	onClick?: () => void;
 }
 
-export function AmazonCard({ card, onDelete, onClick }: AmazonCardProps) {
+export function AmazonCard({ card, onDelete, onArchive, onRestore, onClick }: AmazonCardProps) {
 	const [imageError, setImageError] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
 
@@ -37,6 +39,13 @@ export function AmazonCard({ card, onDelete, onClick }: AmazonCardProps) {
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
+			{/* Processing Indicator */}
+			{card.metadata?.processing && (
+				<div className="absolute right-2 top-2 z-30">
+					<AnalyzingIndicator variant="light" accentColor="#FF9900" size="sm" />
+				</div>
+			)}
+
 			{/* Product Image */}
 			<div className="relative aspect-square w-full overflow-hidden bg-gray-50">
 				{card.imageUrl && !imageError ? (
@@ -72,32 +81,17 @@ export function AmazonCard({ card, onDelete, onClick }: AmazonCardProps) {
 
 				{/* Always-visible External Link */}
 				{card.url && (
-					<a
-						href={card.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						onClick={(e) => e.stopPropagation()}
-						className="absolute bottom-10 left-2 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
-						aria-label="Open original"
-					>
-						<ExternalLink className="h-3.5 w-3.5" />
-					</a>
+					<ExternalLinkButton url={card.url} variant="light" position="bottom-right" />
 				)}
 
 				{/* Hover Actions */}
-				{isHovered && (
-					<div className="absolute right-2 top-2 flex gap-1 z-20">
-						{onDelete && (
-							<button
-								onClick={(e) => { e.stopPropagation(); onDelete(); }}
-								className="p-1.5 rounded-full bg-white/90 hover:bg-white shadow-sm transition-colors"
-								aria-label="Delete card"
-							>
-								<Trash2 className="h-4 w-4 text-gray-600 hover:text-red-500" />
-							</button>
-						)}
-					</div>
-				)}
+				<CardActions
+					isHovered={isHovered}
+					onArchive={onArchive}
+					onDelete={onDelete}
+					onRestore={onRestore}
+					variant="light"
+				/>
 			</div>
 
 			{/* Content */}
@@ -114,6 +108,11 @@ export function AmazonCard({ card, onDelete, onClick }: AmazonCardProps) {
 				{/* Added Date */}
 				<div className="mt-1 text-xs text-[var(--foreground-muted)]">
 					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+				</div>
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5 mt-1">
+					<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+					<span className="text-xs text-[#FF9900] truncate">amazon.com</span>
 				</div>
 				{/* Tags */}
 				{card.tags && card.tags.length > 0 && (

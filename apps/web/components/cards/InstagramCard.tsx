@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { Play, Instagram } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
+import { AnalyzingIndicator } from '../AnalyzingIndicator';
 
 // =============================================================================
 // TYPES
@@ -64,11 +65,20 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 					</div>
 				)}
 
-				{/* Instagram Badge */}
-				<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 backdrop-blur-sm">
-					<Instagram className="h-3.5 w-3.5 text-white" />
-					<span className="text-xs font-medium text-white">Instagram</span>
-				</div>
+				{/* Processing Indicator */}
+				{card.metadata?.processing && (
+					<div className="absolute left-2 top-2 z-20">
+						<AnalyzingIndicator variant="glass" accentColor="#E4405F" size="sm" />
+					</div>
+				)}
+
+				{/* Instagram Badge - only show when not processing */}
+				{!card.metadata?.processing && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 backdrop-blur-sm">
+						<Instagram className="h-3.5 w-3.5 text-white" />
+						<span className="text-xs font-medium text-white">Instagram</span>
+					</div>
+				)}
 
 				{/* Carousel Indicator Badge */}
 				{card.metadata.images && card.metadata.images.length > 1 && (
