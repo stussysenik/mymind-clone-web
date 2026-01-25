@@ -263,9 +263,28 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS: Allow all origins in production (service-to-service calls)
+# The service validates requests via API keys, not CORS
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+
+def is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed (supports wildcards for Vercel)."""
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGINS:
+        return True
+    # Allow all Vercel preview deployments
+    if origin.endswith(".vercel.app"):
+        return True
+    return False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -306,4 +325,5 @@ async def generate_summary(req: SummaryRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "7860"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
