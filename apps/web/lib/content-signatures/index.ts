@@ -152,6 +152,26 @@ export const LETTERBOXD_SIGNATURE: ContentSignature = {
   },
 };
 
+export const IMDB_SIGNATURE: ContentSignature = {
+  platform: 'imdb',
+  requiredFields: ['title'],
+  title: {
+    maxLength: 100,
+    authorFormat: null, // No author in movie titles
+    authorSeparator: undefined,
+  },
+  display: {
+    authorPosition: 'metadata', // Director in metadata
+    primaryVisual: 'image', // Movie/TV poster
+    showPlatformBadge: true,
+  },
+  extraction: {
+    extractImages: true,
+    supportsCarousel: false,
+    extractEmbeddedMedia: false,
+  },
+};
+
 export const REDDIT_SIGNATURE: ContentSignature = {
   platform: 'reddit',
   requiredFields: ['title', 'content'],
@@ -224,6 +244,7 @@ export const CONTENT_SIGNATURES: Partial<Record<Platform, ContentSignature>> = {
   twitter: TWITTER_SIGNATURE,
   youtube: YOUTUBE_SIGNATURE,
   letterboxd: LETTERBOXD_SIGNATURE,
+  imdb: IMDB_SIGNATURE,
   reddit: REDDIT_SIGNATURE,
   github: GITHUB_SIGNATURE,
   unknown: GENERIC_SIGNATURE,
@@ -247,6 +268,7 @@ export function getContentSignatureFromUrl(url: string): ContentSignature {
     if (hostname.includes('twitter.com') || hostname.includes('x.com')) return TWITTER_SIGNATURE;
     if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) return YOUTUBE_SIGNATURE;
     if (hostname.includes('letterboxd.com')) return LETTERBOXD_SIGNATURE;
+    if (hostname.includes('imdb.com')) return IMDB_SIGNATURE;
     if (hostname.includes('reddit.com')) return REDDIT_SIGNATURE;
     if (hostname.includes('github.com')) return GITHUB_SIGNATURE;
 

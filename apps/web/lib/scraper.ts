@@ -627,6 +627,190 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 
                 // =============================================================
+                // IMDB SPECIAL HANDLING (JSON-LD for movie metadata)
+                // =============================================================
+                if (domain.includes('imdb.com')) {
+                        try {
+                                console.log('[Scraper] IMDB: Extracting movie data');
+
+                                const imdbRes = await fetch(url, {
+                                        headers: {
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                                'Accept-Language': 'en-US,en;q=0.9',
+                                        },
+                                });
+
+                                if (imdbRes.ok) {
+                                        const html = await imdbRes.text();
+                                        const $ = cheerio.load(html);
+
+                                        // Extract JSON-LD for structured movie data
+                                        let movieData: any = null;
+                                        $('script[type="application/ld+json"]').each((_, el) => {
+                                                try {
+                                                        const json = JSON.parse($(el).html() || '');
+                                                        if (json['@type'] === 'Movie' || json['@type'] === 'TVSeries') {
+                                                                movieData = json;
+                                                        }
+                                                } catch {}
+                                        });
+
+                                        // Fallback to og: tags if JSON-LD not found
+                                        const ogTitle = $('meta[property="og:title"]').attr('content');
+                                        const ogImage = $('meta[property="og:image"]').attr('content');
+                                        const ogDescription = $('meta[property="og:description"]').attr('content');
+
+                                        if (movieData) {
+                                                // Extract from JSON-LD
+                                                const title = movieData.name || ogTitle || 'Untitled';
+                                                const year = movieData.datePublished?.slice(0, 4);
+                                                const rating = movieData.aggregateRating?.ratingValue;
+                                                const director = Array.isArray(movieData.director)
+                                                        ? movieData.director[0]?.name
+                                                        : movieData.director?.name;
+                                                const genre = Array.isArray(movieData.genre)
+                                                        ? movieData.genre.slice(0, 3)
+                                                        : movieData.genre ? [movieData.genre] : [];
+                                                const description = movieData.description || ogDescription || '';
+
+                                                // Get poster image - prefer og:image (usually higher res)
+                                                let imageUrl = ogImage || movieData.image || null;
+
+                                                console.log(`[Scraper] IMDB: ${title} (${year}) - Rating: ${rating}`);
+
+                                                return {
+                                                        title: year ? `${title} (${year})` : title,
+                                                        description,
+                                                        imageUrl,
+                                                        content: description,
+                                                        author: director,
+                                                        domain: 'imdb.com',
+                                                        url,
+                                                        // Additional metadata for card display
+                                                        hashtags: genre.map((g: string) => g.toLowerCase().replace(/\s+/g, '-')),
+                                                };
+                                        }
+
+                                        // Fallback: use OG tags
+                                        if (ogTitle) {
+                                                console.log('[Scraper] IMDB: Using OG tags fallback');
+                                                return {
+                                                        title: ogTitle,
+                                                        description: ogDescription || '',
+                                                        imageUrl: ogImage || null,
+                                                        content: ogDescription || '',
+                                                        domain: 'imdb.com',
+                                                        url,
+                                                };
+                                        }
+                                }
+                                console.warn('[Scraper] IMDB fetch failed, falling back to generic');
+                        } catch (imdbErr) {
+                                console.warn('[Scraper] IMDB error:', imdbErr);
+                        }
+                }
+
+
+                // =============================================================
+                // LETTERBOXD SPECIAL HANDLING (for film metadata)
+                // =============================================================
+                if (domain.includes('letterboxd.com')) {
+                        try {
+                                console.log('[Scraper] Letterboxd: Extracting film data');
+
+                                const letterboxdRes = await fetch(url, {
+                                        headers: {
+                                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                                'Accept-Language': 'en-US,en;q=0.9',
+                                        },
+                                });
+
+                                if (letterboxdRes.ok) {
+                                        const html = await letterboxdRes.text();
+                                        const $ = cheerio.load(html);
+
+                                        // Extract JSON-LD
+                                        let movieData: any = null;
+                                        $('script[type="application/ld+json"]').each((_, el) => {
+                                                try {
+                                                        const json = JSON.parse($(el).html() || '');
+                                                        if (json['@type'] === 'Movie') {
+                                                                movieData = json;
+                                                        }
+                                                } catch {}
+                                        });
+
+                                        // Fallback to meta tags
+                                        const ogTitle = $('meta[property="og:title"]').attr('content');
+                                        const ogImage = $('meta[property="og:image"]').attr('content');
+                                        const ogDescription = $('meta[property="og:description"]').attr('content');
+
+                                        // Letterboxd-specific selectors
+                                        const filmTitle = $('#featured-film-header h1')?.text()?.trim() ||
+                                                $('h1.headline-1')?.text()?.trim();
+                                        const filmYear = $('small.number a')?.text()?.trim() ||
+                                                $('[itemprop="datePublished"]')?.text()?.trim();
+                                        const directorName = $('[itemprop="director"] [itemprop="name"]')?.text()?.trim() ||
+                                                $('a[href*="/director/"]')?.first()?.text()?.trim();
+
+                                        // Extract poster - Letterboxd uses different image sources
+                                        let posterUrl = ogImage;
+                                        const filmPoster = $('div.film-poster img').attr('src') ||
+                                                $('img.image').attr('src');
+                                        if (filmPoster && filmPoster.includes('ltrbxd.com')) {
+                                                // Upgrade to larger size if possible
+                                                posterUrl = filmPoster.replace(/-0-.*\.jpg/, '-0-1000-0-1500-crop.jpg');
+                                        }
+
+                                        if (movieData) {
+                                                const title = movieData.name || filmTitle || ogTitle || 'Untitled Film';
+                                                const year = movieData.datePublished?.slice(0, 4) || filmYear;
+                                                const director = Array.isArray(movieData.director)
+                                                        ? movieData.director[0]?.name
+                                                        : movieData.director?.name || directorName;
+                                                const rating = movieData.aggregateRating?.ratingValue;
+                                                const genre = Array.isArray(movieData.genre)
+                                                        ? movieData.genre.slice(0, 3)
+                                                        : movieData.genre ? [movieData.genre] : [];
+
+                                                console.log(`[Scraper] Letterboxd: ${title} (${year}) - Dir: ${director}`);
+
+                                                return {
+                                                        title: year ? `${title} (${year})` : title,
+                                                        description: movieData.description || ogDescription || '',
+                                                        imageUrl: posterUrl || movieData.image || null,
+                                                        content: movieData.description || ogDescription || '',
+                                                        author: director,
+                                                        domain: 'letterboxd.com',
+                                                        url,
+                                                        hashtags: genre.map((g: string) => g.toLowerCase().replace(/\s+/g, '-')),
+                                                };
+                                        }
+
+                                        // Fallback: Combine scraped data
+                                        const title = filmTitle || ogTitle || 'Letterboxd Film';
+                                        console.log(`[Scraper] Letterboxd fallback: ${title}`);
+
+                                        return {
+                                                title: filmYear ? `${title} (${filmYear})` : title,
+                                                description: ogDescription || '',
+                                                imageUrl: posterUrl || null,
+                                                content: ogDescription || '',
+                                                author: directorName,
+                                                domain: 'letterboxd.com',
+                                                url,
+                                        };
+                                }
+                                console.warn('[Scraper] Letterboxd fetch failed, falling back to generic');
+                        } catch (letterboxdErr) {
+                                console.warn('[Scraper] Letterboxd error:', letterboxdErr);
+                        }
+                }
+
+
+                // =============================================================
                 // GENERAL HTML SCRAPING (with consent cookies for YouTube fallback)
                 // =============================================================
                 const headers: Record<string, string> = {
