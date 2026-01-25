@@ -4,6 +4,11 @@
  * Routes to platform-specific card renderers based on URL.
  * Falls back to generic card for unknown platforms.
  *
+ * Enhanced with:
+ * - Physics-based hover animations
+ * - Touch target compliant action buttons
+ * - Staggered fade-up entrance animation
+ *
  * @fileoverview Smart card router component
  */
 
@@ -13,8 +18,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Loader2, Twitter, Volume2, MessageSquare, Archive } from 'lucide-react';
+import { TagDisplay } from './TagDisplay';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
+import { decodeHtmlEntities } from '@/lib/text-utils';
 
 // Platform-specific cards
 import { TwitterCard } from './cards/TwitterCard';
@@ -177,10 +184,10 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                 <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 min-h-[120px]">
                                         <h4 className="text-xs font-semibold text-orange-600 mb-2 flex items-center gap-1.5 uppercase tracking-wide">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                                                {card.title || 'Add a New Note'}
+                                                {decodeHtmlEntities(card.title || 'Add a New Note')}
                                         </h4>
                                         <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-6">
-                                                {card.content?.slice(0, 200) || 'Start typing here...'}
+                                                {decodeHtmlEntities(card.content?.slice(0, 200) || 'Start typing here...')}
                                         </p>
                                 </div>
                         );
@@ -213,13 +220,17 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                         data-card-id={card.id}
                         onClick={onClick}
                         className={`
-        group relative flex flex-col overflow-hidden rounded-lg
-        bg-white card-shadow
-        transition-all duration-200
-        hover:card-shadow-hover
-        ${onClick ? 'cursor-pointer' : ''}
-      `}
-                        style={{ borderLeft: `3px solid ${platformInfo.color}` }}
+                                group relative flex flex-col overflow-hidden rounded-lg
+                                bg-[var(--card-bg)] card-shadow
+                                transition-all duration-200
+                                hover:card-shadow-hover hover:-translate-y-1
+                                physics-press animate-fade-up
+                                ${onClick ? 'cursor-pointer' : ''}
+                        `}
+                        style={{
+                                borderLeft: `3px solid ${platformInfo.color}`,
+                                transitionTimingFunction: 'var(--ease-snappy)'
+                        }}
                         onMouseEnter={() => setIsHovered(true)}
                         onMouseLeave={() => setIsHovered(false)}
                 >
@@ -231,14 +242,14 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                 {/* Title */}
                                 {card.title && card.type !== 'note' && (
                                         <h3 className="text-sm font-medium text-[var(--foreground)] line-clamp-2 leading-snug">
-                                                {card.title}
+                                                {decodeHtmlEntities(card.title)}
                                         </h3>
                                 )}
 
                                 {/* Summary */}
                                 {card.metadata.summary && card.type !== 'note' && (
                                         <p className="text-xs text-[var(--foreground-muted)] line-clamp-2">
-                                                {card.metadata.summary}
+                                                {decodeHtmlEntities(card.metadata.summary)}
                                         </p>
                                 )}
 
@@ -261,29 +272,7 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
 
                                 {/* Tags */}
                                 {card.tags.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 pt-1">
-                                                {card.tags.slice(0, 4).map((tag, index) => {
-                                                        const colors = ['var(--tag-green)', 'var(--tag-blue)', 'var(--tag-purple)', 'var(--tag-orange)'];
-                                                        const color = colors[index % colors.length];
-
-                                                        return (
-                                                                <span
-                                                                        key={tag}
-                                                                        onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                router.push(`/?q=%23${tag}`);
-                                                                        }}
-                                                                        className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)] hover:text-[var(--accent-primary)] hover:underline cursor-pointer transition-colors"
-                                                                >
-                                                                        <span
-                                                                                className="w-1.5 h-1.5 rounded-full"
-                                                                                style={{ backgroundColor: color }}
-                                                                        />
-                                                                        {tag}
-                                                                </span>
-                                                        );
-                                                })}
-                                        </div>
+                                        <TagDisplay tags={card.tags} className="pt-2 border-t border-[var(--border)]" />
                                 )}
                         </div>
 
@@ -295,30 +284,39 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                 </div>
                         )}
 
-                        {/* Hover Actions */}
+                        {/* Always-visible External Link - bottom right, touch target compliant */}
+                        {card.url && (
+                                <a
+                                        href={card.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="absolute bottom-2 right-2 p-2 md:p-1.5 rounded-full
+                                                   bg-[var(--card-bg)]/90 shadow-sm text-[var(--foreground-muted)]
+                                                   hover:text-[var(--foreground)] transition-colors z-10
+                                                   physics-press touch-target"
+                                        aria-label="Open original"
+                                >
+                                        <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                                </a>
+                        )}
+
+                        {/* Hover Actions - touch target compliant */}
                         {isHovered && (
-                                <div className="absolute right-2 top-2 flex gap-1">
-                                        {card.url && (
-                                                <a
-                                                        href={card.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-gray-900 transition-colors"
-                                                        aria-label="Open original link"
-                                                >
-                                                        <ExternalLink className="h-3.5 w-3.5" />
-                                                </a>
-                                        )}
+                                <div className="absolute right-2 top-2 flex gap-1.5 animate-scale-in">
                                         {onArchive && (
                                                 <button
                                                         onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 onArchive();
                                                         }}
-                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-amber-600 transition-colors"
+                                                        className="p-2.5 md:p-2 rounded-lg bg-[var(--card-bg)]/90 shadow-sm
+                                                                   text-[var(--foreground-muted)] hover:text-amber-600
+                                                                   hover:bg-amber-50 dark:hover:bg-amber-900/20
+                                                                   transition-colors physics-press touch-target"
                                                         aria-label="Archive card"
                                                 >
-                                                        <Archive className="h-3.5 w-3.5" />
+                                                        <Archive className="h-4 w-4" />
                                                 </button>
                                         )}
                                         {onDelete && (
@@ -327,10 +325,13 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                                                 e.stopPropagation();
                                                                 onDelete();
                                                         }}
-                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-red-600 transition-colors"
+                                                        className="p-2.5 md:p-2 rounded-lg bg-[var(--card-bg)]/90 shadow-sm
+                                                                   text-[var(--foreground-muted)] hover:text-red-600
+                                                                   hover:bg-red-50 dark:hover:bg-red-900/20
+                                                                   transition-colors physics-press touch-target"
                                                         aria-label="Delete card"
                                                 >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="h-4 w-4" />
                                                 </button>
                                         )}
                                         {onRestore && (
@@ -339,10 +340,13 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                                                 e.stopPropagation();
                                                                 onRestore();
                                                         }}
-                                                        className="p-1.5 rounded-md bg-white/90 shadow-sm text-gray-600 hover:text-green-600 transition-colors"
+                                                        className="p-2.5 md:p-2 rounded-lg bg-[var(--card-bg)]/90 shadow-sm
+                                                                   text-[var(--foreground-muted)] hover:text-green-600
+                                                                   hover:bg-green-50 dark:hover:bg-green-900/20
+                                                                   transition-colors physics-press touch-target"
                                                         aria-label="Restore card"
                                                 >
-                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                        <RotateCcw className="h-4 w-4" />
                                                 </button>
                                         )}
                                 </div>
