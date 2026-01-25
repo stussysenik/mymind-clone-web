@@ -19,6 +19,8 @@ import {
 	DEFAULT_TOKENS,
 	PRESET_FONTS,
 	PRESET_ACCENTS,
+	LIGHT_THEME_DEFAULTS,
+	DARK_THEME_DEFAULTS,
 	loadDesignTokens,
 	saveDesignTokens,
 	applyDesignTokens,
@@ -32,10 +34,23 @@ interface SettingsModalProps {
 
 type TabId = 'theme' | 'colors' | 'typography';
 
+// Preset background colors
+const PRESET_BACKGROUNDS = [
+	{ name: 'Warm Cream', value: '#F7F6F3' },
+	{ name: 'Cool White', value: '#FAFAFA' },
+	{ name: 'Pure White', value: '#FFFFFF' },
+	{ name: 'Soft Gray', value: '#F3F4F6' },
+	{ name: 'Warm Sand', value: '#FAF7F2' },
+	{ name: 'Soft Pink', value: '#FDF2F8' },
+	{ name: 'Soft Blue', value: '#F0F9FF' },
+	{ name: 'Soft Green', value: '#F0FDF4' },
+];
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 	const [activeTab, setActiveTab] = useState<TabId>('theme');
 	const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
 	const [showColorPicker, setShowColorPicker] = useState(false);
+	const [showBgColorPicker, setShowBgColorPicker] = useState(false);
 	const [hasChanges, setHasChanges] = useState(false);
 
 	// Load tokens on mount
@@ -66,6 +81,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 	const handleAccentChange = useCallback((color: string) => {
 		const hoverColor = darkenColor(color, 15);
 		updateTokens({ accentPrimary: color, accentHover: hoverColor });
+	}, [updateTokens]);
+
+	// Handle background color change
+	const handleBackgroundChange = useCallback((color: string | null) => {
+		updateTokens({ background: color });
 	}, [updateTokens]);
 
 	// Handle font changes
@@ -266,6 +286,72 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 												>
 													Done
 												</button>
+											</div>
+										)}
+									</div>
+								</div>
+
+								{/* Background Color */}
+								<div>
+									<h3 className="text-xs font-bold uppercase tracking-wider text-[var(--foreground-muted)] mb-4">
+										Background Color
+									</h3>
+
+									{/* Preset Backgrounds */}
+									<div className="flex flex-wrap gap-2 mb-4">
+										{PRESET_BACKGROUNDS.map(preset => (
+											<button
+												key={preset.name}
+												onClick={() => handleBackgroundChange(preset.value)}
+												className={`w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 ${
+													tokens.background?.toLowerCase() === preset.value.toLowerCase()
+														? 'border-[var(--foreground)] ring-2 ring-offset-2 ring-[var(--accent-primary)]'
+														: 'border-[var(--border)]'
+												}`}
+												style={{ backgroundColor: preset.value }}
+												title={preset.name}
+											/>
+										))}
+									</div>
+
+									{/* Custom Background Picker */}
+									<div className="relative">
+										<button
+											onClick={() => setShowBgColorPicker(!showBgColorPicker)}
+											className="flex items-center gap-3 w-full p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-hover)] transition-colors"
+										>
+											<div
+												className="w-8 h-8 rounded-lg border border-[var(--border)]"
+												style={{ backgroundColor: tokens.background || LIGHT_THEME_DEFAULTS.background }}
+											/>
+											<span className="text-sm font-mono text-[var(--foreground)]">
+												{(tokens.background || LIGHT_THEME_DEFAULTS.background).toUpperCase()}
+											</span>
+											<span className="text-xs text-[var(--foreground-muted)] ml-auto">
+												Custom
+											</span>
+										</button>
+
+										{showBgColorPicker && (
+											<div className="absolute top-full left-0 mt-2 p-4 bg-[var(--card-bg)] rounded-xl shadow-xl border border-[var(--border)] z-10">
+												<HexColorPicker
+													color={tokens.background || LIGHT_THEME_DEFAULTS.background}
+													onChange={handleBackgroundChange}
+												/>
+												<div className="flex gap-2 mt-3">
+													<button
+														onClick={() => handleBackgroundChange(null)}
+														className="flex-1 py-2 text-sm font-medium border border-[var(--border)] rounded-lg hover:bg-[var(--background-secondary)] transition-colors"
+													>
+														Reset
+													</button>
+													<button
+														onClick={() => setShowBgColorPicker(false)}
+														className="flex-1 py-2 text-sm font-medium bg-[var(--accent-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
+													>
+														Done
+													</button>
+												</div>
 											</div>
 										)}
 									</div>

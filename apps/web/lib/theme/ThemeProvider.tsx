@@ -31,7 +31,7 @@ interface ThemeContextValue {
 // =============================================================================
 
 const STORAGE_KEY = 'mymind-theme';
-const DEFAULT_THEME: Theme = 'system';
+const DEFAULT_THEME: Theme = 'light';
 
 // =============================================================================
 // CONTEXT

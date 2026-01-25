@@ -72,7 +72,7 @@ export const PRESET_ACCENTS = [
 // =============================================================================
 
 export const DEFAULT_TOKENS: DesignTokens = {
-  mode: 'system',
+  mode: 'light',
   accentPrimary: '#FF6B4A',
   accentHover: '#E35332',
   background: null,

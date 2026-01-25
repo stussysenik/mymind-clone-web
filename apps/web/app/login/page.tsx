@@ -12,6 +12,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function LoginPage() {
         const [email, setEmail] = useState('');
@@ -66,7 +67,12 @@ export default function LoginPage() {
         };
 
         return (
-                <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4">
+                <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4 relative">
+                        {/* Theme Toggle - Top Right */}
+                        <div className="absolute top-4 right-4">
+                                <ThemeToggle />
+                        </div>
+
                         <div className="w-full max-w-md">
                                 {/* Header */}
                                 <div className="text-center mb-8">
