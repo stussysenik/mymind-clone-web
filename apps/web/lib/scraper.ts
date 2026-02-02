@@ -46,6 +46,12 @@ export interface ScrapedContent {
         images?: string[]; // For multi-image posts (Twitter, Instagram carousel)
         content: string; // The main text content
         author?: string;
+        /** Author's display name (e.g., "Elon Musk") */
+        authorName?: string;
+        /** Author's handle/username without @ (e.g., "elonmusk") */
+        authorHandle?: string;
+        /** Author's profile avatar URL */
+        authorAvatar?: string;
         publishedAt?: string;
         domain: string;
         url: string;
@@ -111,12 +117,23 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                 ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
                                                 : oembed.thumbnail_url || null;
 
+                                        // Extract author info from oEmbed
+                                        const authorName = oembed.author_name || 'Unknown';
+                                        // Parse handle from author_url (e.g., https://www.youtube.com/@handle)
+                                        let authorHandle = '';
+                                        if (oembed.author_url) {
+                                                const handleMatch = oembed.author_url.match(/@([^\/\?]+)/);
+                                                authorHandle = handleMatch ? handleMatch[1] : '';
+                                        }
+
                                         return {
                                                 title: oembed.title || 'YouTube Video',
-                                                description: `Video by ${oembed.author_name || 'Unknown'}`,
+                                                description: `Video by ${authorName}`,
                                                 imageUrl,
-                                                content: `YouTube video: "${oembed.title}" by ${oembed.author_name}`,
-                                                author: oembed.author_name,
+                                                content: `YouTube video: "${oembed.title}" by ${authorName}`,
+                                                author: authorName,
+                                                authorName,
+                                                authorHandle,
                                                 domain: 'youtube.com',
                                                 url,
                                         };
@@ -168,8 +185,15 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         }
                                                 }
 
-                                                const author = tweetData.user?.name || tweetData.user?.screen_name || 'Unknown';
-                                                const handle = tweetData.user?.screen_name || '';
+                                                const authorName = tweetData.user?.name || 'Unknown';
+                                                const authorHandle = tweetData.user?.screen_name || '';
+                                                const author = authorName || authorHandle || 'Unknown';
+                                                const handle = authorHandle;
+                                                // Get avatar URL and upgrade to higher resolution (400x400 instead of normal)
+                                                let authorAvatar = tweetData.user?.profile_image_url_https || '';
+                                                if (authorAvatar) {
+                                                        authorAvatar = authorAvatar.replace('_normal', '_400x400');
+                                                }
                                                 // Decode HTML entities from Twitter API (e.g., &amp; → &)
                                                 const tweetText = decodeHtmlEntities(tweetData.text || '');
 
@@ -195,6 +219,9 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         images, // All images for multi-image tweets
                                                         content: tweetText,
                                                         author,
+                                                        authorName,
+                                                        authorHandle,
+                                                        authorAvatar,
                                                         publishedAt: tweetData.created_at,
                                                         domain: 'twitter.com',
                                                         url,
@@ -240,6 +267,10 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         // DSPy not available, use local extraction
                                                 }
 
+                                                // Extract author handle from author string (may include @)
+                                                const authorHandle = playwrightResult.author?.replace('@', '') || '';
+                                                const authorName = authorHandle; // Instagram doesn't expose display names in embed
+
                                                 return {
                                                         title,
                                                         description: playwrightResult.caption,
@@ -247,6 +278,8 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         images: playwrightResult.images,
                                                         content: playwrightResult.caption,
                                                         author: playwrightResult.author,
+                                                        authorName,
+                                                        authorHandle,
                                                         domain: 'instagram.com',
                                                         url,
                                                 };
@@ -465,6 +498,10 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                 }
 
                                                 if (images.length > 0) {
+                                                        // Extract author handle from author string
+                                                        const authorHandle = author?.replace('@', '') || '';
+                                                        const authorName = authorHandle;
+
                                                         console.log(`[Scraper] Instagram: Found ${images.length} images, author="${author}", title="${title.slice(0, 40)}..."`);
                                                         return {
                                                                 title,
@@ -473,6 +510,8 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                                 images, // All carousel images
                                                                 content: cleanCaption,
                                                                 author,
+                                                                authorName,
+                                                                authorHandle,
                                                                 domain: 'instagram.com',
                                                                 url,
                                                         };
@@ -516,6 +555,49 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 
                 // =============================================================
+                // TIKTOK SPECIAL HANDLING (oEmbed API)
+                // =============================================================
+                if (domain.includes('tiktok.com')) {
+                        try {
+                                console.log('[Scraper] TikTok: Extracting video data');
+
+                                // Use TikTok's oEmbed API for clean metadata
+                                const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+                                const tiktokRes = await fetch(oembedUrl, {
+                                        headers: {
+                                                'Accept': 'application/json',
+                                                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+                                        },
+                                });
+
+                                if (tiktokRes.ok) {
+                                        const oembed = await tiktokRes.json();
+                                        console.log('[Scraper] TikTok oEmbed success:', oembed.title);
+
+                                        // Extract author info from oEmbed
+                                        const authorName = oembed.author_name || 'Unknown';
+                                        const authorHandle = oembed.author_unique_id || '';
+
+                                        return {
+                                                title: oembed.title || 'TikTok Video',
+                                                description: `Video by @${authorHandle || authorName}`,
+                                                imageUrl: oembed.thumbnail_url || null,
+                                                content: oembed.title || '',
+                                                author: authorName,
+                                                authorName,
+                                                authorHandle,
+                                                domain: 'tiktok.com',
+                                                url,
+                                        };
+                                }
+                                console.warn('[Scraper] TikTok oEmbed failed, falling back to HTML');
+                        } catch (tiktokErr) {
+                                console.warn('[Scraper] TikTok error:', tiktokErr);
+                        }
+                }
+
+
+                // =============================================================
                 // REDDIT SPECIAL HANDLING (JSON API for clean extraction)
                 // =============================================================
                 if (domain.includes('reddit.com')) {
@@ -524,12 +606,31 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
                                 // Reddit supports appending .json to any URL for API access
                                 const jsonUrl = url.replace(/\/?$/, '') + '.json';
-                                const redditRes = await fetch(jsonUrl, {
+                                let redditRes = await fetch(jsonUrl, {
                                         headers: {
                                                 'User-Agent': 'MyMind/1.0 (Content Archiver)',
                                                 'Accept': 'application/json',
                                         },
                                 });
+
+                                // Fallback to old.reddit.com if blocked (403/429)
+                                if (!redditRes.ok && (redditRes.status === 403 || redditRes.status === 429)) {
+                                        console.log('[Scraper] Reddit: Main API blocked, trying old.reddit.com');
+                                        const oldRedditUrl = url
+                                                .replace('www.reddit.com', 'old.reddit.com')
+                                                .replace(/^(https?:\/\/)reddit\.com/, '$1old.reddit.com')
+                                                .replace(/\/?$/, '') + '.json';
+
+                                        // Small delay to avoid rate limiting
+                                        await new Promise(resolve => setTimeout(resolve, 500));
+
+                                        redditRes = await fetch(oldRedditUrl, {
+                                                headers: {
+                                                        'User-Agent': 'MyMind/1.0 (Content Archiver)',
+                                                        'Accept': 'application/json',
+                                                },
+                                        });
+                                }
 
                                 if (redditRes.ok) {
                                         const data = await redditRes.json();
@@ -537,7 +638,10 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                         const postData = data[0]?.data?.children?.[0]?.data;
 
                                         if (postData) {
-                                                const author = `u/${postData.author}`;
+                                                // Extract author info - Reddit uses u/username format
+                                                const authorHandle = postData.author || 'redditor';
+                                                const authorName = authorHandle; // Reddit doesn't expose display names via API
+                                                const author = `u/${authorHandle}`;
                                                 const subreddit = `r/${postData.subreddit}`;
                                                 const postTitle = postData.title || 'Reddit Post';
                                                 const selftext = postData.selftext || '';
@@ -613,6 +717,8 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         images: images.length > 1 ? images : undefined,
                                                         content,
                                                         author,
+                                                        authorName,
+                                                        authorHandle,
                                                         domain: 'reddit.com',
                                                         url,
                                                         publishedAt: postData.created_utc ? new Date(postData.created_utc * 1000).toISOString() : undefined,
@@ -735,7 +841,10 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                         let movieData: any = null;
                                         $('script[type="application/ld+json"]').each((_, el) => {
                                                 try {
-                                                        const json = JSON.parse($(el).html() || '');
+                                                        let content = $(el).html() || '';
+                                                        // Strip CDATA wrapper if present (Letterboxd wraps JSON-LD in CDATA comments)
+                                                        content = content.replace(/\/\*\s*<!\[CDATA\[\s*\*\//, '').replace(/\/\*\s*\]\]>\s*\*\//, '').trim();
+                                                        const json = JSON.parse(content);
                                                         if (json['@type'] === 'Movie') {
                                                                 movieData = json;
                                                         }
@@ -755,35 +864,53 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                         const directorName = $('[itemprop="director"] [itemprop="name"]')?.text()?.trim() ||
                                                 $('a[href*="/director/"]')?.first()?.text()?.trim();
 
-                                        // Extract poster - Letterboxd uses different image sources and lazy loading
-                                        let posterUrl = ogImage;
+                                        // Extract poster - prioritize JSON-LD image (most reliable), then CSS selectors
+                                        let posterUrl: string | null = null;
 
-                                        // Try multiple selectors in priority order for better poster extraction
-                                        const filmPoster =
-                                                $('div.film-poster img').attr('src') ||
-                                                $('div.film-poster img').attr('data-src') ||           // Lazy-loaded
-                                                $('div.really-lazy-load').attr('data-src') ||          // Lazy-load container
-                                                $('img.image[src*="ltrbxd.com"]').attr('src') ||       // Direct image with domain
-                                                $('img[alt*="poster"]').attr('src') ||                 // Alt text hint
-                                                $('.poster img').attr('src') ||                        // Generic poster class
-                                                $('img.image').attr('src');
+                                        // 1. Try JSON-LD image first (always available, most reliable)
+                                        if (movieData?.image) {
+                                                posterUrl = movieData.image;
+                                        }
 
-                                        if (filmPoster) {
-                                                // Check if it's a Letterboxd CDN image
-                                                if (filmPoster.includes('ltrbxd.com') || filmPoster.includes('letterboxd.com')) {
-                                                        // Upgrade to larger poster size if possible (1000x1500 is a good HD size)
-                                                        posterUrl = filmPoster.replace(/-0-.*\.(jpg|png|webp)/, '-0-1000-0-1500-crop.$1');
-                                                } else if (filmPoster.startsWith('http')) {
-                                                        // Use external image as-is
+                                        // 2. Try CSS selectors as fallback
+                                        if (!posterUrl) {
+                                                const filmPoster =
+                                                        $('div.film-poster img').attr('src') ||
+                                                        $('div.film-poster img').attr('data-src') ||           // Lazy-loaded
+                                                        $('div.really-lazy-load').attr('data-src') ||          // Lazy-load container
+                                                        $('img.image[src*="ltrbxd.com"]').attr('src') ||       // Direct image with domain
+                                                        $('img[alt*="poster"]').attr('src') ||                 // Alt text hint
+                                                        $('.poster img').attr('src') ||                        // Generic poster class
+                                                        $('img.image').attr('src');
+
+                                                if (filmPoster) {
                                                         posterUrl = filmPoster;
                                                 }
                                         }
 
-                                        console.log('[Scraper] Letterboxd poster:', posterUrl ? 'found' : 'using OG image');
+                                        // 3. Fallback to og:image
+                                        if (!posterUrl && ogImage) {
+                                                posterUrl = ogImage;
+                                        }
+
+                                        // 4. Upgrade to HD poster size if it's a Letterboxd CDN URL
+                                        // URL format: https://a.ltrbxd.com/resized/film-poster/6/1/7/4/4/3/617443-dune-part-two-0-230-0-345-crop.jpg?v=...
+                                        // Pattern: {filename}-0-{width}-0-{height}-crop.{ext} (note: starts with filename then 0-, not -0-)
+                                        if (posterUrl && (posterUrl.includes('ltrbxd.com') || posterUrl.includes('letterboxd.com'))) {
+                                                // Match pattern: -0-{width}-0-{height}-crop.{ext} preserving query string
+                                                // The first 0 follows a filename (e.g., "dune-part-two-0-230-0-345-crop.jpg")
+                                                posterUrl = posterUrl.replace(
+                                                        /-0-\d+-0-\d+-crop\.(jpg|png|webp)/i,
+                                                        '-0-1000-0-1500-crop.$1'
+                                                );
+                                        }
+
+                                        console.log('[Scraper] Letterboxd poster:', posterUrl ? posterUrl.slice(0, 80) + '...' : 'none');
 
                                         if (movieData) {
                                                 const title = movieData.name || filmTitle || ogTitle || 'Untitled Film';
-                                                const year = movieData.datePublished?.slice(0, 4) || filmYear;
+                                                // Letterboxd uses dateCreated in JSON-LD, not datePublished
+                                                const year = movieData.datePublished?.slice(0, 4) || movieData.dateCreated?.slice(0, 4) || filmYear;
                                                 const director = Array.isArray(movieData.director)
                                                         ? movieData.director[0]?.name
                                                         : movieData.director?.name || directorName;
@@ -797,7 +924,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                 return {
                                                         title: year ? `${title} (${year})` : title,
                                                         description: movieData.description || ogDescription || '',
-                                                        imageUrl: posterUrl || movieData.image || null,
+                                                        imageUrl: posterUrl,
                                                         content: movieData.description || ogDescription || '',
                                                         author: director,
                                                         domain: 'letterboxd.com',

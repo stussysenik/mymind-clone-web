@@ -83,6 +83,8 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | 12+ card types (articles, videos, tweets...) | ✅ Production |
 | Full-text search with filters | ✅ Production |
 | Instagram carousels | ✅ Production |
+| Letterboxd movie posters | ✅ Production |
+| Reddit post extraction | ✅ Production |
 | Dark mode | ✅ Production |
 | Platform-specific AI | ✅ Production |
 | Serendipity mode | ✅ Production |

@@ -9,7 +9,7 @@
 'use client';
 
 import Image from 'next/image';
-import { ExternalLink, Trash2, RotateCcw, Loader2, Archive } from 'lucide-react';
+import { ExternalLink, Trash2, RotateCcw, Loader2, Archive, Globe } from 'lucide-react';
 import { useState } from 'react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
@@ -36,7 +36,10 @@ interface TwitterCardProps {
  */
 export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: TwitterCardProps) {
 	const [isHovered, setIsHovered] = useState(false);
-	const author = card.metadata.author || '@user';
+	// Use new author fields if available, fallback to legacy
+	const authorName = card.metadata.authorName || card.metadata.author || '';
+	const authorHandle = card.metadata.authorHandle || '';
+	const authorAvatar = card.metadata.authorAvatar || '';
 	// Decode HTML entities that may have been encoded by the scraper/API
 	const tweetText = decodeHtmlEntities(card.content || card.title || '');
 
@@ -48,22 +51,44 @@ export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: T
 			onMouseLeave={() => setIsHovered(false)}
 		>
 			{/* Header */}
-			<div className="flex items-center gap-3 p-3 pb-2">
-				{/* X Logo */}
-				<div className="flex h-8 w-8 items-center justify-center rounded-full bg-black">
-					<svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-					</svg>
-				</div>
-
-				{/* Author */}
-				<div className="flex flex-col">
-					<span className="text-sm font-medium text-[var(--foreground)]">
-						{author.startsWith('@') ? author.slice(1) : author}
-					</span>
-					<span className="text-xs text-[var(--foreground-muted)]">
-						{author.startsWith('@') ? author : `@${author}`}
-					</span>
+			<div className="flex items-start justify-between gap-3 p-3 pb-2">
+				{/* Domain Badge - First (Source) - fixed width, doesn't shrink */}
+				{card.url && (
+					<div className="flex-shrink-0 flex items-center gap-1.5 rounded-md bg-black/80 px-2 py-1">
+						<Globe className="w-3 h-3 text-white/80 flex-shrink-0" />
+						<span className="text-xs font-medium text-white">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
+					</div>
+				)}
+				{/* Author - Name + Avatar on right - can shrink/truncate */}
+				<div className="flex items-center gap-2 min-w-0">
+					<div className="flex flex-col items-end min-w-0">
+						<span className="text-sm font-medium text-[var(--foreground)] truncate max-w-[140px]">
+							{authorName || authorHandle || 'Unknown'}
+						</span>
+						{authorHandle && (
+							<span className="text-xs text-[var(--foreground-muted)] truncate max-w-[140px]">
+								@{authorHandle}
+							</span>
+						)}
+					</div>
+					{/* Avatar or X Logo fallback */}
+					{authorAvatar ? (
+						<Image
+							src={authorAvatar}
+							alt={authorName || 'Author'}
+							width={36}
+							height={36}
+							className="rounded-full object-cover flex-shrink-0"
+						/>
+					) : (
+						<div className="flex h-9 w-9 items-center justify-center rounded-full bg-black flex-shrink-0">
+							<svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+							</svg>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -95,11 +120,18 @@ export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: T
 						{decodeHtmlEntities(card.title)}
 					</h3>
 				)}
-				<div className="flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
-					<span>Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-					<span>•</span>
-					<span>{card.url && new URL(card.url).hostname.replace('www.', '')}</span>
+				<div className="text-xs text-[var(--foreground-muted)]">
+					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 				</div>
+				{/* Domain Link */}
+				{card.url && (
+					<div className="flex items-center gap-1.5">
+						<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+						<span className="text-xs text-[var(--accent-primary)] truncate">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
+					</div>
+				)}
 			</div>
 
 			{/* Tags */}

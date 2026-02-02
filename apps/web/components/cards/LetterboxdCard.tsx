@@ -65,15 +65,15 @@ export function LetterboxdCard({ card, onDelete, onArchive, onRestore, onClick }
 					</div>
 				)}
 
-				{/* Letterboxd Badge */}
-				<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
-					<div className="flex gap-0.5">
-						<div className="w-2 h-2 rounded-full bg-[#FF8000]" />
-						<div className="w-2 h-2 rounded-full bg-[#00E054]" />
-						<div className="w-2 h-2 rounded-full bg-[#40BCF4]" />
+				{/* Domain Badge */}
+				{card.url && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
 					</div>
-					<span className="text-xs font-medium text-white">Letterboxd</span>
-				</div>
+				)}
 
 				{/* Rating Badge */}
 				{rating && (

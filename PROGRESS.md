@@ -15,6 +15,27 @@
 
 #### Week 5 (Jan 27 - Feb 2)
 
+**Scraper & Enrichment Bug Fixes (Feb 2)**
+- **Letterboxd CDATA Fix**: Letterboxd wraps JSON-LD in CDATA comments (`/* <![CDATA[ */ ... /* ]]> */`), causing `JSON.parse()` to fail silently. Added CDATA stripping before parsing to extract poster URLs correctly.
+- **Reddit old.reddit.com Fallback**: Added fallback to `old.reddit.com` when main Reddit API returns 403/429 (anti-bot blocking). Old Reddit has simpler HTML that's easier to scrape.
+- **finalTags Crash Fix**: Fixed "finalTags is not iterable" error in `/api/enrich` by adding `Array.isArray()` checks before spreading.
+- **Enrichment Timing States**: Distinguished "slow" (>2 min) from "failed" states in `AnalyzingIndicator` - only show "failed" when actual `enrichmentError` exists, not just timeout.
+- **Instagram Field Mismatch**: Fixed re-extraction script to look for `metadata.images` (API format) in addition to `metadata.carouselImages`.
+
+**Key Commits:**
+- `fix(scraper): strip CDATA wrapper from Letterboxd JSON-LD`
+- `fix(scraper): add old.reddit.com fallback for blocked requests`
+- `fix(enrich): add Array.isArray checks for finalTags`
+- `fix(enrichment): distinguish slow vs failed states`
+
+**Artifacts:**
+- `apps/web/lib/scraper.ts` — CDATA stripping, Reddit fallback
+- `apps/web/app/api/enrich/route.ts` — Array.isArray guards
+- `apps/web/lib/enrichment-timing.ts` — Slow state logic
+- `apps/web/scripts/reextract-instagram-carousels.mjs` — Fixed field lookup
+
+---
+
 **Instagram High-Quality Carousel Extraction (Feb 2)**
 - Fixed CDN pattern filter from `t51.82787-15` to `t51.2885-15`
 - Added new `scrapeInstagramViaEmbed()` function using embed page approach

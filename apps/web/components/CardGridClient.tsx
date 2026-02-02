@@ -1,9 +1,11 @@
 /**
  * MyMind Clone - CardGridClient Component
- * 
+ *
  * Client wrapper for CardGrid that merges localStorage cards
  * with server-fetched cards. Handles client-side state.
- * 
+ *
+ * Now uses PLATFORM-BASED filtering instead of type-based filtering.
+ *
  * @fileoverview Client-side card grid with localStorage integration, list view, and optimization
  */
 
@@ -16,6 +18,7 @@ import type { Card } from '@/lib/types';
 import { getLocalCards, deleteLocalCard, archiveLocalCard, unarchiveLocalCard } from '@/lib/local-storage';
 import { supabaseBrowser } from '@/lib/supabase';
 import { hasMatchingColor } from '@/lib/color-utils';
+import { detectPlatform, Platform } from '@/lib/platforms';
 import { Card as CardComponent } from './Card';
 import { CardDetailModal } from './CardDetailModal';
 import { TagScroller } from './TagScroller';
@@ -29,7 +32,9 @@ interface CardGridClientProps {
         serverCards: Card[];
         /** Search query for filtering */
         searchQuery?: string;
-        /** Type filter for instant client-side filtering */
+        /** Platform filter for instant client-side filtering (youtube, twitter, websites, images, notes, etc.) */
+        platformFilter?: string;
+        /** @deprecated Use platformFilter instead */
         typeFilter?: string;
         /** Display mode: default (active), archive, or trash */
         mode?: 'default' | 'archive' | 'trash';
@@ -42,7 +47,9 @@ interface CardGridClientProps {
 /**
  * Client-side wrapper that merges localStorage cards with server cards.
  */
-export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'default' }: CardGridClientProps) {
+export function CardGridClient({ serverCards, searchQuery, platformFilter, typeFilter, mode = 'default' }: CardGridClientProps) {
+        // Use platformFilter (new) or fall back to typeFilter (deprecated)
+        const activeFilter = platformFilter || typeFilter;
         const router = useRouter();
         const searchParams = useSearchParams();
         const [localCards, setLocalCards] = useState<Card[]>([]);
@@ -264,6 +271,19 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                 }
         };
 
+        // Helper to get platform for a card (from metadata or detect from URL)
+        const getCardPlatform = (card: Card): Platform => {
+                // First check metadata.platform (set at save time)
+                if (card.metadata?.platform) {
+                        return card.metadata.platform as Platform;
+                }
+                // Fall back to detecting from URL
+                if (card.url) {
+                        return detectPlatform(card.url);
+                }
+                return 'unknown';
+        };
+
         // Memoize filtered cards to prevent expensive re-calculations
         const uniqueCards = useMemo(() => {
                 // Match based on similarity mode or regular mode
@@ -279,32 +299,49 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                         allCards = [...localCards, ...serverCards];
                 }
 
-                // Apply type filter FIRST (instant, no API call)
-                // Map UI type names to database type values
-                if (typeFilter) {
-                        const typeMap: Record<string, string[]> = {
-                                'article': ['article', 'webpages', 'blog', 'news'],
-                                'image': ['image', 'images', 'photo', 'screenshot', 'design'],
-                                'video': ['video', 'videos', 'audio', 'youtube', 'vimeo', 'movie', 'film', 'tv'],
-                                'product': ['product', 'products', 'shopping', 'store'],
-                                'book': ['book', 'books', 'kindle'],
-                                'note': ['note', 'notes', 'thought'],
-                                'twitter': ['twitter', 'posts', 'tweet', 'social', 'reddit', 'instagram', 'linkedin'],
-                        };
+                // Apply platform filter FIRST (instant, no API call)
+                if (activeFilter) {
+                        allCards = allCards.filter(card => {
+                                const cardPlatform = getCardPlatform(card);
 
-                        // Check if typeFilter matches any mapped type
-                        // We find the entry where the filter matches one of the aliases,
-                        // and then valid cards are those whose type is ANY of the aliases for that group.
-                        const matchedEntry = Object.entries(typeMap)
-                                .find(([, aliases]) => aliases.includes(typeFilter));
+                                // Handle fallback category filters
+                                if (activeFilter === 'websites') {
+                                        // "Websites" = unknown platform + article type
+                                        return cardPlatform === 'unknown' && card.type === 'article';
+                                }
+                                if (activeFilter === 'images') {
+                                        return card.type === 'image';
+                                }
+                                if (activeFilter === 'notes') {
+                                        return card.type === 'note';
+                                }
 
-                        if (matchedEntry) {
-                                const allowedTypes = matchedEntry[1];
-                                allCards = allCards.filter(card => allowedTypes.includes(card.type));
-                        } else {
-                                // Direct match as fallback
-                                allCards = allCards.filter(card => card.type === typeFilter);
-                        }
+                                // Handle legacy type-based filters for backwards compatibility
+                                if (activeFilter === 'article') {
+                                        return cardPlatform === 'unknown' && card.type === 'article';
+                                }
+                                if (activeFilter === 'image') {
+                                        return card.type === 'image';
+                                }
+                                if (activeFilter === 'video') {
+                                        return card.type === 'video';
+                                }
+                                if (activeFilter === 'social') {
+                                        return card.type === 'social';
+                                }
+                                if (activeFilter === 'movie') {
+                                        return card.type === 'movie';
+                                }
+                                if (activeFilter === 'book') {
+                                        return card.type === 'book';
+                                }
+                                if (activeFilter === 'product') {
+                                        return card.type === 'product';
+                                }
+
+                                // Platform-specific filter (youtube, twitter, instagram, etc.)
+                                return cardPlatform === activeFilter;
+                        });
                 }
 
                 // Apply color filter if present
@@ -367,11 +404,11 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                 }
 
                 return unique;
-        }, [localCards, serverCards, searchQuery, deletedIds, mode, typeFilter, searchParams, similarityId, similarCards, searchMode, smartResults, currentQuery, colorFilter]);
+        }, [localCards, serverCards, searchQuery, deletedIds, mode, activeFilter, searchParams, similarityId, similarCards, searchMode, smartResults, currentQuery, colorFilter]);
 
 
-        // Calculate type counts for dynamic TagScroller tabs (before type filter is applied)
-        const typeCounts = useMemo(() => {
+        // Calculate platform counts for dynamic TagScroller pills (before platform filter is applied)
+        const platformCounts = useMemo(() => {
                 // Merge local and server cards to get all cards
                 let allCards: Card[] = [];
 
@@ -383,7 +420,7 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                         allCards = [...localCards, ...serverCards];
                 }
 
-                // Apply color filter if present (but NOT type filter)
+                // Apply color filter if present (but NOT platform filter)
                 if (colorFilter) {
                         allCards = allCards.filter(card =>
                                 hasMatchingColor(card.metadata?.colors, colorFilter, 30)
@@ -406,10 +443,23 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                         return true;
                 });
 
-                // Count by type
+                // Count by platform (for platform pills like YouTube, Twitter, etc.)
+                // Also count special categories: images, notes (by type, not platform)
                 const counts: Record<string, number> = {};
                 for (const card of unique) {
-                        counts[card.type] = (counts[card.type] || 0) + 1;
+                        // Handle special non-platform categories by type
+                        if (card.type === 'image') {
+                                counts['image'] = (counts['image'] || 0) + 1;
+                                continue;
+                        }
+                        if (card.type === 'note') {
+                                counts['note'] = (counts['note'] || 0) + 1;
+                                continue;
+                        }
+
+                        // For all other cards, count by platform
+                        const platform = getCardPlatform(card);
+                        counts[platform] = (counts[platform] || 0) + 1;
                 }
                 return counts;
         }, [localCards, serverCards, deletedIds, mode, colorFilter, similarityId, similarCards, searchMode, smartResults]);
@@ -432,9 +482,9 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
 
         return (
                 <div className="w-full" data-testid="card-grid">
-                        {/* Dynamic Category Tabs */}
+                        {/* Dynamic Platform Pills */}
                         <div className="border-b border-[var(--border)] mb-6">
-                                <TagScroller typeCounts={typeCounts} />
+                                <TagScroller platformCounts={platformCounts} />
                         </div>
 
                         {/* Similarity Mode Banner */}
@@ -594,14 +644,19 @@ export function CardGridClient({ serverCards, searchQuery, typeFilter, mode = 'd
                                                         : similarityId
                                                                 ? "We analyzed the vectors but couldn't find anything similar enough yet. Try enriching more cards!"
                                                                 : (() => {
-                                                                        const type = searchParams.get('type');
-                                                                        const label = type ? (
-                                                                                type === 'webpages' ? 'websites' :
-                                                                                        type === 'videos' ? 'videos' :
-                                                                                                type === 'images' ? 'images' :
-                                                                                                        type === 'articles' ? 'articles' :
-                                                                                                                type === 'products' ? 'products' :
-                                                                                                                        type === 'books' ? 'books' : 'items'
+                                                                        const filter = searchParams.get('platform') || searchParams.get('type');
+                                                                        // Get a human-readable label for the filter
+                                                                        const label = filter ? (
+                                                                                filter === 'websites' ? 'websites' :
+                                                                                filter === 'images' ? 'images' :
+                                                                                filter === 'notes' ? 'notes' :
+                                                                                filter === 'youtube' ? 'YouTube videos' :
+                                                                                filter === 'twitter' ? 'tweets' :
+                                                                                filter === 'instagram' ? 'Instagram posts' :
+                                                                                filter === 'reddit' ? 'Reddit posts' :
+                                                                                filter === 'letterboxd' ? 'Letterboxd reviews' :
+                                                                                filter === 'goodreads' ? 'Goodreads books' :
+                                                                                'items'
                                                                         ) : 'items';
                                                                         return `This space is empty using the current filter. Save some ${label} to fill your creative brain.`;
                                                                 })()

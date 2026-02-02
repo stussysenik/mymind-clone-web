@@ -83,13 +83,12 @@ export function Header() {
 						               transition-shadow duration-200">
 							<Sparkles className="h-5 w-5 fill-white/20 group-hover:scale-110 transition-transform duration-200" />
 						</div>
-						{/* Brand text - Weight 3: Decorative, visible xl+ only (1024px+) */}
-						{showDecorative && (
-							<span className="font-serif text-xl font-bold text-[var(--foreground)] tracking-tight
-							               whitespace-nowrap group-hover:text-[var(--accent-primary)] transition-colors">
-								digital consumption experiment.
-							</span>
-						)}
+						{/* Brand text - Weight 3: Decorative, visible xl+ only (1024px+)
+						    Using CSS instead of JS to prevent hydration flash */}
+						<span className="hidden xl:block font-serif text-xl font-bold text-[var(--foreground)] tracking-tight
+						               whitespace-nowrap group-hover:text-[var(--accent-primary)] transition-colors">
+							digital consumption experiment.
+						</span>
 					</Link>
 				</div>
 
@@ -144,10 +143,9 @@ export function Header() {
 									{tab.icon}
 								</span>
 
-								{/* Label - Weight 5: Content Optional, visible md+ */}
-								{showContentOptional && (
-									<span className="relative z-10">{tab.label}</span>
-								)}
+								{/* Label - Weight 5: Content Optional, visible md+
+								    Using CSS instead of JS to prevent hydration flash */}
+								<span className="hidden md:inline relative z-10">{tab.label}</span>
 							</Link>
 						);
 					})}

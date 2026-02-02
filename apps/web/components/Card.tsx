@@ -17,12 +17,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Twitter, Volume2, MessageSquare, Archive } from 'lucide-react';
+import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Twitter, Volume2, MessageSquare, Archive, Film, Users } from 'lucide-react';
 import { AnalyzingIndicator } from './AnalyzingIndicator';
 import { TagDisplay } from './TagDisplay';
 import type { Card as CardType } from '@/lib/types';
 import { detectPlatform, getPlatformInfo, extractDomain } from '@/lib/platforms';
 import { decodeHtmlEntities } from '@/lib/text-utils';
+import { getProcessingState } from '@/lib/enrichment-timing';
 
 // Platform-specific cards
 import { TwitterCard } from './cards/TwitterCard';
@@ -63,8 +64,8 @@ const TYPE_ICONS = {
         book: BookOpen,
         video: Play,
         audio: Volume2,
-        twitter: Twitter,
-        reddit: MessageSquare,
+        social: Users,     // Social media (Twitter, Instagram, Reddit, etc.)
+        movie: Film,       // Movies (IMDB, Letterboxd)
         website: Globe,
 } as const;
 
@@ -286,15 +287,45 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                         </div>
 
                         {/* Processing Indicator - positioned on left to avoid conflicting with hover actions */}
-                        {card.metadata?.processing && (
-                                <div className="absolute top-2 left-2 z-10">
-                                        <AnalyzingIndicator
-                                                variant="dark"
-                                                accentColor={platformInfo.color}
-                                                size="sm"
-                                        />
-                                </div>
-                        )}
+                        {(() => {
+                                const processingState = getProcessingState(card.metadata);
+                                // Only show indicator if actively processing (not stuck/failed/idle)
+                                if (processingState === 'idle') return null;
+
+                                const handleRetry = async () => {
+                                        try {
+                                                // Fire enrichment request (don't wait for completion)
+                                                // Use keepalive so request continues even if component unmounts
+                                                fetch('/api/enrich', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ cardId: card.id }),
+                                                        keepalive: true,
+                                                }).catch(err => console.error('Enrichment failed:', err));
+
+                                                // Small delay to let the API set processing=true
+                                                await new Promise(resolve => setTimeout(resolve, 200));
+
+                                                // Refresh immediately to show "Analyzing" state
+                                                router.refresh();
+                                        } catch (err) {
+                                                console.error('Failed to retry enrichment:', err);
+                                        }
+                                };
+
+                                return (
+                                        <div className="absolute top-2 left-2 z-10">
+                                                <AnalyzingIndicator
+                                                        variant="dark"
+                                                        accentColor={platformInfo.color}
+                                                        size="sm"
+                                                        startTime={card.metadata?.enrichmentTiming?.startedAt}
+                                                        failed={processingState === 'failed' || processingState === 'stuck'}
+                                                        onRetry={handleRetry}
+                                                />
+                                        </div>
+                                );
+                        })()}
 
                         {/* Always-visible External Link - bottom right, touch target compliant */}
                         {card.url && (

@@ -234,3 +234,99 @@ export function updateEnrichmentTiming(
 		...updates,
 	};
 }
+
+// =============================================================================
+// STUCK DETECTION
+// =============================================================================
+
+/**
+ * Maximum time (ms) before considering enrichment "stuck".
+ * After this time, we assume something went wrong and stop showing the loading indicator.
+ * 5 minutes = 300,000 ms
+ */
+export const STUCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Checks if a card's enrichment is stuck (processing for too long).
+ *
+ * A card is considered stuck if:
+ * - metadata.processing === true AND
+ * - enrichmentTiming.startedAt is older than STUCK_TIMEOUT_MS (5 minutes)
+ *
+ * If stuck, the card should be treated as "done" (with or without AI data).
+ */
+export function isEnrichmentStuck(metadata: {
+	processing?: boolean;
+	enrichmentTiming?: { startedAt?: number };
+	enrichmentError?: string;
+	enrichmentFailedAt?: string;
+} | null | undefined): { stuck: boolean; failed: boolean; elapsedMs: number } {
+	if (!metadata?.processing) {
+		return { stuck: false, failed: false, elapsedMs: 0 };
+	}
+
+	const startedAt = metadata.enrichmentTiming?.startedAt;
+	const elapsedMs = startedAt ? Date.now() - startedAt : 0;
+
+	// Check if there's an explicit error
+	if (metadata.enrichmentError || metadata.enrichmentFailedAt) {
+		return { stuck: true, failed: true, elapsedMs };
+	}
+
+	if (!startedAt) {
+		// No timestamp - can't determine, assume not stuck yet
+		// But if processing without a timestamp, that's suspicious after a while
+		return { stuck: false, failed: false, elapsedMs: 0 };
+	}
+
+	const stuck = elapsedMs > STUCK_TIMEOUT_MS;
+
+	// stuck but not failed - just taking too long (no explicit error)
+	return { stuck, failed: false, elapsedMs };
+}
+
+/**
+ * Gets the processing state of a card for UI display.
+ *
+ * Returns:
+ * - 'idle': Not processing, no errors
+ * - 'processing': Currently processing (within timeout)
+ * - 'slow': Processing but taking longer than expected (but not yet stuck)
+ * - 'stuck': Processing but timed out (>5 min) - show options to user
+ * - 'failed': Explicit error recorded
+ */
+export type ProcessingState = 'idle' | 'processing' | 'slow' | 'stuck' | 'failed';
+
+/** Time (ms) after which processing is considered "slow" but not failed (2 minutes) */
+export const SLOW_TIMEOUT_MS = 2 * 60 * 1000;
+
+export function getProcessingState(metadata: {
+	processing?: boolean;
+	enrichmentTiming?: { startedAt?: number; estimatedTotalMs?: number };
+	enrichmentError?: string;
+	enrichmentFailedAt?: string;
+} | null | undefined): ProcessingState {
+	if (!metadata?.processing) {
+		return 'idle';
+	}
+
+	// Check for explicit failure
+	if (metadata.enrichmentError || metadata.enrichmentFailedAt) {
+		return 'failed';
+	}
+
+	// Check for timeout (stuck = 5 min)
+	const { stuck, elapsedMs } = isEnrichmentStuck(metadata);
+	if (stuck) {
+		return 'stuck';
+	}
+
+	// Check if slow (> 2 min or > 2x estimated time)
+	const estimatedMs = metadata.enrichmentTiming?.estimatedTotalMs || 15000;
+	const slowThreshold = Math.max(SLOW_TIMEOUT_MS, estimatedMs * 2);
+	if (elapsedMs > slowThreshold) {
+		return 'slow';
+	}
+
+	return 'processing';
+}

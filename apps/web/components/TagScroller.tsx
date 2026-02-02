@@ -2,22 +2,26 @@
  * MyMind Clone - TagScroller Component
  *
  * Horizontal scrolling tag/filter bar matching mymind.com.
- * Enhanced with:
+ * Now uses PLATFORM-BASED pills instead of content-type pills.
+ *
+ * Features:
+ * - Dynamic platform pills (YouTube, Twitter, Instagram, etc.)
+ * - 3-item threshold for showing a platform pill
+ * - Fallback categories: Websites, Images, Notes
  * - Tactile micro-interactions following Don Norman's principles
  * - Atomic weight system for responsive pill limits
  * - Fade edge indicators for overflow
- * - Momentum scroll for touch devices
- * - Physics-based elastic-tap animations
  *
- * @fileoverview Horizontal tag filter bar with micro-interactions
+ * @fileoverview Horizontal platform filter bar with micro-interactions
  */
 
 'use client';
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Globe, Video, Image, FileText, MessageSquare, ShoppingBag, BookOpen, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Globe, Video, Image as ImageIcon, FileText, MessageSquare, ShoppingBag, BookOpen, Sparkles, Film, Music, Package, Mail, AtSign } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useBreakpoint } from '@/hooks/useMediaQuery';
+import { PLATFORMS, Platform } from '@/lib/platforms';
 
 // =============================================================================
 // TYPES
@@ -38,75 +42,61 @@ interface TagScrollerProps {
 	selectedTag?: string | null;
 	/** Callback when tag is selected */
 	onTagSelect?: (tagId: string | null) => void;
-	/** Card type counts for dynamic tab filtering */
+	/** Platform counts for dynamic platform-based filtering (e.g., { youtube: 15, twitter: 8 }) */
+	platformCounts?: Record<string, number>;
+	/** @deprecated Use platformCounts instead */
 	typeCounts?: Record<string, number>;
 }
 
 // =============================================================================
-// DEFAULT TAGS (Content Types) - Now dynamically filtered based on content
+// PLATFORM PILL CONFIGURATION
 // =============================================================================
 
-const ALL_AVAILABLE_TAGS: Tag[] = [
-	{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles },
-	{ id: 'webpages', label: 'Web Pages', color: '#00A99D' },
-	{ id: 'videos', label: 'Videos', color: '#FF48B0' },
-	{ id: 'images', label: 'Images', color: '#9D7AD2' },
-	{ id: 'articles', label: 'Articles', color: '#00A99D' },
-	{ id: 'posts', label: 'Posts', color: '#2B579A' },
-	{ id: 'products', label: 'Products', color: '#00A99D' },
-	{ id: 'books', label: 'Books', color: '#FFE800' },
-];
+// Minimum number of items required to show a platform pill
+const MIN_ITEMS_FOR_PILL = 3;
 
-// Minimum number of items required to show a category tab
-const MIN_ITEMS_FOR_TAB = 1;
-
-// Map card types to UI tag IDs
-const TYPE_TO_TAG: Record<string, string> = {
-	'article': 'webpages',
-	'webpages': 'webpages',
-	'blog': 'webpages',
-	'news': 'webpages',
-	'image': 'images',
-	'images': 'images',
-	'photo': 'images',
-	'screenshot': 'images',
-	'design': 'images',
-	'video': 'videos',
-	'videos': 'videos',
-	'audio': 'videos',
-	'youtube': 'videos',
-	'vimeo': 'videos',
-	'movie': 'videos',
-	'film': 'videos',
-	'tv': 'videos',
-	'product': 'products',
-	'products': 'products',
-	'shopping': 'products',
-	'store': 'products',
-	'book': 'books',
-	'books': 'books',
-	'kindle': 'books',
-	'note': 'articles',
-	'notes': 'articles',
-	'thought': 'articles',
-	'twitter': 'posts',
-	'posts': 'posts',
-	'tweet': 'posts',
-	'social': 'posts',
-	'reddit': 'posts',
-	'instagram': 'posts',
-	'linkedin': 'posts',
+// Map platform IDs to Lucide icons
+const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+	youtube: Video,
+	tiktok: Video,
+	twitter: MessageSquare, // X logo not in Lucide, using message
+	instagram: ImageIcon,
+	reddit: MessageSquare,
+	linkedin: MessageSquare,
+	mastodon: AtSign,
+	letterboxd: Film,
+	imdb: Film,
+	goodreads: BookOpen,
+	storygraph: BookOpen,
+	amazon: Package,
+	spotify: Music,
+	pinterest: ImageIcon,
+	github: FileText,
+	medium: FileText,
+	substack: Mail,
+	// Fallback categories
+	websites: Globe,
+	images: ImageIcon,
+	notes: FileText,
 };
+
+// Fallback category definitions (for non-platform cards)
+const FALLBACK_PILLS: Tag[] = [
+	{ id: 'websites', label: 'Websites', color: '#6B7280', icon: Globe },
+	{ id: 'images', label: 'Images', color: '#9D7AD2', icon: ImageIcon },
+	{ id: 'notes', label: 'Notes', color: '#00A99D', icon: FileText },
+];
 
 // =============================================================================
 // PILL LIMIT BY BREAKPOINT
 // =============================================================================
 
-const getPillLimit = (isXs: boolean, isSm: boolean, isMd: boolean): number => {
-	if (isXs) return 3;   // xs: 3 pills
-	if (isSm) return 5;   // sm: 5 pills
-	if (isMd) return 6;   // md: 6 pills
-	return Infinity;      // lg+: all pills
+const getPillLimit = (isXs: boolean, isMidSm: boolean, isSm: boolean, isMd: boolean): number => {
+	if (isXs) return 2;      // xs (≤374px): 2 pills only
+	if (isMidSm) return 3;   // midSm (375-450px): 3 pills (iPhone 12/14/16 range)
+	if (isSm) return 5;      // sm (451-639px): 5 pills
+	if (isMd) return 6;      // md (640-767px): 6 pills
+	return Infinity;         // lg+ (>767px): all pills
 };
 
 // =============================================================================
@@ -117,49 +107,105 @@ export function TagScroller({
 	tags: propTags,
 	selectedTag: propSelectedTag,
 	onTagSelect,
-	typeCounts
+	platformCounts,
+	typeCounts // deprecated, for backwards compatibility
 }: TagScrollerProps) {
-	// Generate dynamic tags based on content counts
+	// Generate dynamic pills based on platform counts
 	const dynamicTags = useMemo(() => {
 		if (propTags) return propTags;
 
-		if (!typeCounts || Object.keys(typeCounts).length === 0) {
-			return ALL_AVAILABLE_TAGS;
+		// Use platformCounts (new) or fall back to typeCounts (deprecated)
+		const counts = platformCounts || typeCounts;
+
+		if (!counts || Object.keys(counts).length === 0) {
+			// Return just "All" if no data
+			return [{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles }];
 		}
 
-		// Count items per tag category
-		const tagCounts: Record<string, number> = {};
-		for (const [type, count] of Object.entries(typeCounts)) {
-			const tagId = TYPE_TO_TAG[type] || 'webpages';
-			tagCounts[tagId] = (tagCounts[tagId] || 0) + count;
+		const pills: Tag[] = [
+			{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles }
+		];
+
+		// Sort platforms by count descending
+		const sortedPlatforms = Object.entries(counts)
+			.sort(([, a], [, b]) => b - a);
+
+		for (const [platform, count] of sortedPlatforms) {
+			// Skip if below threshold
+			if (count < MIN_ITEMS_FOR_PILL) continue;
+
+			// Handle fallback categories (websites, images, notes from unknown platform or specific types)
+			if (platform === 'unknown' || platform === 'article' || platform === 'website') {
+				// Add "Websites" pill if we have enough generic articles
+				const existingWebsites = pills.find(p => p.id === 'websites');
+				if (!existingWebsites) {
+					pills.push({
+						id: 'websites',
+						label: 'Websites',
+						color: '#6B7280',
+						icon: Globe,
+						count
+					});
+				}
+				continue;
+			}
+
+			if (platform === 'image') {
+				pills.push({
+					id: 'images',
+					label: 'Images',
+					color: '#9D7AD2',
+					icon: ImageIcon,
+					count
+				});
+				continue;
+			}
+
+			if (platform === 'note') {
+				pills.push({
+					id: 'notes',
+					label: 'Notes',
+					color: '#00A99D',
+					icon: FileText,
+					count
+				});
+				continue;
+			}
+
+			// Check if this is a known platform
+			const platformInfo = PLATFORMS[platform as Platform];
+			if (platformInfo && platform !== 'unknown') {
+				pills.push({
+					id: platform,
+					label: platformInfo.name,
+					color: platformInfo.color,
+					icon: PLATFORM_ICONS[platform],
+					count
+				});
+			}
 		}
-
-		// Filter tags to only show those with enough items
-		const filteredTags = ALL_AVAILABLE_TAGS.filter(tag => {
-			if (tag.id === 'all') return true; // Always show "All"
-			return (tagCounts[tag.id] || 0) >= MIN_ITEMS_FOR_TAB;
-		});
-
-		// Add counts to tags and sort by count (after "All")
-		const tagsWithCounts = filteredTags.map(tag => ({
-			...tag,
-			count: tag.id === 'all' ? undefined : tagCounts[tag.id] || 0
-		}));
 
 		// Sort: "All" first, then by count descending
-		return tagsWithCounts.sort((a, b) => {
+		return pills.sort((a, b) => {
 			if (a.id === 'all') return -1;
 			if (b.id === 'all') return 1;
 			return (b.count || 0) - (a.count || 0);
 		});
-	}, [propTags, typeCounts]);
+	}, [propTags, platformCounts, typeCounts]);
 
 	const tags = dynamicTags;
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const currentType = searchParams.get('type') || 'all';
+	// Support both old ?type= and new ?platform= params
+	const currentPlatform = searchParams.get('platform') || searchParams.get('type') || 'all';
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const { isXs, isSm, isMd } = useBreakpoint();
+	const { isXs, isMidSm, isSm, isMd } = useBreakpoint();
+
+	// Track hydration to prevent flash - show skeleton until client is ready
+	const [isHydrated, setIsHydrated] = useState(false);
+	useEffect(() => {
+		setIsHydrated(true);
+	}, []);
 
 	// Track which button is being pressed for tactile feedback
 	const [pressedTag, setPressedTag] = useState<string | null>(null);
@@ -169,7 +215,7 @@ export function TagScroller({
 	const [isExpanded, setIsExpanded] = useState(false);
 
 	// Calculate pill limit based on breakpoint
-	const pillLimit = useMemo(() => getPillLimit(isXs, isSm, isMd), [isXs, isSm, isMd]);
+	const pillLimit = useMemo(() => getPillLimit(isXs, isMidSm, isSm, isMd), [isXs, isMidSm, isSm, isMd]);
 
 	// Determine visible tags based on limit
 	const visibleTags = useMemo(() => {
@@ -182,21 +228,21 @@ export function TagScroller({
 		setShowMoreButton(tags.length > pillLimit && !isExpanded);
 	}, [tags.length, pillLimit, isExpanded]);
 
-	// Map DB types back to UI Tag IDs for highlighting
-	const getSelectedTagId = (type: string) => {
-		if (type === 'article') return 'webpages';
-		if (type === 'image') return 'images';
-		if (type === 'video') return 'videos';
-		if (type === 'product') return 'products';
-		if (type === 'book') return 'books';
-		if (type === 'twitter') return 'posts'; // Map twitter type to Posts tab
-		return type;
+	// Map current filter to UI tag ID for highlighting
+	const getSelectedTagId = (filter: string) => {
+		// Handle legacy type values for backwards compatibility
+		if (filter === 'article') return 'websites';
+		if (filter === 'image') return 'images';
+		if (filter === 'note') return 'notes';
+		// Platform values map directly to tag IDs
+		return filter;
 	};
 
-	const selectedTag = propSelectedTag || getSelectedTagId(currentType);
+	const selectedTag = propSelectedTag || getSelectedTagId(currentPlatform);
 
 	/**
-	 * Handle tag selection with URL update
+	 * Handle tag selection with URL update.
+	 * Now uses ?platform= param instead of ?type=
 	 */
 	const handleTagSelect = useCallback((tagId: string | null) => {
 		if (onTagSelect) {
@@ -205,21 +251,16 @@ export function TagScroller({
 		}
 
 		const params = new URLSearchParams(searchParams.toString());
-		if (tagId && tagId !== 'all') {
-			// Map UI tags to DB types
-			let dbType = tagId;
-			if (tagId === 'webpages') dbType = 'article'; // Web pages are essentially articles/content
-			if (tagId === 'articles') dbType = 'article'; // Explicit articles
-			if (tagId === 'images') dbType = 'image';
-			if (tagId === 'products') dbType = 'product';
-			if (tagId === 'books') dbType = 'book';
-			if (tagId === 'videos') dbType = 'video';
-			if (tagId === 'posts') dbType = 'twitter'; // Posts can be twitter, bluesky, etc.
+		// Remove both old and new params to start fresh
+		params.delete('type');
+		params.delete('platform');
 
-			params.set('type', dbType);
-		} else {
-			params.delete('type');
+		if (tagId && tagId !== 'all') {
+			// Platform IDs map directly (youtube, twitter, instagram, etc.)
+			// Fallback categories also work: websites, images, notes
+			params.set('platform', tagId);
 		}
+
 		router.push(`/?${params.toString()}`);
 	}, [onTagSelect, searchParams, router]);
 
@@ -258,6 +299,24 @@ export function TagScroller({
 		if (showRightArrow) return 'fade-edge-right';
 		return '';
 	}, [showLeftArrow, showRightArrow]);
+
+	// Skeleton shown during SSR and initial hydration to prevent flash
+	if (!isHydrated) {
+		return (
+			<div className="relative flex items-center gap-2 py-3">
+				<div className="flex items-center gap-2 md:gap-3 px-1 pb-1">
+					{/* Skeleton pills - show 3 on mobile, more on larger screens */}
+					<div className="h-9 w-14 rounded-full bg-[var(--background-secondary)] animate-pulse" />
+					<div className="h-9 w-16 rounded-full bg-[var(--background-secondary)] animate-pulse" />
+					<div className="h-9 w-20 rounded-full bg-[var(--background-secondary)] animate-pulse" />
+					<div className="h-9 w-16 rounded-full bg-[var(--background-secondary)] animate-pulse hidden sm:block" />
+					<div className="h-9 w-18 rounded-full bg-[var(--background-secondary)] animate-pulse hidden sm:block" />
+					<div className="h-9 w-20 rounded-full bg-[var(--background-secondary)] animate-pulse hidden md:block" />
+					<div className="h-9 w-16 rounded-full bg-[var(--background-secondary)] animate-pulse hidden lg:block" />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="relative flex items-center gap-2 py-3">

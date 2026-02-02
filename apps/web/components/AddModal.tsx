@@ -268,23 +268,39 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
         return (
                 <>
-                        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md transition-opacity" onClick={onClose} />
+                        {/* Backdrop with fade animation */}
+                        <div
+                                className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md animate-backdrop-enter"
+                                onClick={onClose}
+                        />
 
+                        {/* Modal with entrance animation + link mode color wash */}
                         <div
                                 className={`
-                                        fixed inset-x-4 top-[15%] z-[70] mx-auto max-w-2xl 
-                                        bg-white rounded-2xl shadow-2xl overflow-hidden
-                                        transition-all duration-300 ease-out transform
-                                        ${isDragOver ? 'scale-105 ring-4 ring-[var(--accent-primary)]' : 'scale-100'}
+                                        fixed inset-x-4 top-[15%] z-[70] mx-auto max-w-2xl
+                                        rounded-2xl shadow-2xl overflow-hidden
+                                        animate-modal-enter
+                                        transition-colors duration-300 ease-out
+                                        ${mode === 'link' ? 'bg-blue-50/30' : 'bg-white'}
+                                        ${isDragOver ? 'scale-105 ring-4 ring-[var(--accent-primary)]' : ''}
                                 `}
                                 onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                                 onDragLeave={() => setIsDragOver(false)}
                                 onDrop={handleDrop}
                         >
-                                {/* Active Mode Indicator / Header */}
+                                {/* Close Button - Notion-like responsive */}
                                 <div className="absolute top-4 right-4 flex gap-2 z-10">
-                                        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
-                                                <X className="w-5 h-5" />
+                                        <button
+                                                onClick={onClose}
+                                                className="
+                                                        group p-2 rounded-full text-gray-400
+                                                        transition-all duration-200 ease-out
+                                                        hover:bg-gray-100 hover:text-gray-600
+                                                        active:scale-95 active:bg-gray-200
+                                                        focus-visible:ring-2 focus-visible:ring-gray-300 focus-visible:outline-none
+                                                "
+                                        >
+                                                <X className="w-5 h-5 transition-transform duration-200 group-hover:rotate-90" />
                                         </button>
                                 </div>
 
@@ -310,16 +326,25 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                                                 value={content}
                                                                 onChange={(e) => setContent(e.target.value)}
                                                                 placeholder="Save something... (paste multiple links to batch import)"
-                                                                className="w-full text-2xl font-serif text-gray-800 placeholder:text-gray-300 bg-transparent border-none resize-none focus:ring-0 leading-relaxed custom-scrollbar"
+                                                                className="
+                                                                        w-full text-2xl font-serif text-gray-800
+                                                                        placeholder:text-gray-300 placeholder:transition-opacity placeholder:duration-150
+                                                                        bg-transparent border-none resize-none leading-relaxed custom-scrollbar
+                                                                        focus:outline-none focus:ring-0
+                                                                        focus:placeholder:opacity-50
+                                                                        focus:bg-gray-50/30
+                                                                        transition-all duration-150
+                                                                        rounded-lg p-2 -m-2
+                                                                "
                                                                 rows={isMultiMode ? 6 : (mode === 'link' ? 2 : 5)}
                                                                 disabled={isSubmitting}
                                                         />
 
                                                         {/* Batch Mode Badge */}
                                                         {isMultiMode && !batchProgress && (
-                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-badge-pulse">
                                                                         <Upload className="w-4 h-4" />
-                                                                        <span className="text-sm font-medium">📦 {detectedLinks.length} links detected - will save all</span>
+                                                                        <span className="text-sm font-medium">{detectedLinks.length} links detected - will save all</span>
                                                                         <Sparkles className="w-3 h-3 ml-auto animate-pulse" />
                                                                 </div>
                                                         )}
@@ -344,7 +369,7 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
                                                         {/* Single Link Detected Badge */}
                                                         {mode === 'link' && !isMultiMode && platformInfo && (
-                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                                                <div className="flex items-center gap-2 mt-4 text-[var(--accent-primary)] bg-[var(--accent-primary)]/5 p-3 rounded-lg animate-badge-pulse">
                                                                         <Globe className="w-4 h-4" />
                                                                         <span className="text-sm font-medium">Link detected: {platformInfo.name}</span>
                                                                         {content.length > 20 && <Sparkles className="w-3 h-3 ml-auto animate-pulse" />}
@@ -356,11 +381,18 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                         {/* Footer / Controls */}
                                         <div className="flex items-center justify-between px-6 pb-6 pt-2">
                                                 <div className="flex gap-1">
-                                                        {/* Manual Mode Toggles (Subtle) */}
+                                                        {/* Image Upload Button - Polished */}
                                                         <button
                                                                 onClick={() => fileInputRef.current?.click()}
-                                                                className={`p-2 rounded-lg transition-colors ${mode === 'image' ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
                                                                 title="Upload Image"
+                                                                className={`
+                                                                        p-2 rounded-lg transition-all duration-200
+                                                                        ${mode === 'image'
+                                                                                ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10'
+                                                                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:scale-95'
+                                                                        }
+                                                                        ${isDragOver ? 'text-[var(--accent-primary)] animate-pulse' : ''}
+                                                                `}
                                                         >
                                                                 <ImageIcon className="w-5 h-5" />
                                                         </button>
@@ -378,8 +410,16 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                                                 <div className="h-6 w-px bg-gray-200 mx-2 self-center" />
                                                         )}
 
+                                                        {/* Mode Label - Context-aware pill */}
                                                         {mode !== 'image' && (
-                                                                <span className="text-xs text-gray-300 font-medium self-center tracking-wide uppercase px-2">
+                                                                <span className={`
+                                                                        text-xs font-medium tracking-wide uppercase px-2 py-1 rounded-full
+                                                                        transition-all duration-200 self-center
+                                                                        ${mode === 'auto'
+                                                                                ? 'text-gray-400 bg-transparent'
+                                                                                : 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/5'
+                                                                        }
+                                                                `}>
                                                                         {mode === 'auto' ? 'Smart Mode' : mode}
                                                                 </span>
                                                         )}
@@ -387,13 +427,15 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
 
                                                 <div className="flex items-center gap-3">
                                                         <span className="hidden sm:inline text-xs text-gray-300 mr-2">CMD + Enter to save</span>
+                                                        {/* Save Button - Refined lift + press */}
                                                         <button
                                                                 onClick={handleSubmit}
                                                                 disabled={!canSubmit || isSubmitting}
                                                                 className={`
-                                                                        flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all
+                                                                        group flex items-center gap-2 px-6 py-2.5 rounded-full font-medium
+                                                                        transition-all duration-200 ease-out
                                                                         ${canSubmit
-                                                                                ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] hover:shadow-md transform hover:-translate-y-0.5'
+                                                                                ? 'bg-[var(--accent-primary)] text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.97] active:shadow-sm'
                                                                                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                                                         }
                                                                 `}
@@ -406,16 +448,16 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                                                 ) : (
                                                                         <>
                                                                                 <span>Save to Brain</span>
-                                                                                <ArrowUp className={`w-4 h-4 ${canSubmit ? 'animate-bounce-short' : ''}`} />
+                                                                                <ArrowUp className={`w-4 h-4 transition-transform duration-200 ${canSubmit ? 'group-hover:-translate-y-0.5' : ''}`} />
                                                                         </>
                                                                 )}
                                                         </button>
                                                 </div>
                                         </div>
 
-                                        {/* Error Toast styled */}
+                                        {/* Error Toast - with subtle shake */}
                                         {error && (
-                                                <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+                                                <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2 animate-subtle-shake">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
                                                         {error}
                                                 </div>

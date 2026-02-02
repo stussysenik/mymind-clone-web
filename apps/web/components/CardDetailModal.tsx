@@ -92,22 +92,34 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                 setRetryCount(prev => prev + 1);
 
                 try {
-                        const response = await fetch('/api/enrich', {
+                        // Fire request without waiting (keepalive ensures it completes)
+                        // The API will set processing=true immediately
+                        fetch('/api/enrich', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ cardId: card.id })
+                                body: JSON.stringify({ cardId: card.id }),
+                                keepalive: true,
+                        }).then(response => {
+                                if (!response.ok) {
+                                        response.json().then(data => {
+                                                console.error('[Re-analyze] Failed:', data.error);
+                                        });
+                                }
+                                // Refresh when enrichment completes to get final data
+                                router.refresh();
+                        }).catch(err => {
+                                console.error('[Re-analyze] Error:', err);
+                        }).finally(() => {
+                                setIsReAnalyzing(false);
                         });
 
-                        if (!response.ok) {
-                                const data = await response.json();
-                                console.error('[Re-analyze] Failed:', data.error);
-                        }
+                        // Small delay to let API set processing=true
+                        await new Promise(resolve => setTimeout(resolve, 300));
 
-                        // Refresh to get updated card data
+                        // Refresh immediately to show "Analyzing" state from server
                         router.refresh();
                 } catch (err) {
                         console.error('[Re-analyze] Error:', err);
-                } finally {
                         setIsReAnalyzing(false);
                 }
         }, [card, isReAnalyzing, router]);

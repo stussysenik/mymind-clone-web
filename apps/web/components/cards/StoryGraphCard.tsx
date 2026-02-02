@@ -64,11 +64,15 @@ export function StoryGraphCard({ card, onDelete, onArchive, onRestore, onClick }
 					</div>
 				)}
 
-				{/* StoryGraph Badge */}
-				<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-[#9B7EBD]/90 px-2 py-1 backdrop-blur-sm">
-					<Sparkles className="h-3.5 w-3.5 text-white" />
-					<span className="text-xs font-medium text-white">StoryGraph</span>
-				</div>
+				{/* Domain Badge */}
+				{card.url && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
+					</div>
+				)}
 
 				{/* Rating Badge */}
 				{rating && (

@@ -510,6 +510,33 @@ npm install
 
 *For more details, see [README.md](README.md) and [CLAUDE.md](CLAUDE.md)*
 
+### Scraper Reliability Features
+
+The scraper includes multiple fallback strategies and fixes for common issues:
+
+**Letterboxd CDATA Handling:**
+```typescript
+// Letterboxd wraps JSON-LD in CDATA comments
+content = content.replace(/\/\*\s*<!\[CDATA\[\s*\*\//, '')
+                 .replace(/\/\*\s*\]\]>\s*\*\//, '')
+                 .trim();
+const json = JSON.parse(content);
+```
+
+**Reddit Fallback Chain:**
+```typescript
+// Strategy 1: Main Reddit API (may be blocked)
+fetch(`https://www.reddit.com/r/${subreddit}/...`)
+
+// Strategy 2: old.reddit.com (simpler HTML, less blocking)
+fetch(`https://old.reddit.com/r/${subreddit}/...`)
+```
+
+**Enrichment Error Handling:**
+- `processing: true` + no error = Still analyzing
+- `processing: true` + >2 min elapsed = Slow (not failed)
+- `enrichmentError` set = Actually failed
+
 ### Self-Hosted Screenshots
 
 Zero-cost Playwright screenshots with content-focused selectors.

@@ -15,6 +15,7 @@ import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
 import { AnalyzingIndicator } from '../AnalyzingIndicator';
 import { CardActions, ExternalLinkButton } from './CardActions';
+import { AuthorDisplay } from '../AuthorDisplay';
 
 // =============================================================================
 // TYPES
@@ -39,7 +40,9 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 	const [imageError, setImageError] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
 	const subreddit = card.metadata.subreddit || extractSubreddit(card.url);
-	const author = card.metadata.author || 'u/redditor';
+	// Use new author fields if available, fallback to legacy
+	const authorHandle = card.metadata.authorHandle || card.metadata.author?.replace('u/', '') || 'redditor';
+	const author = `u/${authorHandle}`;
 	const upvotes = card.metadata.upvotes;
 	const comments = card.metadata.comments;
 
@@ -96,6 +99,15 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 						loading="lazy"
 						onError={() => setImageError(true)}
 					/>
+					{/* Domain Badge Overlay */}
+					{card.url && (
+						<div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-md">
+							<Globe className="w-3 h-3 text-white/80" />
+							<span className="text-xs font-medium text-white truncate max-w-[120px]">
+								{new URL(card.url).hostname.replace('www.', '')}
+							</span>
+						</div>
+					)}
 				</div>
 			)}
 

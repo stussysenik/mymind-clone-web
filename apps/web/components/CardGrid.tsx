@@ -19,7 +19,9 @@ import { CardGridClient } from './CardGridClient';
 interface CardGridProps {
         /** Search query to filter cards */
         searchQuery?: string;
-        /** Type filter */
+        /** Platform filter (youtube, twitter, websites, images, notes, etc.) */
+        platformFilter?: string;
+        /** @deprecated Use platformFilter instead */
         typeFilter?: string;
         /** View mode */
         mode?: 'default' | 'archive' | 'trash';
@@ -32,7 +34,7 @@ interface CardGridProps {
 /**
  * Server Component that fetches cards and renders via client wrapper.
  */
-export async function CardGrid({ searchQuery, typeFilter, mode = 'default' }: CardGridProps) {
+export async function CardGrid({ searchQuery, platformFilter, typeFilter, mode = 'default' }: CardGridProps) {
         // Fetch cards from server
         let cards;
 
@@ -54,8 +56,8 @@ export async function CardGrid({ searchQuery, typeFilter, mode = 'default' }: Ca
         }
 
         // Pass to client wrapper which handles localStorage merge and client-side filtering
-        // Client-side filtering provides instant response for type/tag filters
-        return <CardGridClient serverCards={cards} searchQuery={searchQuery} typeFilter={typeFilter} mode={mode} />;
+        // Client-side filtering provides instant response for platform filters
+        return <CardGridClient serverCards={cards} searchQuery={searchQuery} platformFilter={platformFilter || typeFilter} mode={mode} />;
 }
 
 export default CardGrid;

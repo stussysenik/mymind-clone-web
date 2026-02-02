@@ -231,13 +231,13 @@ function extractTweetText(content: string | null): string {
 
 /**
  * Normalize type to allowed database values.
- * Maps any type to: article, image, note, product, book, video, or audio
+ * Maps any type to: article, image, note, product, book, video, audio, social, or movie
  */
-function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' {
+function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'social' | 'movie' {
         const normalized = type?.toLowerCase() ?? 'article';
 
         // Map common types to our allowed values
-        const typeMap: Record<string, 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio'> = {
+        const typeMap: Record<string, 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'social' | 'movie'> = {
                 article: 'article',
                 blog: 'article',
                 post: 'article',
@@ -269,12 +269,23 @@ function normalizeType(type: string): 'article' | 'image' | 'note' | 'product' |
                 video: 'video',
                 youtube: 'video',
                 vimeo: 'video',
-                movie: 'video',
-                film: 'video',
                 audio: 'audio',
                 podcast: 'audio',
                 music: 'audio',
                 song: 'audio',
+                // Social media types
+                social: 'social',
+                twitter: 'social',
+                instagram: 'social',
+                reddit: 'social',
+                linkedin: 'social',
+                bluesky: 'social',
+                mastodon: 'social',
+                // Movie types
+                movie: 'movie',
+                film: 'movie',
+                imdb: 'movie',
+                letterboxd: 'movie',
         };
 
         return typeMap[normalized] ?? 'article';
@@ -474,10 +485,15 @@ function classifyContentFallback(
                         tags.push('music');
                 }
         }
-        // Letterboxd
+        // IMDB - Movie platform
+        else if (domain.includes('imdb.com')) {
+                type = 'movie' as CardType;
+                tags.push('movie', 'film', 'entertainment', 'imdb');
+        }
+        // Letterboxd - Movie platform
         else if (domain.includes('letterboxd.com')) {
-                type = 'article';
-                tags.push('film', 'movies', 'reviews', 'cinema');
+                type = 'movie' as CardType;
+                tags.push('movie', 'film', 'reviews', 'letterboxd');
         }
         // GitHub
         else if (domain.includes('github.com') || domain.includes('github.io')) {
@@ -487,15 +503,35 @@ function classifyContentFallback(
                         tags.push('portfolio');
                 }
         }
-        // Twitter/X
+        // Twitter/X - Social media
         else if (domain.includes('twitter.com') || domain.includes('x.com')) {
-                type = 'article';
+                type = 'social' as CardType;
                 tags.push('social', 'twitter', 'thoughts');
         }
-        // Reddit
+        // Instagram - Social media
+        else if (domain.includes('instagram.com')) {
+                type = 'social' as CardType;
+                tags.push('social', 'instagram', 'visual');
+        }
+        // Reddit - Social media
         else if (domain.includes('reddit.com')) {
-                type = 'article';
+                type = 'social' as CardType;
                 tags.push('social', 'reddit', 'discussion', 'community');
+        }
+        // Bluesky - Social media
+        else if (domain.includes('bsky.app') || domain.includes('bluesky')) {
+                type = 'social' as CardType;
+                tags.push('social', 'bluesky', 'thoughts');
+        }
+        // Mastodon - Social media
+        else if (domain.includes('mastodon') || domain.includes('fosstodon') || domain.includes('hachyderm')) {
+                type = 'social' as CardType;
+                tags.push('social', 'mastodon', 'fediverse');
+        }
+        // LinkedIn - Social media
+        else if (domain.includes('linkedin.com')) {
+                type = 'social' as CardType;
+                tags.push('social', 'linkedin', 'professional');
         }
         // Medium / Substack (Articles)
         else if (domain.includes('medium.com') || domain.includes('substack.com')) {
@@ -525,15 +561,19 @@ function classifyContentFallback(
                 type = 'product';
                 tags.push('shopping', 'product', 'wishlist');
         }
-        // Book sites
+        // Book sites (including StoryGraph)
         else if (
                 urlLower.includes('goodreads.') ||
+                domain.includes('thestorygraph.com') ||
                 urlLower.includes('/book') ||
                 contentLower.includes('isbn') ||
                 contentLower.includes('author:')
         ) {
                 type = 'book';
                 tags.push('book', 'reading', 'literature');
+                if (domain.includes('thestorygraph.com')) {
+                        tags.push('storygraph');
+                }
         }
         // Image platforms
         else if (

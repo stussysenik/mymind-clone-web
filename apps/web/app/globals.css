@@ -818,6 +818,72 @@ h3 {
 }
 
 /* =============================================================================
+   ADD MODAL ANIMATIONS (Notion-like minimal polish)
+   ============================================================================= */
+
+/* Modal entrance - subtle scale + fade + lift */
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modal-enter 200ms var(--ease-snappy) forwards;
+}
+
+/* Backdrop fade in */
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-backdrop-enter {
+  animation: backdrop-enter 150ms ease-out forwards;
+}
+
+/* Subtle shake for error toast */
+@keyframes subtle-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.animate-subtle-shake {
+  animation: subtle-shake 400ms ease-out;
+}
+
+/* Badge pulse on appear */
+@keyframes badge-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 250ms var(--ease-snappy) forwards;
+}
+
+/* =============================================================================
    AI SUMMARY MERGE SEPARATOR
    ============================================================================= */
 

@@ -64,22 +64,25 @@ export function useMediaQuery(query: string): boolean {
  *
  * Breakpoints:
  * - isXs: <= 374px (iPhone SE/4, very small phones)
- * - isSm: <= 639px (Small phones)
+ * - isMidSm: <= 450px (iPhone 12/14/16 series, Pixel 7 - mid-range phones)
+ * - isSm: <= 639px (Small phones, larger than mid-range)
  * - isMd: <= 767px (Tablets portrait, large phones)
  * - isLg: <= 1023px (Tablets landscape)
  *
  * @example
- * const { isMobile, isXs, isSm } = useBreakpoint();
+ * const { isMobile, isXs, isMidSm, isSm } = useBreakpoint();
  * // isMobile is true for anything <= 767px
  */
 export function useBreakpoint() {
 	const isXs = useMediaQuery('(max-width: 374px)');   // iPhone SE/4
+	const isMidSm = useMediaQuery('(max-width: 450px)'); // iPhone 12/14/16, Pixel 7 (375-450px)
 	const isSm = useMediaQuery('(max-width: 639px)');   // Small phones
 	const isMd = useMediaQuery('(max-width: 767px)');   // Tablets portrait
 	const isLg = useMediaQuery('(max-width: 1023px)');  // Tablets landscape
 
 	return {
 		isXs,
+		isMidSm,
 		isSm,
 		isMd,
 		isLg,

@@ -10,10 +10,11 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Play, Instagram } from 'lucide-react';
+import { Play, Instagram, Globe } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
 import { AnalyzingIndicator } from '../AnalyzingIndicator';
+import { AuthorDisplay } from '../AuthorDisplay';
 
 // =============================================================================
 // TYPES
@@ -38,7 +39,10 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 	const [imageError, setImageError] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
 	const isReel = card.url?.includes('/reel/') || card.url?.includes('/reels/');
-	const author = card.metadata.author || 'instagram';
+	// Use new author fields if available, fallback to legacy
+	const authorName = card.metadata.authorName || '';
+	const authorHandle = card.metadata.authorHandle || card.metadata.author?.replace('@', '') || '';
+	const authorAvatar = card.metadata.authorAvatar || '';
 
 	return (
 		<article
@@ -72,11 +76,13 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 					</div>
 				)}
 
-				{/* Instagram Badge - only show when not processing */}
-				{!card.metadata?.processing && (
-					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1 backdrop-blur-sm">
-						<Instagram className="h-3.5 w-3.5 text-white" />
-						<span className="text-xs font-medium text-white">Instagram</span>
+				{/* Domain Badge - only show when not processing */}
+				{!card.metadata?.processing && card.url && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
 					</div>
 				)}
 
@@ -179,15 +185,27 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 			{/* Content */}
 			<div className="p-3">
 				{/* Author */}
-				<div className="mb-2 flex items-center gap-2">
-					<div className="h-6 w-6 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-0.5">
-						<div className="flex h-full w-full items-center justify-center rounded-full bg-white">
-							<span className="text-[8px] font-semibold text-pink-500">IG</span>
+				<div className="mb-2">
+					{authorHandle || authorName ? (
+						<AuthorDisplay
+							name={authorName || authorHandle}
+							handle={authorHandle}
+							avatarUrl={authorAvatar}
+							platform="instagram"
+							size="sm"
+						/>
+					) : (
+						<div className="flex items-center gap-2">
+							<div className="h-6 w-6 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-0.5">
+								<div className="flex h-full w-full items-center justify-center rounded-full bg-white">
+									<span className="text-[8px] font-semibold text-pink-500">IG</span>
+								</div>
+							</div>
+							<span className="text-sm font-medium text-[var(--foreground)]">
+								Instagram
+							</span>
 						</div>
-					</div>
-					<span className="text-sm font-medium text-[var(--foreground)]">
-						{author}
-					</span>
+					)}
 				</div>
 
 				{/* Title (AI-generated summary) */}
@@ -204,11 +222,14 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 					</p>
 				)}
 
-				{/* Date + Source */}
-				<div className="mt-2 flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
-					<span>Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-					<span>•</span>
-					<span className="text-[var(--accent-primary)]">instagram.com</span>
+				{/* Date */}
+				<div className="mt-2 text-xs text-[var(--foreground-muted)]">
+					Added {new Date(card.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+				</div>
+				{/* Domain Link */}
+				<div className="flex items-center gap-1.5 mt-1">
+					<Globe className="w-3 h-3 text-[var(--foreground-muted)]" />
+					<span className="text-xs text-[var(--accent-primary)] truncate">instagram.com</span>
 				</div>
 
 				{/* Tags */}

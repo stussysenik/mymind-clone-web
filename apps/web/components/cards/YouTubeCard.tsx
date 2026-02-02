@@ -15,6 +15,7 @@ import type { Card } from '@/lib/types';
 import { TagDisplay } from '../TagDisplay';
 import { AnalyzingIndicator } from '../AnalyzingIndicator';
 import { CardActions, ExternalLinkButton } from './CardActions';
+import { AuthorDisplay } from '../AuthorDisplay';
 
 // =============================================================================
 // TYPES
@@ -38,7 +39,9 @@ interface YouTubeCardProps {
 export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: YouTubeCardProps) {
 	const [imageError, setImageError] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
-	const channelName = card.metadata.author || 'YouTube';
+	// Use new author fields if available, fallback to legacy
+	const authorName = card.metadata.authorName || card.metadata.author || 'YouTube';
+	const authorHandle = card.metadata.authorHandle || '';
 	const viewCount = card.metadata.viewCount;
 
 	return (
@@ -89,13 +92,13 @@ export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: Y
 					</div>
 				)}
 
-				{/* YouTube Badge - only show when not processing */}
-				{!card.metadata?.processing && (
+				{/* Domain Badge - only show when not processing */}
+				{!card.metadata?.processing && card.url && (
 					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
-						<svg className="h-3.5 w-3.5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-						</svg>
-						<span className="text-xs font-medium text-white">YouTube</span>
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
 					</div>
 				)}
 
@@ -123,7 +126,12 @@ export function YouTubeCard({ card, onDelete, onArchive, onRestore, onClick }: Y
 
 				{/* Channel & Views */}
 				<div className="flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
-					<span className="font-medium">{channelName}</span>
+					<span className="font-medium">{authorName}</span>
+					{authorHandle && (
+						<>
+							<span className="text-[var(--foreground-muted)]">@{authorHandle}</span>
+						</>
+					)}
 					{viewCount && (
 						<>
 							<span>•</span>

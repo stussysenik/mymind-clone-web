@@ -190,12 +190,13 @@ export async function POST(request: NextRequest) {
                 console.log(`[Enrich API] Classification completed in ${classifyMs}ms`);
 
                 // 4. Normalize tags against existing database tags ("Gardener Bot")
-                let finalTags = classification.tags || [];
+                // Defensive: ensure classification.tags is always an array before iteration
+                let finalTags: string[] = Array.isArray(classification?.tags) ? classification.tags : [];
                 try {
                         const existingTags = await getUniqueTags(userId);
                         const existingTagNames = (existingTags ?? []).map(t => t.tag);
-                        if (existingTagNames.length > 0) {
-                                finalTags = await normalizeTagsToExisting(classification.tags, existingTagNames);
+                        if (existingTagNames.length > 0 && finalTags.length > 0) {
+                                finalTags = await normalizeTagsToExisting(finalTags, existingTagNames);
                         }
                 } catch (normError) {
                         console.warn('[Enrich API] Tag normalization skipped:', normError);
@@ -210,7 +211,8 @@ export async function POST(request: NextRequest) {
                         .single();
 
                 const currentMetadata = latestCard?.metadata || card.metadata;
-                const currentTags = latestCard?.tags || card.tags || [];
+                // Ensure both tag arrays are valid before merging
+                const currentTags = Array.isArray(latestCard?.tags) ? latestCard.tags : (Array.isArray(card.tags) ? card.tags : []);
                 const mergedTags = Array.from(new Set([...currentTags, ...finalTags]));
 
                 // Check if user has manually edited title/summary - preserve their edits

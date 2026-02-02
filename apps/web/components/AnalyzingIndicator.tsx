@@ -10,7 +10,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Loader2, Brain, Wand2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, Brain, Wand2, AlertCircle, RefreshCw } from 'lucide-react';
 
 // =============================================================================
 // TYPES
@@ -35,6 +35,10 @@ interface AnalyzingIndicatorProps {
 	startTime?: number;
 	/** Callback when processing is considered stuck (>60s) */
 	onTimeout?: () => void;
+	/** Callback to retry enrichment - shows retry button when stuck */
+	onRetry?: () => void;
+	/** Whether enrichment explicitly failed (shows failed state immediately) */
+	failed?: boolean;
 }
 
 // =============================================================================
@@ -71,12 +75,21 @@ export function AnalyzingIndicator({
 	progress,
 	startTime,
 	onTimeout,
+	onRetry,
+	failed = false,
 }: AnalyzingIndicatorProps) {
 	// Timeout detection state
-	const [timeoutState, setTimeoutState] = useState<TimeoutState>('normal');
+	const [timeoutState, setTimeoutState] = useState<TimeoutState>(failed ? 'stuck' : 'normal');
+	const [isRetrying, setIsRetrying] = useState(false);
 
 	// Check for timeout based on startTime
 	useEffect(() => {
+		// If explicitly failed, always show stuck state
+		if (failed) {
+			setTimeoutState('stuck');
+			return;
+		}
+
 		if (!startTime) {
 			setTimeoutState('normal');
 			return;
@@ -100,7 +113,19 @@ export function AnalyzingIndicator({
 		// Check every second
 		const interval = setInterval(checkTimeout, 1000);
 		return () => clearInterval(interval);
-	}, [startTime, onTimeout]);
+	}, [startTime, onTimeout, failed]);
+
+	// Handle retry click
+	const handleRetry = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!onRetry || isRetrying) return;
+		setIsRetrying(true);
+		try {
+			await onRetry();
+		} finally {
+			setIsRetrying(false);
+		}
+	};
 
 	// Determine stage based on progress
 	const stageIndex = progress !== undefined
@@ -209,7 +234,7 @@ export function AnalyzingIndicator({
 			</span>
 
 			{/* Progress indicator dots */}
-			{showStage && (
+			{showStage && timeoutState !== 'stuck' && (
 				<div className="flex gap-0.5 ml-1">
 					{STAGES.map((_, i) => (
 						<div
@@ -225,6 +250,25 @@ export function AnalyzingIndicator({
 						/>
 					))}
 				</div>
+			)}
+
+			{/* Retry button - shown when stuck and onRetry is provided */}
+			{timeoutState === 'stuck' && onRetry && (
+				<button
+					onClick={handleRetry}
+					disabled={isRetrying}
+					className={`
+						ml-1 p-1 rounded-full transition-colors
+						${variant === 'light'
+							? 'hover:bg-gray-200 text-gray-600'
+							: 'hover:bg-white/20 text-white/80 hover:text-white'
+						}
+						${isRetrying ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+					`}
+					title="Retry enrichment"
+				>
+					<RefreshCw className={`${iconSizes[size]} ${isRetrying ? 'animate-spin' : ''}`} />
+				</button>
 			)}
 		</div>
 	);

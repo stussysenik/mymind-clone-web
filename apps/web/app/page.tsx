@@ -17,7 +17,7 @@ export const revalidate = 0; // Disable caching for realtime updates
 // =============================================================================
 
 interface HomePageProps {
-  searchParams: Promise<{ q?: string; type?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; platform?: string; type?: string; view?: string }>;
 }
 
 // =============================================================================
@@ -46,7 +46,8 @@ function CardGridSkeleton() {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const searchQuery = params.q ?? '';
-  const typeFilter = params.type ?? '';
+  // Support both new ?platform= and legacy ?type= params
+  const platformFilter = params.platform ?? params.type ?? '';
   const mode = (params.view === 'archive' || params.view === 'trash') ? params.view : 'default';
 
   return (
@@ -71,7 +72,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {/* Card Grid */}
         <section className="pb-12">
           <Suspense fallback={<CardGridSkeleton />}>
-            <CardGrid searchQuery={searchQuery} typeFilter={typeFilter} mode={mode} />
+            <CardGrid searchQuery={searchQuery} platformFilter={platformFilter} mode={mode} />
           </Suspense>
         </section>
       </main>

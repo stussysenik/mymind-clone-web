@@ -96,28 +96,15 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 					</div>
 				)}
 
-				{/* Platform Badge */}
-				<div
-					className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md px-2 py-1 backdrop-blur-sm"
-					style={{ backgroundColor: `${accentColor}20` }}
-				>
-					{isLetterboxd ? (
-						<>
-							<div className="flex gap-0.5">
-								<div className="h-2.5 w-2.5 rounded-full bg-[#FF8000]" />
-								<div className="h-2.5 w-2.5 rounded-full bg-[#00E054]" />
-								<div className="h-2.5 w-2.5 rounded-full bg-[#40BCF4]" />
-							</div>
-							<span className="text-xs font-medium text-white">Letterboxd</span>
-						</>
-					) : (
-						<>
-							<div className="rounded bg-[#F5C518] px-1 py-0.5 text-[10px] font-bold text-black">
-								IMDb
-							</div>
-						</>
-					)}
-				</div>
+				{/* Domain Badge */}
+				{card.url && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
+					</div>
+				)}
 
 				{/* Rating Badge */}
 				{rating && (

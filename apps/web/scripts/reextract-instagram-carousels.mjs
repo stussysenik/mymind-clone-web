@@ -22,9 +22,9 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-// Load environment variables from apps/web/.env.local
+// Load environment variables from .env.local (relative to this script in apps/web/scripts)
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve(__dirname, '../apps/web/.env.local');
+const envPath = resolve(__dirname, '../.env.local');
 
 function loadEnvFile(path) {
   try {

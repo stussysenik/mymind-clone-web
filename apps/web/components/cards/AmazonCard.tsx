@@ -64,13 +64,15 @@ export function AmazonCard({ card, onDelete, onArchive, onRestore, onClick }: Am
 					</div>
 				)}
 
-				{/* Amazon Badge */}
-				<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-[#232F3E] px-2 py-1">
-					<svg className="h-4 w-4" viewBox="0 0 24 24" fill="#FF9900">
-						<path d="M13.958 10.09c0 1.232.029 2.256-.591 3.351-.502.891-1.301 1.438-2.186 1.438-1.214 0-1.922-.924-1.922-2.292 0-2.692 2.415-3.182 4.7-3.182v.685zm3.186 7.705a.66.66 0 01-.753.077c-1.06-.878-1.25-1.286-1.828-2.123-1.748 1.783-2.988 2.317-5.251 2.317-2.683 0-4.773-1.656-4.773-4.968 0-2.586 1.4-4.348 3.395-5.208 1.727-.756 4.14-.89 5.982-1.098v-.411c0-.753.058-1.642-.385-2.292-.385-.579-1.124-.818-1.774-.818-1.205 0-2.277.618-2.54 1.897-.054.285-.261.566-.549.58l-3.065-.33c-.259-.058-.548-.268-.474-.665C5.73 2.11 8.253.853 10.502.853c1.155 0 2.663.307 3.577 1.18 1.155 1.075 1.041 2.507 1.041 4.068v3.683c0 1.107.46 1.593 1.155 2.192.241.17.295.48.016.64-.733.612-2.037 1.747-2.755 2.386l-.005-.003-.387-.197z" />
-					</svg>
-					<span className="text-xs font-medium text-white">Amazon</span>
-				</div>
+				{/* Domain Badge */}
+				{card.url && (
+					<div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 backdrop-blur-sm">
+						<Globe className="w-3 h-3 text-white/80" />
+						<span className="text-xs font-medium text-white truncate max-w-[120px]">
+							{new URL(card.url).hostname.replace('www.', '')}
+						</span>
+					</div>
+				)}
 
 				{/* Prime Badge (if applicable) */}
 				{price && (

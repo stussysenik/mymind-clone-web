@@ -10,7 +10,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Globe, Play, StickyNote, FileText, ShoppingBag, BookOpen, Volume2, Twitter, MessageSquare } from 'lucide-react';
+import { Globe, Play, StickyNote, FileText, ShoppingBag, BookOpen, Volume2, Film, Users } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { extractDomain, isVideoUrl } from '@/lib/platforms';
 import { decodeHtmlEntities } from '@/lib/text-utils';
@@ -38,8 +38,8 @@ const TYPE_ICONS = {
 	book: BookOpen,
 	video: Play,
 	audio: Volume2,
-	twitter: Twitter,
-	reddit: MessageSquare,
+	social: Users,     // Social media (Twitter, Instagram, Reddit, etc.)
+	movie: Film,       // Movies (IMDB, Letterboxd)
 	website: Globe,
 } as const;
 
