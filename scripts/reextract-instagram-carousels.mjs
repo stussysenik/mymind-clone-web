@@ -68,8 +68,8 @@ const FORCE = args.includes('--force');
 const limitIndex = args.indexOf('--limit');
 const LIMIT = limitIndex !== -1 ? parseInt(args[limitIndex + 1], 10) : null;
 
-// API endpoint for re-enrichment
-const ENRICH_API_URL = process.env.ENRICH_API_URL || 'http://localhost:3000/api/enrich';
+// API endpoint for re-enrichment (default port 3737 matches bun run dev)
+const ENRICH_API_URL = process.env.ENRICH_API_URL || 'http://localhost:3737/api/enrich';
 
 async function findFailedInstagramCards() {
   console.log('🔍 Finding Instagram cards that need re-extraction...\n');
@@ -149,6 +149,7 @@ async function triggerReExtraction(card) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-service-key': SUPABASE_SERVICE_KEY,
       },
       body: JSON.stringify({
         cardId: card.id,

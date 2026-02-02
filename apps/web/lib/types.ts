@@ -15,7 +15,7 @@
  * Supported card types in the system.
  * Each type determines how the card is displayed in the grid.
  */
-export type CardType = 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'twitter' | 'reddit' | 'website';
+export type CardType = 'article' | 'image' | 'note' | 'product' | 'book' | 'video' | 'audio' | 'social' | 'movie' | 'website';
 
 /**
  * AI-extracted metadata stored in the card's metadata JSONB field.
@@ -36,6 +36,12 @@ export interface CardMetadata {
         price?: string;
         /** Author name for articles/books/tweets */
         author?: string;
+        /** Author's display name (e.g., "Elon Musk") */
+        authorName?: string;
+        /** Author's handle/username without @ (e.g., "elonmusk") */
+        authorHandle?: string;
+        /** Author's profile avatar URL */
+        authorAvatar?: string;
         /** Estimated reading time in minutes */
         readingTime?: number;
         /** Original publication date (ISO string) */

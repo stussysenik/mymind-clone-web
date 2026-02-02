@@ -82,6 +82,10 @@ export async function POST(request: NextRequest) {
                 const user = await getUser();
                 const userId = user?.id ?? 'demo-user';
 
+                // Check for service key bypass (for migration scripts)
+                const serviceKey = request.headers.get('x-service-key');
+                const isServiceRequest = serviceKey === process.env.SUPABASE_SERVICE_ROLE_KEY;
+
                 // If strictly requiring auth for production, uncomment this:
                 // if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
@@ -101,7 +105,8 @@ export async function POST(request: NextRequest) {
                         return NextResponse.json({ success: false, error: 'Card not found' }, { status: 404 });
                 }
 
-                if (card.user_id !== userId) {
+                // Skip user check for service requests (migration scripts)
+                if (!isServiceRequest && card.user_id !== userId) {
                         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
                 }
 
@@ -113,10 +118,14 @@ export async function POST(request: NextRequest) {
                 const contentLength = (card.content?.length || 0) + (card.title?.length || 0);
                 const timing = createEnrichmentTiming(platform, contentLength, !!card.image_url, imageCount);
 
-                // Store initial timing estimate in card metadata for UI
+                // IMPORTANT: Set processing=true at START so UI shows loading state immediately
+                // This is crucial for retry scenarios where processing was previously false
                 await updateCard(cardId, {
                         metadata: {
                                 ...card.metadata,
+                                processing: true,  // Show loading indicator in UI
+                                enrichmentError: undefined,  // Clear any previous error
+                                enrichmentFailedAt: undefined,  // Clear previous failure timestamp
                                 enrichmentTiming: {
                                         startedAt: timing.startedAt,
                                         estimatedTotalMs: timing.estimatedTotalMs,
@@ -181,7 +190,7 @@ export async function POST(request: NextRequest) {
                 console.log(`[Enrich API] Classification completed in ${classifyMs}ms`);
 
                 // 4. Normalize tags against existing database tags ("Gardener Bot")
-                let finalTags = classification.tags;
+                let finalTags = classification.tags || [];
                 try {
                         const existingTags = await getUniqueTags(userId);
                         const existingTagNames = (existingTags ?? []).map(t => t.tag);
