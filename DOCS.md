@@ -134,6 +134,25 @@ apps/web/
 
 ### Instagram Carousel Support
 
+**High-Quality Multi-Image Extraction:**
+The scraper uses an embed page approach that works without login:
+1. Navigate to `instagram.com/p/{shortcode}/embed/captioned/`
+2. Click "Next" button to navigate through carousel (triggers lazy-loading)
+3. Capture CDN image requests matching `t51.2885-15` pattern
+4. Filter for high-resolution versions (1080px+ width)
+
+**Fallback Chain:**
+```typescript
+// Strategy 1: Embed page with browser navigation (BEST - works without login)
+scrapeInstagramViaEmbed(shortcode)
+
+// Strategy 2: Direct post page with Playwright (may require login)
+scrapeInstagramCarousel(shortcode)
+
+// Strategy 3: Static embed HTML parsing (fastest but may miss images)
+scrapeInstagramEmbed(shortcode)
+```
+
 **Detection:**
 ```typescript
 const hasCarousel = card.metadata.images?.length > 1;
@@ -148,6 +167,17 @@ const hasCarousel = card.metadata.images?.length > 1;
 - Previous/Next buttons in detail view
 - Dot indicators showing position
 - Swipe support (mobile)
+
+**Re-extraction Script:**
+```bash
+# Find and re-extract failed Instagram carousels
+node scripts/reextract-instagram-carousels.mjs
+
+# Options:
+#   --dry-run     Preview what would be re-extracted
+#   --limit N     Only process N cards
+#   --force       Re-extract all Instagram cards
+```
 
 ### Platform-Specific AI
 

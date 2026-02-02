@@ -109,9 +109,11 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 ## Visual Features
 
 ### Instagram Support
-- **Multi-image carousels**: All images accessible with navigation
+- **High-quality extraction**: Images captured at 1080px+ resolution via embed page
+- **Multi-image carousels**: All carousel images extracted and navigable
 - **Carousel indicators**: "1/X" badge on multi-image posts
 - **Hashtag extraction**: Instagram hashtags become searchable tags
+- **No login required**: Uses embed page approach that works without authentication
 
 ### Twitter/X Support
 - **Visual fidelity**: Preserves line breaks and formatting

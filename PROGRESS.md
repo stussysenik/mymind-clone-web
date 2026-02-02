@@ -11,7 +11,29 @@
 
 ## Timeline
 
-### January 2026
+### January 2026 - February 2026
+
+#### Week 5 (Jan 27 - Feb 2)
+
+**Instagram High-Quality Carousel Extraction (Feb 2)**
+- Fixed CDN pattern filter from `t51.82787-15` to `t51.2885-15`
+- Added new `scrapeInstagramViaEmbed()` function using embed page approach
+- Carousel navigation via Next button clicks to trigger image lazy-loading
+- Network interception captures high-res images (1080x1348 to 1440x1798)
+- Updated fallback chain: embed scraper → direct page → static HTML parsing
+- Created migration script for re-extracting failed Instagram carousels
+
+**Key Commits:**
+- `feat(instagram): add high-quality multi-image carousel extraction`
+
+**Artifacts:**
+- `apps/web/lib/instagram-scraper.ts` — Updated with embed page scraper
+- `scripts/reextract-instagram-carousels.mjs` — Migration script for failed cards
+
+**Test Case:**
+- 7-image carousel post (WIKID camo hoodies) successfully extracted all images at 1080+ resolution
+
+---
 
 #### Week 4 (Jan 20-26)
 
@@ -155,7 +177,7 @@
 | Supabase auth | ✅ Done | OAuth + RLS |
 | Archive/Trash | ✅ Done | Full lifecycle |
 | Vercel deployment | ✅ Done | Edge functions |
-| Instagram carousels | ✅ Done | Multi-image support with navigation |
+| Instagram carousels | ✅ Done | Multi-image extraction via embed page, high-res (1080px+) |
 | Platform-specific AI | ✅ Done | Instagram, Twitter, website prompts |
 | Dark mode | ✅ Done | Auto + manual with settings modal |
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
@@ -252,4 +274,4 @@ apps/web/
 
 ---
 
-*Last updated: 2026-01-25*
+*Last updated: 2026-02-02*
