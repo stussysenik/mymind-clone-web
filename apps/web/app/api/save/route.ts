@@ -14,7 +14,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
-import type { SaveCardRequest, SaveCardResponse, CardRow, SaveSource } from '@/lib/types';
+import type { SaveCardRequest, SaveCardResponse, CardRow, SaveSource, CardType } from '@/lib/types';
+import { detectPlatform, Platform } from '@/lib/platforms';
+
+// =============================================================================
+// PLATFORM TO TYPE MAPPING
+// =============================================================================
+
+/**
+ * Maps detected platforms to their corresponding card types.
+ * This ensures YouTube URLs get type 'video', not 'article'.
+ */
+const PLATFORM_TYPE_MAP: Record<Platform, CardType> = {
+	'youtube': 'video',
+	'tiktok': 'video',
+	'twitter': 'social',
+	'instagram': 'social',
+	'reddit': 'social',
+	'linkedin': 'social',
+	'mastodon': 'social',
+	'letterboxd': 'movie',
+	'imdb': 'movie',
+	'goodreads': 'book',
+	'storygraph': 'book',
+	'amazon': 'product',
+	'spotify': 'audio',
+	'pinterest': 'image',
+	'github': 'article',
+	'medium': 'article',
+	'substack': 'article',
+	'unknown': 'article',
+};
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -59,10 +89,12 @@ async function validateAuthToken(authToken: string): Promise<{ userId: string | 
 
 /**
  * Extract basic metadata from URL (without AI)
+ * Now includes platform detection for correct type assignment.
  */
-function extractQuickMetadata(url: string | null, content: string | null) {
+function extractQuickMetadata(url: string | null, content: string | null): { title: string; type: CardType; platform: Platform } {
 	let title = 'New Card';
-	let type: 'article' | 'image' | 'note' | 'product' | 'book' = 'article';
+	let type: CardType = 'article';
+	let platform: Platform = 'unknown';
 
 	if (content && !url) {
 		type = 'note';
@@ -70,6 +102,9 @@ function extractQuickMetadata(url: string | null, content: string | null) {
 		const firstLine = content.split('\n')[0].trim();
 		title = firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
 	} else if (url) {
+		// Detect platform from URL and map to correct type
+		platform = detectPlatform(url);
+		type = PLATFORM_TYPE_MAP[platform];
 		try {
 			const parsed = new URL(url);
 			// Use domain as title
@@ -79,13 +114,13 @@ function extractQuickMetadata(url: string | null, content: string | null) {
 		}
 	}
 
-	return { title, type };
+	return { title, type, platform };
 }
 
 import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
-import { scrapeInstagramQuick, scrapeInstagramCarousel } from '@/lib/instagram-scraper';
+import { scrapeInstagramQuick, extractInstagramImages } from '@/lib/instagram-scraper';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
@@ -155,7 +190,9 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 	try {
 		console.log(`[Save] Background: Starting carousel extraction for ${shortcode}`);
 
-		const result = await scrapeInstagramCarousel(shortcode);
+		// Use the full extraction function with fallback chain (embed scraper first, then direct page)
+		const url = `https://www.instagram.com/p/${shortcode}/`;
+		const result = await extractInstagramImages(url);
 
 		if (result && result.images.length > 0) {
 			console.log(`[Save] Background: Extracted ${result.images.length} images, caption: "${result.caption?.slice(0, 50)}..."`);
@@ -397,7 +434,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		const quickMeta = extractQuickMetadata(url ?? null, content ?? null);
 
 		// Get URL preview (OG image/title/content) - fast parallel fetch
-		let preview: { title?: string; imageUrl?: string; content?: string; description?: string; images?: string[]; isCarousel?: boolean; shortcode?: string } = {};
+		let preview: {
+			title?: string;
+			imageUrl?: string;
+			content?: string;
+			description?: string;
+			images?: string[];
+			isCarousel?: boolean;
+			shortcode?: string;
+			authorName?: string;
+			authorHandle?: string;
+			authorAvatar?: string;
+		} = {};
 
 		// Check if this is an Instagram URL - use fast path for immediate response
 		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/'));
@@ -458,7 +506,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 				imageUrl: scraped.imageUrl ?? fallbackImage,
 				content: scraped.content,
 				description: scraped.description,
-				images: scraped.images
+				images: scraped.images,
+				authorName: scraped.authorName,
+				authorHandle: scraped.authorHandle,
+				authorAvatar: scraped.authorAvatar,
 			};
 		}
 
@@ -482,9 +533,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			image_url: finalImageUrl ?? preview.imageUrl ?? null,
 			metadata: {
 				processing: !tags, // Flag as processing if we need AI
+				platform: quickMeta.platform !== 'unknown' ? quickMeta.platform : undefined, // Store detected platform
 				images: preview.images, // Store carousel images
 				isCarousel: preview.isCarousel, // Track if this is a carousel
 				carouselPending: !!(preview.isCarousel && preview.shortcode), // Background extraction pending
+				// Author info extracted from social platforms
+				authorName: preview.authorName,
+				authorHandle: preview.authorHandle,
+				authorAvatar: preview.authorAvatar,
 			},
 			tags: tags ?? [], // Empty tags, will be filled by AI
 		};

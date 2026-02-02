@@ -81,12 +81,12 @@ const MAX_CAROUSEL_SIZE = 10;
  * Determines if a URL is a high-resolution POST image (not thumbnail/profile)
  */
 function isCarouselImage(url: string): boolean {
-	// MUST be a post image (t51.82787-15 marker)
-	if (!url.includes('t51.82787-15')) {
+	// MUST be a post image (t51.2885-15 is the correct CDN marker for post images)
+	if (!url.includes('t51.2885-15')) {
 		return false;
 	}
 
-	// EXCLUDE patterns
+	// EXCLUDE patterns (low-quality thumbnails and profile pics)
 	const excludePatterns = [
 		't51.2885-19', // Profile pictures
 		'150x150',
@@ -96,7 +96,7 @@ function isCarouselImage(url: string): boolean {
 		'/s320x320/',
 		'/c0.',
 		'/e15/',
-		'/e35/',
+		// Note: _e35_ is used in high-res images, don't exclude it
 		'profile_pic',
 	];
 
@@ -122,7 +122,7 @@ function getImageSignature(url: string): string {
 	try {
 		const parsed = new URL(url);
 		// Extract the unique media ID from the path
-		// Instagram URLs have format: /v/t51.82787-15/{mediaId}_{suffix}/...
+		// Instagram URLs have format: /v/t51.2885-15/{mediaId}_{suffix}/...
 		const pathParts = parsed.pathname.split('/');
 		// Find the segment that contains the media ID (usually has underscores)
 		const mediaSegment = pathParts.find(p => p.includes('_') && p.length > 20);
@@ -526,7 +526,7 @@ export async function scrapeInstagramEmbed(shortcode: string): Promise<string[]>
 					.replace(/\\"/g, '"');
 
 				// Only include high-res images
-				if (cleanUrl.includes('t51.82787-15') && !images.includes(cleanUrl)) {
+				if (cleanUrl.includes('t51.2885-15') && !images.includes(cleanUrl)) {
 					images.push(cleanUrl);
 				}
 			}
@@ -536,6 +536,163 @@ export async function scrapeInstagramEmbed(shortcode: string): Promise<string[]>
 	} catch (e) {
 		console.warn('[InstagramScraper] Embed fallback failed:', e);
 		return [];
+	}
+}
+
+/**
+ * Scrapes Instagram carousel via embed page with browser navigation
+ * This approach works without login by using the public embed endpoint
+ * and clicking through the carousel to trigger network requests for all images
+ */
+export async function scrapeInstagramViaEmbed(shortcode: string): Promise<InstagramScraperResult> {
+	const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+	let playwright: typeof import('playwright');
+	let chromium: typeof import('@sparticuz/chromium') | null = null;
+
+	if (isServerless) {
+		chromium = await import('@sparticuz/chromium');
+		playwright = await import('playwright-core') as unknown as typeof import('playwright');
+	} else {
+		playwright = await import('playwright');
+	}
+
+	const launchOptions: Parameters<typeof playwright.chromium.launch>[0] = {
+		headless: true,
+		args: isServerless && chromium ? [...chromium.default.args, ...STEALTH_ARGS] : STEALTH_ARGS,
+	};
+
+	if (isServerless && chromium) {
+		launchOptions.executablePath = await chromium.default.executablePath();
+	}
+
+	console.log('[InstagramScraper] Starting embed page carousel extraction');
+	const browser: Browser = await playwright.chromium.launch(launchOptions);
+
+	const capturedImages: ImageCandidate[] = [];
+	let imageCounter = 0;
+
+	try {
+		const context = await browser.newContext({
+			viewport: VIEWPORT,
+			userAgent: USER_AGENT,
+			extraHTTPHeaders: HEADERS,
+			javaScriptEnabled: true,
+		});
+
+		const page = await context.newPage();
+
+		// Network interception - capture all high-res images as they load
+		page.on('response', (response: Response) => {
+			const url = response.url();
+
+			// Only capture high-res carousel images (t51.2885-15 is the CDN marker)
+			if (!url.includes('t51.2885-15')) return;
+
+			// Exclude thumbnails and profile pics
+			const excludePatterns = ['150x150', '_s.jpg', '_t.jpg', '/s150x150/', '/s320x320/', 'profile_pic'];
+			for (const pattern of excludePatterns) {
+				if (url.includes(pattern)) return;
+			}
+
+			// Must be an image file
+			if (!url.includes('.jpg') && !url.includes('.jpeg') && !url.includes('.webp')) return;
+
+			// Check content type
+			const contentType = response.headers()['content-type'] || '';
+			if (!contentType.includes('image/')) return;
+
+			// Capture this image
+			capturedImages.push({
+				url,
+				timestamp: imageCounter++,
+			});
+
+			console.log(`[InstagramScraper] Embed captured image #${imageCounter}: ${url.slice(0, 80)}...`);
+		});
+
+		// Navigate to embed page (works without login)
+		const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+		console.log(`[InstagramScraper] Navigating to embed: ${embedUrl}`);
+
+		await page.goto(embedUrl, { waitUntil: 'networkidle', timeout: 20000 });
+
+		// Wait for initial content to load
+		await page.waitForTimeout(1000);
+
+		// Extract metadata from embed page
+		let caption = '';
+		let author = '';
+
+		try {
+			// Try to get caption from embed
+			const captionEl = await page.locator('.Caption').first();
+			if (await captionEl.isVisible({ timeout: 1000 }).catch(() => false)) {
+				caption = await captionEl.innerText().catch(() => '');
+			}
+
+			// Try to get author from embed
+			const authorEl = await page.locator('.UsernameText').first();
+			if (await authorEl.isVisible({ timeout: 1000 }).catch(() => false)) {
+				author = await authorEl.innerText().catch(() => '');
+			}
+		} catch {
+			// Metadata extraction is optional
+		}
+
+		// Navigate through carousel by clicking Next button repeatedly
+		let clickCount = 0;
+		const maxClicks = MAX_CAROUSEL_SIZE - 1; // -1 because first image already loaded
+
+		console.log('[InstagramScraper] Starting carousel navigation...');
+
+		while (clickCount < maxClicks) {
+			try {
+				// Look for Next button in embed (different selector than main page)
+				const nextButton = page.locator('button.coreSpriteRightChevron, button[aria-label="Next"], .LeftChevron + .RightChevron, button:has(svg[aria-label="Next"])');
+				const isVisible = await nextButton.first().isVisible({ timeout: 1500 }).catch(() => false);
+
+				if (!isVisible) {
+					console.log(`[InstagramScraper] No more Next button after ${clickCount} clicks`);
+					break;
+				}
+
+				// Click next
+				await nextButton.first().click();
+				clickCount++;
+
+				// Wait for new image to load via network
+				await page.waitForTimeout(400);
+
+				console.log(`[InstagramScraper] Embed clicked Next (${clickCount}/${maxClicks})`);
+			} catch (e) {
+				console.log(`[InstagramScraper] Embed navigation stopped: ${e}`);
+				break;
+			}
+		}
+
+		// Wait for final images to load
+		await page.waitForTimeout(500);
+
+		await context.close();
+		await browser.close();
+
+		// Deduplicate images
+		const uniqueImages = deduplicateImages(capturedImages);
+		const finalImages = uniqueImages.slice(0, MAX_CAROUSEL_SIZE);
+
+		console.log(`[InstagramScraper] Embed captured ${capturedImages.length} -> ${uniqueImages.length} unique -> ${finalImages.length} final`);
+
+		return {
+			images: finalImages,
+			caption,
+			author,
+			slideCount: finalImages.length,
+		};
+	} catch (error) {
+		await browser.close();
+		console.error('[InstagramScraper] Embed carousel extraction error:', error);
+		throw error;
 	}
 }
 
@@ -552,24 +709,36 @@ export async function extractInstagramImages(url: string): Promise<InstagramScra
 		return null;
 	}
 
-	// Strategy 1: Playwright with timing-based filtering (BEST)
+	// Strategy 1: Embed page with browser carousel navigation (BEST - works without login)
 	try {
-		console.log('[InstagramScraper] Strategy 1: Playwright with time-filtered capture');
-		const result = await scrapeInstagramCarousel(shortcode);
+		console.log('[InstagramScraper] Strategy 1: Embed page with carousel navigation');
+		const result = await scrapeInstagramViaEmbed(shortcode);
 		if (result.images.length > 0) {
-			console.log(`[InstagramScraper] Success: ${result.images.length} images`);
+			console.log(`[InstagramScraper] Embed navigation succeeded: ${result.images.length} images`);
 			return result;
 		}
 	} catch (e) {
-		console.warn('[InstagramScraper] Strategy 1 failed:', e);
+		console.warn('[InstagramScraper] Strategy 1 (embed navigation) failed:', e);
 	}
 
-	// Strategy 2: Embed endpoint (lower quality)
+	// Strategy 2: Direct post page with Playwright (may require login for some posts)
 	try {
-		console.log('[InstagramScraper] Strategy 2: Embed endpoint');
+		console.log('[InstagramScraper] Strategy 2: Direct post page with Playwright');
+		const result = await scrapeInstagramCarousel(shortcode);
+		if (result.images.length > 0) {
+			console.log(`[InstagramScraper] Direct page succeeded: ${result.images.length} images`);
+			return result;
+		}
+	} catch (e) {
+		console.warn('[InstagramScraper] Strategy 2 (direct page) failed:', e);
+	}
+
+	// Strategy 3: Static embed HTML parsing (fastest but may miss carousel images)
+	try {
+		console.log('[InstagramScraper] Strategy 3: Static embed HTML parsing');
 		const images = await scrapeInstagramEmbed(shortcode);
 		if (images.length > 0) {
-			console.log(`[InstagramScraper] Embed succeeded: ${images.length} images`);
+			console.log(`[InstagramScraper] Static embed succeeded: ${images.length} images`);
 			return {
 				images,
 				caption: '',
@@ -578,7 +747,7 @@ export async function extractInstagramImages(url: string): Promise<InstagramScra
 			};
 		}
 	} catch (e) {
-		console.warn('[InstagramScraper] Strategy 2 failed:', e);
+		console.warn('[InstagramScraper] Strategy 3 (static embed) failed:', e);
 	}
 
 	console.error('[InstagramScraper] All strategies failed');
