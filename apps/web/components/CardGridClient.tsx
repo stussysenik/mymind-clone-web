@@ -497,10 +497,14 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
         // Calculate masonry styles based on card size using inline styles
         // This bypasses Tailwind CSS generation issues with dynamic responsive classes
         // cardSize 0.7 = compact (more columns), 1.0 = default, 1.5 = expanded (fewer columns)
-        const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+        // IMPORTANT: Use consistent initial value (1200) for SSR/client hydration match
+        const [windowWidth, setWindowWidth] = useState(1200);
 
         // Track window resize for responsive column calculation
+        // Set actual width on mount to avoid hydration mismatch
         useEffect(() => {
+                // Set actual width immediately on mount
+                setWindowWidth(window.innerWidth);
                 const handleResize = () => setWindowWidth(window.innerWidth);
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);

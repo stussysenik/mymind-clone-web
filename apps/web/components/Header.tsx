@@ -78,10 +78,24 @@ export function Header() {
 						className="flex items-center gap-2 group physics-press touch-target"
 					>
 						{/* Logo icon - Weight 10: Always visible */}
-						<div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)] flex items-center justify-center text-white
+						{/* Custom "D" logo for Digital consumption experiment */}
+						<div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)] flex items-center justify-center
 						               group-hover:shadow-lg group-hover:shadow-[var(--accent-primary)]/25
-						               transition-shadow duration-200">
-							<Sparkles className="h-5 w-5 fill-white/20 group-hover:scale-110 transition-transform duration-200" />
+						               transition-all duration-200 group-hover:scale-105">
+							<svg
+								viewBox="0 0 24 24"
+								className="w-5 h-5"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2.5"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								{/* Stylized D with spark */}
+								<path d="M7 4h4a8 8 0 0 1 0 16H7V4z" className="text-white" />
+								{/* Spark/dot accent */}
+								<circle cx="18" cy="6" r="2" className="fill-white/80 stroke-none" />
+							</svg>
 						</div>
 						{/* Brand text - Weight 3: Decorative, visible xl+ only (1024px+)
 						    Using CSS instead of JS to prevent hydration flash */}

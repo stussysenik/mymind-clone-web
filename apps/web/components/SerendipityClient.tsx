@@ -35,6 +35,9 @@ interface SerendipityClientProps {
 /**
  * Interactive serendipity client with focus mode carousel.
  */
+// Count options for random cards
+const COUNT_OPTIONS = [5, 10, 20, 50, 100];
+
 export function SerendipityClient({ initialCards }: SerendipityClientProps) {
 	const router = useRouter();
 	const [cards, setCards] = useState(initialCards);
@@ -43,6 +46,7 @@ export function SerendipityClient({ initialCards }: SerendipityClientProps) {
 	const [isShuffling, setIsShuffling] = useState(false);
 	const [animationDirection, setAnimationDirection] = useState<'left' | 'right'>('right');
 	const [isAnimating, setIsAnimating] = useState(false);
+	const [cardCount, setCardCount] = useState(20); // Default to 20 cards
 
 	const currentCard = cards[currentIndex];
 
@@ -111,7 +115,7 @@ export function SerendipityClient({ initialCards }: SerendipityClientProps) {
 	const handleShuffle = async () => {
 		setIsShuffling(true);
 		try {
-			const response = await fetch('/api/cards/random?limit=20');
+			const response = await fetch(`/api/cards/random?limit=${cardCount}`);
 			if (response.ok) {
 				const newCards = await response.json();
 				if (newCards.length > 0) {
@@ -211,22 +215,52 @@ export function SerendipityClient({ initialCards }: SerendipityClientProps) {
 					<span className="hidden sm:inline">Back to Everything</span>
 				</Link>
 
-				<button
-					onClick={handleShuffle}
-					disabled={isShuffling}
-					className={`
-						inline-flex items-center gap-2 px-5 py-2.5
-						bg-white border border-gray-200 rounded-full
-						text-sm font-medium shadow-sm
-						hover:bg-gray-50 hover:border-gray-300
-						disabled:opacity-50 disabled:cursor-not-allowed
-						transition-all
-						${isShuffling ? 'animate-pulse' : ''}
-					`}
-				>
-					<Shuffle className={`w-4 h-4 ${isShuffling ? 'animate-spin' : ''}`} />
-					{isShuffling ? 'Shuffling...' : 'Shuffle Again'}
-				</button>
+				<div className="flex items-center gap-2">
+					{/* Count Selector */}
+					<select
+						value={cardCount}
+						onChange={(e) => setCardCount(Number(e.target.value))}
+						disabled={isShuffling}
+						className="
+							px-3 py-2.5
+							bg-white border border-gray-200 rounded-full
+							text-sm font-medium shadow-sm
+							hover:bg-gray-50 hover:border-gray-300
+							disabled:opacity-50 disabled:cursor-not-allowed
+							transition-all cursor-pointer
+							appearance-none
+							pr-8
+							bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23666%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')]
+							bg-[position:right_8px_center]
+							bg-no-repeat
+						"
+						aria-label="Number of cards to show"
+					>
+						{COUNT_OPTIONS.map((count) => (
+							<option key={count} value={count}>
+								{count} cards
+							</option>
+						))}
+					</select>
+
+					{/* Shuffle Button */}
+					<button
+						onClick={handleShuffle}
+						disabled={isShuffling}
+						className={`
+							inline-flex items-center gap-2 px-5 py-2.5
+							bg-white border border-gray-200 rounded-full
+							text-sm font-medium shadow-sm
+							hover:bg-gray-50 hover:border-gray-300
+							disabled:opacity-50 disabled:cursor-not-allowed
+							transition-all
+							${isShuffling ? 'animate-pulse' : ''}
+						`}
+					>
+						<Shuffle className={`w-4 h-4 ${isShuffling ? 'animate-spin' : ''}`} />
+						{isShuffling ? 'Shuffling...' : 'Shuffle'}
+					</button>
+				</div>
 			</div>
 
 			{/* Focus Card Area */}
