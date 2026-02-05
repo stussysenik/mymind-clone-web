@@ -43,6 +43,7 @@ const PLATFORM_TYPE_MAP: Record<Platform, CardType> = {
 	'github': 'article',
 	'medium': 'article',
 	'substack': 'article',
+	'perplexity': 'article',
 	'unknown': 'article',
 };
 
@@ -121,6 +122,7 @@ import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
 import { scrapeInstagramQuick, extractInstagramImages } from '@/lib/instagram-scraper';
+import { persistInstagramMedia, isPersistedUrl } from '@/lib/instagram-storage';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
@@ -185,10 +187,34 @@ async function uploadImageToStorage(base64Data: string, userId: string): Promise
 /**
  * Background carousel extraction for Instagram
  * Runs AFTER initial card is saved, updates card with all images
+ *
+ * ENHANCED: Now persists media to Supabase Storage to avoid CDN URL expiration
+ * Also detects video content and tracks media types
  */
 async function extractInstagramCarouselBackground(cardId: string, shortcode: string): Promise<void> {
 	try {
 		console.log(`[Save] Background: Starting carousel extraction for ${shortcode}`);
+
+		// Fetch current card to get user_id and merge metadata properly
+		const client = getSupabaseClient(true);
+		if (!client) {
+			console.error('[Save] Background: No Supabase client');
+			return;
+		}
+
+		const { data: currentCard } = await client
+			.from('cards')
+			.select('user_id, metadata, title, content')
+			.eq('id', cardId)
+			.single();
+
+		if (!currentCard) {
+			console.error('[Save] Background: Card not found:', cardId);
+			return;
+		}
+
+		const userId = currentCard.user_id;
+		const currentMetadata = currentCard.metadata || {};
 
 		// Use the full extraction function with fallback chain (embed scraper first, then direct page)
 		const url = `https://www.instagram.com/p/${shortcode}/`;
@@ -197,20 +223,37 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 		if (result && result.images.length > 0) {
 			console.log(`[Save] Background: Extracted ${result.images.length} images, caption: "${result.caption?.slice(0, 50)}..."`);
 
-			// Fetch current card to merge metadata properly
-			const client = getSupabaseClient(true);
-			if (!client) {
-				console.error('[Save] Background: No Supabase client');
-				return;
+			// PERSIST MEDIA TO SUPABASE STORAGE
+			// This creates permanent URLs that won't expire like CDN URLs
+			let persistedUrls: string[] = result.images;
+			let mediaTypes: ('image' | 'video')[] = result.media?.map(m => m.type) || result.images.map(() => 'image');
+			let videoPositions: number[] = result.media?.filter(m => m.type === 'video').map((_, i) => {
+				const idx = result.media!.findIndex((m, j) => m.type === 'video' && result.media!.slice(0, j).filter(x => x.type === 'video').length === i);
+				return idx;
+			}) || [];
+			let originalCdnUrls: string[] = result.images;
+			let mediaPersisted = false;
+
+			// Attempt to persist media to Supabase Storage
+			if (result.media && result.media.length > 0) {
+				try {
+					console.log(`[Save] Background: Persisting ${result.media.length} media items to storage`);
+					const persistResult = await persistInstagramMedia(result.media, userId, shortcode);
+
+					if (persistResult.urls.length > 0) {
+						persistedUrls = persistResult.urls;
+						mediaTypes = persistResult.mediaTypes;
+						videoPositions = persistResult.videoPositions;
+						originalCdnUrls = persistResult.originalCdnUrls;
+						mediaPersisted = persistResult.success;
+
+						console.log(`[Save] Background: Persisted ${persistedUrls.length} media items, videos at positions: [${videoPositions.join(', ')}]`);
+					}
+				} catch (persistError) {
+					console.warn('[Save] Background: Media persistence failed, using CDN URLs:', persistError);
+					// Fall back to CDN URLs (original behavior)
+				}
 			}
-
-			const { data: currentCard } = await client
-				.from('cards')
-				.select('metadata, title, content')
-				.eq('id', cardId)
-				.single();
-
-			const currentMetadata = currentCard?.metadata || {};
 
 			// Generate title from caption (max 80 chars)
 			const generatedTitle = result.caption
@@ -219,18 +262,18 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 
 			// Update card with all carousel images and metadata
 			await updateCard(cardId, {
-				image_url: result.images[0], // Primary image
+				image_url: persistedUrls[0], // Primary image (now permanent!)
 				// Only update title if it's still the placeholder
-				...(currentCard?.title === 'Instagram Post' || !currentCard?.title
+				...(currentCard.title === 'Instagram Post' || !currentCard.title
 					? { title: generatedTitle }
 					: {}),
 				// Only update content if empty
-				...((!currentCard?.content || currentCard?.content === '')
+				...((!currentCard.content || currentCard.content === '')
 					? { content: result.caption }
 					: {}),
 				metadata: {
 					...currentMetadata,
-					images: result.images,
+					images: persistedUrls,
 					author: result.author,
 					platform: 'instagram',
 					slideCount: result.slideCount,
@@ -238,31 +281,27 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 					carouselExtracted: true,
 					carouselPending: false,
 					carouselExtractedAt: new Date().toISOString(),
+					// NEW: Media persistence fields
+					mediaTypes,
+					videoPositions: videoPositions.length > 0 ? videoPositions : undefined,
+					mediaPersisted,
+					originalCdnUrls: mediaPersisted ? originalCdnUrls : undefined, // Only store if we persisted
 				}
 			});
 
-			console.log(`[Save] Background: Card ${cardId} updated with ${result.images.length} images`);
+			console.log(`[Save] Background: Card ${cardId} updated with ${persistedUrls.length} images (persisted: ${mediaPersisted})`);
 		} else {
 			console.warn(`[Save] Background: No images extracted for ${shortcode}`);
 
 			// Mark as failed so we don't keep retrying
-			const client = getSupabaseClient(true);
-			if (client) {
-				const { data: currentCard } = await client
-					.from('cards')
-					.select('metadata')
-					.eq('id', cardId)
-					.single();
-
-				await updateCard(cardId, {
-					metadata: {
-						...(currentCard?.metadata || {}),
-						carouselPending: false,
-						carouselExtractionFailed: true,
-						carouselExtractionError: 'No images extracted',
-					}
-				});
-			}
+			await updateCard(cardId, {
+				metadata: {
+					...currentMetadata,
+					carouselPending: false,
+					carouselExtractionFailed: true,
+					carouselExtractionError: 'No images extracted',
+				}
+			});
 		}
 	} catch (error) {
 		console.error(`[Save] Background carousel extraction failed:`, error);
@@ -458,13 +497,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		}
 
 		if (url && isInstagram) {
-			// INSTAGRAM ULTRA-FAST PATH: Return immediately with minimal data
-			// Full extraction happens in background - NO Playwright in critical path
-			console.log('[Save] Instagram detected - using ultra-fast path (no Playwright)');
+			// INSTAGRAM FAST PATH: Get OG image quickly, full extraction in background
+			console.log('[Save] Instagram detected - using fast path with OG fallback');
+
+			// Try to get at least the OG image from microlink for immediate display
+			let ogImageUrl: string | undefined;
+			try {
+				const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`;
+				const mlRes = await fetch(microlinkUrl, { signal: AbortSignal.timeout(5000) });
+				if (mlRes.ok) {
+					const mlData = await mlRes.json();
+					if (mlData.data?.image?.url) {
+						ogImageUrl = mlData.data.image.url;
+						console.log(`[Save] Instagram: Got OG image from microlink: ${mlData.data.image.url.slice(0, 60)}...`);
+					}
+				}
+			} catch (e) {
+				console.warn('[Save] Instagram: Microlink fallback failed:', e);
+			}
 
 			preview = {
 				title: 'Instagram Post',
-				imageUrl: undefined, // Will be filled by background extraction
+				imageUrl: ogImageUrl, // Immediate OG image, will be replaced by high-res in background
 				content: '',
 				description: '',
 				images: undefined,
@@ -472,7 +526,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 				shortcode: instagramShortcode,
 			};
 
-			console.log(`[Save] Instagram ultra-fast: shortcode=${instagramShortcode}`);
+			console.log(`[Save] Instagram fast path: shortcode=${instagramShortcode}, hasOgImage=${!!ogImageUrl}`);
 		} else if (url) {
 			// Standard path for non-Instagram URLs
 			const scraped = await scrapeUrl(url);
@@ -480,13 +534,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			// Fallback to self-hosted Playwright screenshot if no image found in metadata
 			// Uses Playwright (content-focused, zero cost) with fallback to Microlink
 			let fallbackImage: string | undefined;
+
 			if (!scraped.imageUrl) {
+				const isTwitter = url.includes('twitter.com') || url.includes('x.com');
+				if (isTwitter) {
+					console.log('[Save] Twitter: Taking optimized screenshot with popup dismissal');
+				}
+
 				try {
 					const result = await captureWithPlaywright(url);
 					if (result.success && result.buffer.length > 0) {
 						// Upload to Supabase Storage
 						const uploadedUrl = await uploadScreenshotToStorage(result.buffer, url);
 						fallbackImage = uploadedUrl ?? undefined;
+						if (isTwitter && fallbackImage) {
+							console.log('[Save] Twitter: Screenshot captured and uploaded successfully');
+						}
 					}
 
 					// If Playwright failed or storage upload failed, fallback to Microlink

@@ -57,6 +57,8 @@ export interface ScrapedContent {
         url: string;
         hashtags?: string[]; // Extracted hashtags from content
         mentions?: string[]; // Extracted @mentions from content
+        /** Flag for screenshot to use mobile viewport for better aspect ratio */
+        needsMobileScreenshot?: boolean;
 }
 
 /**
@@ -145,7 +147,7 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                 }
 
                 // =============================================================
-                // TWITTER/X SPECIAL HANDLING (syndication API for clean images)
+                // TWITTER/X SPECIAL HANDLING (oEmbed API + Playwright screenshot)
                 // =============================================================
                 if (domain.includes('twitter.com') || domain.includes('x.com')) {
                         try {
@@ -155,56 +157,37 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                         const tweetId = tweetIdMatch[1];
                                         console.log('[Scraper] Twitter/X: Extracting tweet', tweetId);
 
-                                        // Use Twitter syndication API (no auth required, returns clean JSON)
-                                        const syndicationUrl = `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&token=0`;
-                                        const syndicationRes = await fetch(syndicationUrl, {
+                                        // Normalize URL to twitter.com format for oEmbed
+                                        const twitterUrl = url.replace('x.com', 'twitter.com');
+
+                                        // Use Twitter oEmbed API (official, more reliable)
+                                        const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(twitterUrl)}&omit_script=true`;
+                                        const oembedRes = await fetch(oembedUrl, {
                                                 headers: {
                                                         'Accept': 'application/json',
                                                         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
                                                 },
                                         });
 
-                                        if (syndicationRes.ok) {
-                                                const tweetData = await syndicationRes.json();
-                                                console.log('[Scraper] Twitter syndication success');
+                                        if (oembedRes.ok) {
+                                                const oembedData = await oembedRes.json();
+                                                console.log('[Scraper] Twitter oEmbed success');
 
-                                                // Extract images from tweet media
-                                                const images: string[] = [];
-                                                if (tweetData.mediaDetails) {
-                                                        for (const media of tweetData.mediaDetails) {
-                                                                if (media.media_url_https) {
-                                                                        // Use original quality images
-                                                                        images.push(media.media_url_https + ':orig');
-                                                                }
-                                                        }
-                                                }
-                                                // Fallback to photos array
-                                                if (images.length === 0 && tweetData.photos) {
-                                                        for (const photo of tweetData.photos) {
-                                                                if (photo.url) images.push(photo.url);
-                                                        }
-                                                }
+                                                // Parse tweet text from HTML blockquote
+                                                const htmlMatch = oembedData.html?.match(/<p[^>]*>([^<]+)<\/p>/);
+                                                const tweetText = htmlMatch ? decodeHtmlEntities(htmlMatch[1]) : '';
 
-                                                const authorName = tweetData.user?.name || 'Unknown';
-                                                const authorHandle = tweetData.user?.screen_name || '';
+                                                const authorName = oembedData.author_name || 'Unknown';
+                                                const authorHandle = oembedData.author_url?.split('/').pop() || '';
                                                 const author = authorName || authorHandle || 'Unknown';
-                                                const handle = authorHandle;
-                                                // Get avatar URL and upgrade to higher resolution (400x400 instead of normal)
-                                                let authorAvatar = tweetData.user?.profile_image_url_https || '';
-                                                if (authorAvatar) {
-                                                        authorAvatar = authorAvatar.replace('_normal', '_400x400');
-                                                }
-                                                // Decode HTML entities from Twitter API (e.g., &amp; → &)
-                                                const tweetText = decodeHtmlEntities(tweetData.text || '');
 
-                                                // Format title: "Author: tweet text..."
+                                                // Format title
                                                 let title = `${author}: "${tweetText.slice(0, 100)}${tweetText.length > 100 ? '...' : ''}"`;
 
                                                 // DSPy Enhancement: Optionally use DSPy for better title extraction
                                                 try {
-                                                        const dspyTitle = await extractTitleWithDSPy(tweetText, handle, 'twitter');
+                                                        const dspyTitle = await extractTitleWithDSPy(tweetText, authorHandle, 'twitter');
                                                         if (dspyTitle.confidence > 0.7) {
-                                                                // Twitter title format includes author per signature
                                                                 title = `${author}: "${dspyTitle.title}"`;
                                                                 console.log(`[Scraper] DSPy improved Twitter title (confidence: ${dspyTitle.confidence})`);
                                                         }
@@ -212,22 +195,25 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                                                         // DSPy not available, use standard format
                                                 }
 
+                                                // Note: oEmbed doesn't provide images directly
+                                                // Screenshot will be taken by the save route for visual preview
                                                 return {
                                                         title,
                                                         description: tweetText,
-                                                        imageUrl: images[0] || null,
-                                                        images, // All images for multi-image tweets
+                                                        imageUrl: null, // Will trigger Playwright screenshot
+                                                        images: [],
                                                         content: tweetText,
                                                         author,
                                                         authorName,
                                                         authorHandle,
-                                                        authorAvatar,
-                                                        publishedAt: tweetData.created_at,
-                                                        domain: 'twitter.com',
+                                                        authorAvatar: '', // oEmbed doesn't provide avatar
+                                                        domain: 'x.com',
                                                         url,
+                                                        // Flag for screenshot to use mobile viewport for better aspect ratio
+                                                        needsMobileScreenshot: true,
                                                 };
                                         }
-                                        console.warn('[Scraper] Twitter syndication failed, falling back to HTML');
+                                        console.warn('[Scraper] Twitter oEmbed failed, falling back to HTML');
                                 }
                         } catch (twitterErr) {
                                 console.warn('[Scraper] Twitter special handling error:', twitterErr);

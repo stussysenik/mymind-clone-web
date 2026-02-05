@@ -62,23 +62,44 @@ interface PopupDismissalConfig {
 	scrollToContent?: string;
 	/** Additional wait time after dismissal (ms) */
 	waitAfter?: number;
+	/** CSS to inject to forcibly hide persistent elements */
+	hideCSS?: string;
 }
 
 const POPUP_CONFIGS: Partial<Record<Platform, PopupDismissalConfig>> = {
 	twitter: {
 		selectors: [
-			// "Don't miss what's happening" login modal
+			// "Don't miss what's happening" login modal - multiple variations
 			'[data-testid="sheetDialog"] [aria-label="Close"]',
 			'[role="dialog"] [data-testid="app-bar-close"]',
-			// Bottom signup banner
+			'[data-testid="app-bar-close"]',
+			// Bottom signup/login banner - various close buttons
 			'[data-testid="BottomBar"] button[aria-label="Close"]',
+			'[data-testid="BottomBar"] [role="button"]',
+			'div[data-testid="BottomBar"]', // Will be hidden via CSS below
+			// "Sign up" bottom bar close
+			'[data-testid="signup-bar-close-button"]',
 			// Cookie consent
 			'[data-testid="cookie-policy-banner"] button',
 			// Generic close buttons in dialogs
 			'[role="dialog"] button[aria-label="Close"]',
+			'[role="alertdialog"] button[aria-label="Close"]',
+			// Login prompt "Not now" style buttons
+			'button[data-testid="confirmationSheetCancel"]',
 		],
 		scrollToContent: 'article[data-testid="tweet"]',
 		waitAfter: 500,
+		// CSS to inject to hide persistent bottom bars
+		hideCSS: `
+			[data-testid="BottomBar"],
+			[data-testid="sheetDialog"],
+			[role="dialog"][aria-modal="true"],
+			div[class*="BottomBar"],
+			div[class*="SignupBanner"] {
+				display: none !important;
+				visibility: hidden !important;
+			}
+		`,
 	},
 	instagram: {
 		selectors: [
@@ -160,12 +181,13 @@ const PLATFORM_CONFIGS: Record<Platform, PlatformConfig | null> = {
 		selector: 'article[role="presentation"], article', // Post + caption only
 	},
 	twitter: {
-		viewport_width: 1200,
+		viewport_width: 550, // Narrower viewport for card-friendly aspect ratio
 		viewport_height: 800,
 		device_scale_factor: 2,
 		full_page: false,
-		delay: 1000,
+		delay: 2000, // Extra wait for content to load
 		selector: 'article[data-testid="tweet"]', // Single tweet
+		fallback_full_viewport: true, // If tweet selector fails, capture viewport
 	},
 	tiktok: {
 		viewport_width: 375,
@@ -284,6 +306,16 @@ const PLATFORM_CONFIGS: Record<Platform, PlatformConfig | null> = {
 		selector: '[data-testid="entity-page"], main', // Album/playlist/artist page
 	},
 
+	// AI/Research platforms
+	perplexity: {
+		viewport_width: 1200,
+		viewport_height: 1600,
+		device_scale_factor: 2,
+		full_page: false,
+		delay: 2000,
+		selector: '[class*="answer"], [class*="response"], main', // AI answer content
+	},
+
 	// Generic websites
 	unknown: {
 		viewport_width: 1920,
@@ -388,6 +420,17 @@ async function dismissPopups(
 			}
 		} catch {
 			// Selector not found or not visible, continue to next
+		}
+	}
+
+	// Inject CSS to forcibly hide persistent elements (like Twitter bottom bar)
+	if (config.hideCSS) {
+		try {
+			await page.addStyleTag({ content: config.hideCSS });
+			console.log(`[Screenshot] Injected hide CSS for ${platform}`);
+			dismissed = true; // Consider this a "dismissal" for wait purposes
+		} catch {
+			// CSS injection failed, continue anyway
 		}
 	}
 

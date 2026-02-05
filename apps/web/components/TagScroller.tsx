@@ -78,6 +78,7 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
 	github: FileText,
 	medium: FileText,
 	substack: Mail,
+	perplexity: Sparkles,
 	// Fallback categories
 	websites: Globe,
 	images: ImageIcon,

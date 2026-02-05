@@ -13,6 +13,31 @@
 
 ### January 2026 - February 2026
 
+#### Week 6 (Feb 3 - Feb 9)
+
+**UI/UX Enhancements & Platform Support (Feb 5)**
+- **Golden Ratio Design System**: Added CSS custom properties based on φ ≈ 1.618 for spacing
+- **Card Size Slider**: Adjustable masonry grid density (0.7 compact to 1.5 expanded) with localStorage persistence
+- **Platform Filter Pills**: Priority platforms (X, Reddit, YouTube, Instagram) always visible with "+N more" expansion
+- **Clean Selection Styling**: Removed UI artifacts, simplified to bottom dot indicator
+- **Mobile Touch Scrolling**: Added `touch-pan-x` and `-webkit-overflow-scrolling: touch` for smooth horizontal scrolling
+- **Mobile Controls**: Card size slider now visible on all screen sizes
+- **Perplexity.ai Support**: Added platform detection, screenshot config, and type mapping for AI research links
+
+**Key Commits:**
+- `feat(ui): add golden ratio design system, card size slider, and platform filters`
+- `feat(platform): add Perplexity.ai support with screenshot config`
+- `fix(build): resolve Vercel deployment type errors and SSR issues`
+
+**Artifacts:**
+- `apps/web/app/globals.css` — Golden ratio CSS variables, slider styling
+- `apps/web/components/CardGridClient.tsx` — Card size slider with inline masonry styles
+- `apps/web/components/TagScroller.tsx` — Platform filter pills with priority platforms
+- `apps/web/lib/platforms.ts` — Perplexity platform definition
+- `apps/web/lib/screenshot-playwright.ts` — Perplexity screenshot config
+
+---
+
 #### Week 5 (Jan 27 - Feb 2)
 
 **Scraper & Enrichment Bug Fixes (Feb 2)**
@@ -205,6 +230,10 @@
 | Self-hosted screenshots | ✅ Done | Playwright-based, zero cost, unlimited |
 | Serendipity mode | ✅ Done | Focus view, keyboard nav, shuffle, archive |
 | Card consistency | ✅ Done | Domain links, external buttons, shared CardActions |
+| Golden ratio design | ✅ Done | CSS variables based on φ ≈ 1.618 |
+| Card size slider | ✅ Done | Adjustable grid density, mobile support |
+| Platform filters | ✅ Done | Priority platforms, expandable pills, touch scroll |
+| Perplexity.ai support | ✅ Done | Platform detection, screenshots, type mapping |
 
 ### iOS App
 
@@ -295,4 +324,4 @@ apps/web/
 
 ---
 
-*Last updated: 2026-02-02*
+*Last updated: 2026-02-05*

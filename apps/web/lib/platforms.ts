@@ -31,6 +31,7 @@ export type Platform =
         | 'pinterest'
         | 'medium'
         | 'substack'
+        | 'perplexity'
         | 'unknown';
 
 /**
@@ -171,6 +172,13 @@ export const PLATFORMS: Record<Platform, PlatformInfo> = {
                 bgColor: 'rgba(155, 126, 189, 0.08)',
                 icon: 'bookMarked',
         },
+        perplexity: {
+                id: 'perplexity',
+                name: 'Perplexity',
+                color: '#20808D',
+                bgColor: 'rgba(32, 128, 141, 0.08)',
+                icon: 'sparkles',
+        },
         unknown: {
                 id: 'unknown',
                 name: 'Web',
@@ -283,6 +291,11 @@ export function detectPlatform(url: string | null | undefined): Platform {
         // StoryGraph
         if (urlLower.includes('thestorygraph.com') || urlLower.includes('storygraph.com')) {
                 return 'storygraph';
+        }
+
+        // Perplexity AI
+        if (urlLower.includes('perplexity.ai')) {
+                return 'perplexity';
         }
 
         return 'unknown';

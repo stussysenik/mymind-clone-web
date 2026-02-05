@@ -1,14 +1,14 @@
+'use client';
+
 /**
  * MyMind Clone - Login Page
- * 
+ *
  * Login page with email/password and magic link options.
- * 
+ *
  * @fileoverview Login page
  */
 
-'use client';
-
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
@@ -21,7 +21,8 @@ export default function LoginPage() {
         const [error, setError] = useState<string | null>(null);
         const [message, setMessage] = useState<string | null>(null);
         const router = useRouter();
-        const supabase = createClient();
+        // Lazy initialization to avoid SSR issues during build
+        const supabase = useMemo(() => createClient(), []);
 
         const handleLogin = async (e: React.FormEvent) => {
                 e.preventDefault();
