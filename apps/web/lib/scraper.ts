@@ -1260,6 +1260,37 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
 
 
                 // =============================================================
+                // PERPLEXITY.AI SPECIAL HANDLING
+                // Perplexity blocks scrapers (403) so we rely on URL structure
+                // and store minimal metadata - the screenshot captures the answer
+                // =============================================================
+                if (domain.includes('perplexity.ai')) {
+                        console.log('[Scraper] Perplexity: Extracting from URL structure');
+
+                        // Extract search ID from URL (e.g., /search/d03ec8bd-cab5-43a4-b97d-196bff7f4e9f)
+                        const searchIdMatch = url.match(/\/search\/([a-f0-9-]+)/i);
+                        const searchId = searchIdMatch?.[1] || 'search';
+
+                        // Perplexity URLs don't contain the query, so we use a generic title
+                        // The AI enrichment will analyze the screenshot to understand content
+                        const title = 'Perplexity AI Search';
+                        const description = 'AI-powered search result with cited sources. View the screenshot for the full answer.';
+
+                        return {
+                                title,
+                                description,
+                                imageUrl: null, // Screenshot will be captured separately
+                                content: `Perplexity AI search result (ID: ${searchId}). This is an AI-generated answer with citations from web sources. The screenshot captures the full response.`,
+                                author: 'Perplexity AI',
+                                domain: 'perplexity.ai',
+                                url,
+                                hashtags: ['ai-search', 'research'],
+                                needsMobileScreenshot: true,
+                        };
+                }
+
+
+                // =============================================================
                 // GENERAL HTML SCRAPING (with consent cookies for YouTube fallback)
                 // =============================================================
                 const headers: Record<string, string> = {

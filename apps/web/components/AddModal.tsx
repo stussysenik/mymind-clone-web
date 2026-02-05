@@ -288,21 +288,21 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                 onDragLeave={() => setIsDragOver(false)}
                                 onDrop={handleDrop}
                         >
-                                {/* Close Button - Notion-like responsive */}
-                                <div className="absolute top-4 right-4 flex gap-2 z-10">
-                                        <button
-                                                onClick={onClose}
-                                                className="
-                                                        group p-2 rounded-full text-gray-400
-                                                        transition-all duration-200 ease-out
-                                                        hover:bg-gray-100 hover:text-gray-600
-                                                        active:scale-95 active:bg-gray-200
-                                                        focus-visible:ring-2 focus-visible:ring-gray-300 focus-visible:outline-none
-                                                "
-                                        >
-                                                <X className="w-5 h-5 transition-transform duration-200 group-hover:rotate-90" />
-                                        </button>
-                                </div>
+                                {/* Close Button - positioned outside input area */}
+                                <button
+                                        onClick={onClose}
+                                        className="
+                                                absolute -top-3 -right-3 z-10
+                                                group p-2 rounded-full
+                                                bg-white text-gray-400 shadow-md border border-gray-100
+                                                transition-all duration-200 ease-out
+                                                hover:bg-gray-50 hover:text-gray-600 hover:shadow-lg
+                                                active:scale-95 active:shadow-sm
+                                                focus-visible:ring-2 focus-visible:ring-gray-300 focus-visible:outline-none
+                                        "
+                                >
+                                        <X className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
+                                </button>
 
                                 <div className="p-1">
                                         {/* Image Preview Area */}

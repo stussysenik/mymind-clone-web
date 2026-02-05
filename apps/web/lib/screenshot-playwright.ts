@@ -151,6 +151,35 @@ const POPUP_CONFIGS: Partial<Record<Platform, PopupDismissalConfig>> = {
 		scrollToContent: 'div[data-e2e="browse-video"]',
 		waitAfter: 1000,
 	},
+	perplexity: {
+		selectors: [
+			// Login/signup modal close buttons
+			'button[aria-label="Close"]',
+			'button[aria-label="close"]',
+			'[role="dialog"] button:has(svg)',
+			// "Continue without signing in" or "Maybe later"
+			'button:has-text("Maybe later")',
+			'button:has-text("Continue")',
+			'button:has-text("Skip")',
+			// Cookie consent
+			'button:has-text("Accept")',
+			// Any X close button in modal
+			'[class*="modal"] button:first-child',
+			'[class*="Modal"] button:first-child',
+		],
+		scrollToContent: '[class*="answer"], [class*="response"], main',
+		waitAfter: 500,
+		hideCSS: `
+			[role="dialog"],
+			[class*="modal"],
+			[class*="Modal"],
+			[class*="overlay"],
+			[class*="Overlay"] {
+				display: none !important;
+				visibility: hidden !important;
+			}
+		`,
+	},
 };
 
 // =============================================================================
@@ -308,12 +337,13 @@ const PLATFORM_CONFIGS: Record<Platform, PlatformConfig | null> = {
 
 	// AI/Research platforms
 	perplexity: {
-		viewport_width: 1200,
-		viewport_height: 1600,
+		viewport_width: 430, // Mobile viewport for cleaner preview
+		viewport_height: 932, // iPhone 14 Pro Max dimensions
 		device_scale_factor: 2,
 		full_page: false,
-		delay: 2000,
-		selector: '[class*="answer"], [class*="response"], main', // AI answer content
+		delay: 3000, // Extra delay for content to load and modals to appear
+		selector: '[class*="answer"], [class*="response"], [class*="Answer"], main', // AI answer content
+		fallback_full_viewport: true,
 	},
 
 	// Generic websites
