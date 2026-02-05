@@ -194,7 +194,6 @@ export function hexToRgb(hex: string): RGB | null {
 export async function extractColorsFromUrl(imageUrl: string): Promise<ColorResult[]> {
   try {
     // Dynamically import sharp (server-side only)
-    // @ts-expect-error - sharp is optional and may not have types in serverless
     const sharp = (await import('sharp')).default;
 
     // Fetch the image
