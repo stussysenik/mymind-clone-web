@@ -62,6 +62,31 @@
   /* Spacing */
   --header-height: 56px;
 
+  /* Golden Ratio Design System (φ ≈ 1.618) */
+  --phi: 1.618;
+  --phi-inverse: 0.618;
+
+  /* Golden spacing scale: base * φ^n */
+  --space-phi-xs: 4px;       /* base */
+  --space-phi-sm: 6px;       /* 4 * 1.5 (approx) */
+  --space-phi-md: 10px;      /* 6 * 1.618 */
+  --space-phi-lg: 16px;      /* 10 * 1.618 */
+  --space-phi-xl: 26px;      /* 16 * 1.618 */
+  --space-phi-2xl: 42px;     /* 26 * 1.618 */
+  --space-phi-3xl: 68px;     /* 42 * 1.618 */
+
+  /* Golden ratio card widths for masonry */
+  --card-width-xs: 180px;
+  --card-width-sm: 220px;    /* 180 * 1.22 */
+  --card-width-md: 280px;    /* 220 * 1.27 (closer to φ) */
+  --card-width-lg: 340px;    /* 280 * 1.21 */
+  --card-width-xl: 420px;    /* 340 * 1.23 */
+
+  /* Dynamic card size (controlled by slider) */
+  --card-size-factor: 1;     /* Controlled by JS, range 0.7-1.5 */
+  --masonry-gap: var(--space-phi-lg);
+  --masonry-columns: 4;
+
   /* Transitions - Enhanced with spring easing (Don Norman tactile feedback) */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
@@ -902,3 +927,61 @@ textarea::placeholder,
   margin: 1rem 0;
   opacity: 0.6;
 }
+
+/* =============================================================================
+   GOLDEN RATIO MASONRY GRID SYSTEM
+   ============================================================================= */
+
+/* Masonry with golden ratio spacing and dynamic sizing */
+.masonry-golden {
+  column-gap: var(--masonry-gap);
+}
+
+/* Card size slider styling */
+.card-size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.card-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease;
+}
+
+.card-size-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.card-size-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+}
+
+.card-size-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease;
+}
+
+.card-size-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+/* Note: Column counts are controlled by Tailwind classes set via React state */

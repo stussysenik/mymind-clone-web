@@ -1,14 +1,34 @@
 # Project Characteristics & Tech Stack Analysis
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 **Purpose:** To provide a comprehensive technical overview for decision-making regarding cross-platform adaptation and iOS integration.
 
 ## 1. Core Identity & Philosophy
 *   **Product:** Privacy-first, AI-powered visual knowledge manager.
 *   **Aesthetic:** "Anti-tool," "Visual First" (Masonry Grid), Minimalist.
 *   **Key UX:** Optimistic UI (<200ms save), high-speed interaction, no folder hierarchy.
+*   **Design System:** Golden Ratio (φ ≈ 1.618) based spacing and proportions.
 
-## 2. Current Tech Stack
+## 2. UI/UX Features
+
+### Platform-Based Filtering
+*   **Priority Platforms:** X/Twitter, Reddit, YouTube, Instagram always visible in filter bar
+*   **Dynamic Pills:** Additional platforms appear when 3+ items exist
+*   **Fallback Categories:** Websites, Images, Notes for non-platform content
+*   **Mobile Scrolling:** Touch-enabled horizontal scroll with momentum
+
+### Card Size Control
+*   **Slider Range:** 0.7 (compact) to 1.5 (expanded)
+*   **Responsive Columns:** Adjusts column count based on viewport and slider value
+*   **Persistence:** User preference saved to localStorage
+*   **Mobile Support:** Slider accessible on all screen sizes
+
+### Design System
+*   **Golden Ratio Variables:** CSS custom properties based on φ ≈ 1.618
+*   **Spacing Scale:** `--space-phi-xs` (4px) through `--space-phi-3xl` (68px)
+*   **O(1) Performance:** All filtering done with `useMemo` for instant response
+
+## 3. Current Tech Stack
 The project is a modern **Next.js 16** web application.
 
 | Layer | Technology | Status | Key Implications for Mobile |
@@ -20,7 +40,7 @@ The project is a modern **Next.js 16** web application.
 | **Auth** | **Supabase Auth** | Production | Secure, supports OAuth; easy to bridge to native login. |
 | **AI** | **Zhipu GLM-4.7** | Production | Server-side processing; specific client device doesn't matter. |
 
-## 3. Cross-Platform Analysis (iOS Share Sheet Focus)
+## 4. Cross-Platform Analysis (iOS Share Sheet Focus)
 
 ### The Constraint: iOS Share Sheet
 The user has a critical requirement: **"Show in iOS share sheet so I can add links like an app."**
@@ -42,7 +62,7 @@ To achieve native share sheet integration while preserving the existing Next.js 
         2.  **Deep Link:** Open the main app with the URL as a parameter (slower, interrupts user flow).
 *   **Effort:** Moderate. Requires maintaining an `ios/` folder and basic Swift knowledge for the extension, but keeps 95% of code in JS/TS.
 
-## 4. Execution Roadmap
+## 5. Execution Roadmap
 
 ### Step 1: Prepare Web App for Mobile
 1.  **Viewport & Touch:** Ensure tap targets are 44px+, remove hover states for mobile.
@@ -66,7 +86,7 @@ This is the specific solution for the user's request.
     *   Send POST request to `https://your-domain.com/api/save`.
 4.  *Result:* Providing a native "Save to MyMind" button in Safari/Twitter/etc. that uploads in the background without even opening the app.
 
-## 5. Alternatives Considered
+## 6. Alternatives Considered
 
 *   **React Native / Expo:**
     *   *Pros:* "Real" native feel, better gesture support.
@@ -78,6 +98,6 @@ This is the specific solution for the user's request.
     *   *Cons:* Two codebases to maintain.
     *   *Verdict:* Not efficient for a solo dev/small team.
 
-## 6. Diagnosis & Decision
+## 7. Diagnosis & Decision
 **Recommended Path:** **Next.js + Capacitor**.
 This allows you to "use it as a cross-platform app" immediately while solving the specific "iOS Share Sheet" requirement via a native Share Extension.

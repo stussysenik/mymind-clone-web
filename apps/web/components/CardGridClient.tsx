@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LayoutGrid, List as ListIcon, Sparkles, X, Plus } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, Sparkles, X, Plus, Minus } from 'lucide-react';
 import type { Card } from '@/lib/types';
 import { getLocalCards, deleteLocalCard, archiveLocalCard, unarchiveLocalCard } from '@/lib/local-storage';
 import { supabaseBrowser } from '@/lib/supabase';
@@ -57,6 +57,10 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
         const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
         const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
         const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+        // Card size slider state (1 = default, range: 0.7 to 1.5)
+        // Maps to column counts: smaller value = more columns (compact), larger = fewer columns (expanded)
+        const [cardSize, setCardSize] = useState<number>(1);
 
         // Similarity Search State
         const similarityId = searchParams.get('similar');
@@ -153,11 +157,26 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                 }
         };
 
-        // Load localStorage cards on mount
+        // Load localStorage cards and card size preference on mount
         useEffect(() => {
                 setMounted(true);
                 setLocalCards(getLocalCards());
+                // Load card size preference
+                const savedSize = localStorage.getItem('mymind_card_size');
+                if (savedSize) {
+                        const parsed = parseFloat(savedSize);
+                        if (!isNaN(parsed) && parsed >= 0.7 && parsed <= 1.5) {
+                                setCardSize(parsed);
+                        }
+                }
         }, []);
+
+        // Save card size to localStorage when changed
+        useEffect(() => {
+                if (mounted) {
+                        localStorage.setItem('mymind_card_size', String(cardSize));
+                }
+        }, [cardSize, mounted]);
 
         // Listen for storage events to sync across tabs
         useEffect(() => {
@@ -475,6 +494,43 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                 }
         }, [uniqueCards, selectedCard]);
 
+        // Calculate masonry styles based on card size using inline styles
+        // This bypasses Tailwind CSS generation issues with dynamic responsive classes
+        // cardSize 0.7 = compact (more columns), 1.0 = default, 1.5 = expanded (fewer columns)
+        const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+        // Track window resize for responsive column calculation
+        useEffect(() => {
+                const handleResize = () => setWindowWidth(window.innerWidth);
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+        }, []);
+
+        // Calculate column count based on viewport and card size
+        const masonryStyle = useMemo(() => {
+                // Base columns per breakpoint (default at cardSize = 1.0)
+                let baseColumns: number;
+                if (windowWidth < 640) baseColumns = 1;        // mobile
+                else if (windowWidth < 768) baseColumns = 2;   // sm
+                else if (windowWidth < 1024) baseColumns = 3;  // md
+                else if (windowWidth < 1280) baseColumns = 4;  // lg
+                else if (windowWidth < 1536) baseColumns = 5;  // xl
+                else baseColumns = 6;                          // 2xl
+
+                // Adjust columns based on card size (subtle adjustment)
+                // cardSize 0.7 = +1 column, cardSize 1.5 = -1 column
+                const columnAdjustment = Math.round((1 - cardSize) * 2);
+                const columns = Math.max(1, Math.min(8, baseColumns + columnAdjustment));
+
+                // Gap scales inversely with card size (compact = tighter gap)
+                const gap = cardSize <= 0.9 ? 12 : cardSize >= 1.2 ? 20 : 16;
+
+                return {
+                        columnCount: columns,
+                        columnGap: `${gap}px`,
+                };
+        }, [windowWidth, cardSize]);
+
         // Optimistic rendering: Show server cards immediately while hydrating.
         // We removed the (!mounted) check to prevent the "double loading" effect (Server Skeleton -> Client Skeleton -> Content).
         // Since localCards are empty initially, hydration logic is safe.
@@ -592,24 +648,45 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                                                 {uniqueCards.length} items
                                         </p>
 
-                                        {/* View Toggle */}
-                                        <div className="flex items-center bg-gray-100 p-1 rounded-lg">
-                                                <button
-                                                        onClick={() => setViewMode('grid')}
-                                                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
-                                                                }`}
-                                                        aria-label="Grid View"
-                                                >
-                                                        <LayoutGrid className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                        onClick={() => setViewMode('list')}
-                                                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
-                                                                }`}
-                                                        aria-label="List View"
-                                                >
-                                                        <ListIcon className="h-4 w-4" />
-                                                </button>
+                                        <div className="flex items-center gap-4">
+                                                {/* Card Size Slider (only show in grid view) */}
+                                                {viewMode === 'grid' && (
+                                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                                                <Minus className="h-3 w-3 text-[var(--foreground-muted)]" />
+                                                                <input
+                                                                        type="range"
+                                                                        min="0.7"
+                                                                        max="1.5"
+                                                                        step="0.1"
+                                                                        value={cardSize}
+                                                                        onChange={(e) => setCardSize(parseFloat(e.target.value))}
+                                                                        className="card-size-slider"
+                                                                        aria-label="Card size"
+                                                                        title={`Card size: ${cardSize < 0.9 ? 'Compact' : cardSize > 1.2 ? 'Expanded' : 'Default'}`}
+                                                                />
+                                                                <Plus className="h-3 w-3 text-[var(--foreground-muted)]" />
+                                                        </div>
+                                                )}
+
+                                                {/* View Toggle */}
+                                                <div className="flex items-center bg-gray-100 p-1 rounded-lg">
+                                                        <button
+                                                                onClick={() => setViewMode('grid')}
+                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
+                                                                        }`}
+                                                                aria-label="Grid View"
+                                                        >
+                                                                <LayoutGrid className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                                onClick={() => setViewMode('list')}
+                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
+                                                                        }`}
+                                                                aria-label="List View"
+                                                        >
+                                                                <ListIcon className="h-4 w-4" />
+                                                        </button>
+                                                </div>
                                         </div>
                                 </div>
                         )}
@@ -666,7 +743,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                         ) : (
                                 <>
                                         {viewMode === 'grid' ? (
-                                                <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5">
+                                                <div className="masonry-golden" style={masonryStyle}>
                                                         {uniqueCards.map((card) => (
                                                                 <div key={card.id} className="mb-4 break-inside-avoid">
                                                                         <CardComponent

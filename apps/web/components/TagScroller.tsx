@@ -55,6 +55,10 @@ interface TagScrollerProps {
 // Minimum number of items required to show a platform pill
 const MIN_ITEMS_FOR_PILL = 3;
 
+// Priority platforms that ALWAYS show in the filter bar (even with 0 items)
+// These are commonly used social platforms that users expect to filter by
+const PRIORITY_PLATFORMS: Platform[] = ['twitter', 'reddit', 'youtube', 'instagram'];
+
 // Map platform IDs to Lucide icons
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 	youtube: Video,
@@ -115,23 +119,38 @@ export function TagScroller({
 		if (propTags) return propTags;
 
 		// Use platformCounts (new) or fall back to typeCounts (deprecated)
-		const counts = platformCounts || typeCounts;
-
-		if (!counts || Object.keys(counts).length === 0) {
-			// Return just "All" if no data
-			return [{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles }];
-		}
+		const counts = platformCounts || typeCounts || {};
 
 		const pills: Tag[] = [
 			{ id: 'all', label: 'All', color: 'var(--accent-primary)', icon: Sparkles }
 		];
 
-		// Sort platforms by count descending
+		// Track which platforms we've added
+		const addedPlatforms = new Set<string>();
+
+		// First, add priority platforms (always visible, even with 0 items)
+		for (const platform of PRIORITY_PLATFORMS) {
+			const count = counts[platform] || 0;
+			const platformInfo = PLATFORMS[platform];
+			if (platformInfo) {
+				pills.push({
+					id: platform,
+					label: platformInfo.name,
+					color: platformInfo.color,
+					icon: PLATFORM_ICONS[platform],
+					count
+				});
+				addedPlatforms.add(platform);
+			}
+		}
+
+		// Sort remaining platforms by count descending
 		const sortedPlatforms = Object.entries(counts)
+			.filter(([platform]) => !addedPlatforms.has(platform))
 			.sort(([, a], [, b]) => b - a);
 
 		for (const [platform, count] of sortedPlatforms) {
-			// Skip if below threshold
+			// Skip if below threshold (priority platforms already added above)
 			if (count < MIN_ITEMS_FOR_PILL) continue;
 
 			// Handle fallback categories (websites, images, notes from unknown platform or specific types)
@@ -172,9 +191,9 @@ export function TagScroller({
 				continue;
 			}
 
-			// Check if this is a known platform
+			// Check if this is a known platform (and not already added)
 			const platformInfo = PLATFORMS[platform as Platform];
-			if (platformInfo && platform !== 'unknown') {
+			if (platformInfo && platform !== 'unknown' && !addedPlatforms.has(platform)) {
 				pills.push({
 					id: platform,
 					label: platformInfo.name,
@@ -182,13 +201,26 @@ export function TagScroller({
 					icon: PLATFORM_ICONS[platform],
 					count
 				});
+				addedPlatforms.add(platform);
 			}
 		}
 
-		// Sort: "All" first, then by count descending
+		// Sort: "All" first, then priority platforms in order, then by count descending
 		return pills.sort((a, b) => {
 			if (a.id === 'all') return -1;
 			if (b.id === 'all') return 1;
+
+			// Priority platforms stay in their defined order
+			const aIsPriority = PRIORITY_PLATFORMS.includes(a.id as Platform);
+			const bIsPriority = PRIORITY_PLATFORMS.includes(b.id as Platform);
+
+			if (aIsPriority && bIsPriority) {
+				return PRIORITY_PLATFORMS.indexOf(a.id as Platform) - PRIORITY_PLATFORMS.indexOf(b.id as Platform);
+			}
+			if (aIsPriority) return -1;
+			if (bIsPriority) return 1;
+
+			// Non-priority: sort by count
 			return (b.count || 0) - (a.count || 0);
 		});
 	}, [propTags, platformCounts, typeCounts]);
@@ -319,13 +351,13 @@ export function TagScroller({
 	}
 
 	return (
-		<div className="relative flex items-center gap-2 py-3">
-			{/* Left Arrow - Weight 5: Content Optional, visible on desktop */}
+		<div className="relative flex items-center py-3 w-full">
+			{/* Left Arrow - visible on desktop only */}
 			{showLeftArrow && (
 				<button
 					onClick={() => scroll('left')}
 					className="absolute left-0 z-10 p-2 bg-[var(--card-bg)] shadow-md rounded-full
-					           physics-press touch-target hover:shadow-lg
+					           physics-press hover:shadow-lg
 					           hidden md:flex items-center justify-center"
 					aria-label="Scroll left"
 				>
@@ -333,15 +365,17 @@ export function TagScroller({
 				</button>
 			)}
 
-			{/* Scrollable Tags with momentum scroll and fade edges */}
+			{/* Scrollable Tags with momentum scroll */}
 			<div
 				ref={scrollRef}
 				onScroll={handleScroll}
 				className={`
 					flex items-center gap-2 md:gap-3 overflow-x-auto hide-scrollbar
-					px-1 pb-1 momentum-scroll
+					w-full px-1 pb-1
+					touch-pan-x
 					${fadeEdgeClass}
 				`}
+				style={{ WebkitOverflowScrolling: 'touch' }}
 			>
 				{visibleTags.map((tag) => {
 					const Icon = tag.icon;
@@ -360,66 +394,31 @@ export function TagScroller({
 							className={`
 								group relative inline-flex items-center gap-1.5 px-3 md:px-3.5 py-2
 								rounded-full text-sm font-medium whitespace-nowrap
-								select-none cursor-pointer
-								elastic-tap touch-target
-								${isPressed
-									? 'scale-[0.95]'
-									: 'hover:-translate-y-0.5'
-								}
+								select-none cursor-pointer transition-all duration-150
+								${isPressed ? 'scale-95' : ''}
 								${isSelected
-									? 'bg-[var(--card-bg)] text-[var(--foreground)] shadow-md ring-1 ring-black/10 border-b-2 border-[var(--accent-primary)]'
-									: 'bg-transparent text-[var(--foreground-muted)] hover:bg-[var(--card-bg)]/80 hover:text-[var(--foreground)] hover:shadow-sm'
+									? 'bg-[var(--card-bg)] text-[var(--foreground)] shadow-sm'
+									: 'bg-transparent text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]'
 								}
 							`}
-							style={{
-								// Spring animation on release
-								transitionTimingFunction: isPressed
-									? 'cubic-bezier(0.4, 0, 0.2, 1)'
-									: 'var(--ease-elastic)'
-							}}
 						>
-							{/* Selection pulse effect */}
-							{isSelected && (
-								<span
-									className="absolute inset-0 rounded-full animate-scale-in"
-									style={{
-										background: 'transparent',
-										boxShadow: `0 0 0 2px ${tag.color}20`
-									}}
-								/>
-							)}
 
-							{/* Icon or Colored Dot */}
-							{Icon ? (
+							{/* Icon */}
+							{Icon && (
 								<Icon
-									className={`
-										h-3.5 w-3.5 transition-all duration-200
-										${isSelected
-											? 'text-[var(--accent-primary)] scale-110'
-											: 'text-[var(--foreground-muted)] group-hover:text-[var(--accent-primary)] group-hover:scale-110'
-										}
-									`}
-								/>
-							) : (
-								<span
-									className={`
-										w-2.5 h-2.5 rounded-full border-[1.5px]
-										transition-all duration-200
-										${isSelected
-											? 'scale-110'
-											: 'group-hover:scale-110'
-										}
-									`}
-									style={{
-										backgroundColor: isSelected ? tag.color : 'transparent',
-										borderColor: tag.color,
-										boxShadow: isSelected ? `0 0 8px ${tag.color}40` : 'none'
-									}}
+									className={`h-3.5 w-3.5 ${isSelected ? 'text-[var(--accent-primary)]' : 'text-[var(--foreground-muted)]'}`}
 								/>
 							)}
 
 							{/* Label */}
-							<span className="relative">{tag.label}</span>
+							<span>{tag.label}</span>
+
+							{/* Selection indicator - bottom dot */}
+							{isSelected && (
+								<span
+									className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--accent-primary)]"
+								/>
+							)}
 						</button>
 					);
 				})}
@@ -428,15 +427,7 @@ export function TagScroller({
 				{showMoreButton && (
 					<button
 						onClick={() => setIsExpanded(true)}
-						className={`
-							inline-flex items-center gap-1.5 px-3 py-2
-							rounded-full text-sm font-medium whitespace-nowrap
-							select-none cursor-pointer
-							elastic-tap touch-target
-							bg-[var(--background-secondary)] text-[var(--foreground-muted)]
-							hover:bg-[var(--card-bg)] hover:text-[var(--foreground)] hover:shadow-sm
-							hover:-translate-y-0.5
-						`}
+						className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap select-none cursor-pointer bg-[var(--background-secondary)] text-[var(--foreground-muted)] hover:bg-[var(--card-bg)] hover:text-[var(--foreground)] transition-colors duration-150"
 					>
 						<span>+{tags.length - pillLimit} more</span>
 					</button>

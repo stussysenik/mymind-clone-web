@@ -44,5 +44,8 @@ Access at [http://localhost:3000](http://localhost:3000)
 ## ✨ Key Features
 - **Optimistic UI**: Instant interactions for Save/Delete
 - **Server Components**: Heavy lifting (DB fetch) done on server
-- **Tailwind v4**: Styling engine
+- **Tailwind v4**: Styling engine with Golden Ratio design system (φ ≈ 1.618)
 - **Serendipity Mode**: Focused discovery with single-card focus view, keyboard navigation (←/→, j/k), swipe gestures, and shuffle functionality
+- **Card Size Slider**: Adjustable masonry grid density (compact to expanded view)
+- **Platform Filters**: Quick filtering by platform (X/Twitter, Reddit, YouTube, Instagram, Images, Notes)
+- **Mobile-First Controls**: All controls accessible on mobile with touch scrolling support
