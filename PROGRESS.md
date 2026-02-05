@@ -22,19 +22,29 @@
 - **Clean Selection Styling**: Removed UI artifacts, simplified to bottom dot indicator
 - **Mobile Touch Scrolling**: Added `touch-pan-x` and `-webkit-overflow-scrolling: touch` for smooth horizontal scrolling
 - **Mobile Controls**: Card size slider now visible on all screen sizes
-- **Perplexity.ai Support**: Added platform detection, screenshot config, and type mapping for AI research links
+- **Perplexity.ai Support**: Added platform detection, screenshot config (mobile viewport), popup dismissal, and type mapping for AI research links
+- **New "D" Logo**: Custom SVG logo with spark accent for "Digital consumption experiment" branding
+- **Add Modal UX**: Moved close button outside input border for cleaner appearance
+- **Serendipity Count Selector**: Users can choose how many random cards to explore (5/10/20/50/100)
+- **Hydration Fix**: Fixed SSR/client mismatch in masonry grid column calculation
 
 **Key Commits:**
 - `feat(ui): add golden ratio design system, card size slider, and platform filters`
 - `feat(platform): add Perplexity.ai support with screenshot config`
 - `fix(build): resolve Vercel deployment type errors and SSR issues`
+- `fix(ui): improve add modal close button and Perplexity support`
+- `feat(ui): new D logo, serendipity count selector, fix hydration`
 
 **Artifacts:**
 - `apps/web/app/globals.css` — Golden ratio CSS variables, slider styling
-- `apps/web/components/CardGridClient.tsx` — Card size slider with inline masonry styles
+- `apps/web/components/CardGridClient.tsx` — Card size slider with inline masonry styles, hydration fix
 - `apps/web/components/TagScroller.tsx` — Platform filter pills with priority platforms
+- `apps/web/components/Header.tsx` — Custom "D" SVG logo
+- `apps/web/components/AddModal.tsx` — Repositioned close button
+- `apps/web/components/SerendipityClient.tsx` — Card count selector
 - `apps/web/lib/platforms.ts` — Perplexity platform definition
-- `apps/web/lib/screenshot-playwright.ts` — Perplexity screenshot config
+- `apps/web/lib/screenshot-playwright.ts` — Perplexity screenshot config with mobile viewport and popup dismissal
+- `apps/web/lib/scraper.ts` — Perplexity-specific scraping handler
 
 ---
 
