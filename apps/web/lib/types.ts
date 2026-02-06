@@ -100,6 +100,25 @@ export interface CardMetadata {
 	/** Error message if extraction failed */
 	carouselExtractionError?: string;
 
+	// Engagement metrics (Twitter, etc.)
+	/** Social engagement metrics from platform APIs */
+	engagement?: {
+		likes?: number;
+		retweets?: number;
+		replies?: number;
+		views?: number;
+	};
+
+	// Media persistence fields
+	/** Types of media items (image/video) */
+	mediaTypes?: ('image' | 'video')[];
+	/** Positions of video items in media array */
+	videoPositions?: number[];
+	/** Whether media has been persisted to storage */
+	mediaPersisted?: boolean;
+	/** Original CDN URLs before persistence */
+	originalCdnUrls?: string[];
+
 	// Enrichment timing for real-time ETA display
 	/** Enrichment timing data for ETA calculation */
 	enrichmentTiming?: {

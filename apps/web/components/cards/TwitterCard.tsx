@@ -36,12 +36,17 @@ interface TwitterCardProps {
  */
 export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: TwitterCardProps) {
 	const [isHovered, setIsHovered] = useState(false);
+	const [imageError, setImageError] = useState(false);
 	// Use new author fields if available, fallback to legacy
 	const authorName = card.metadata.authorName || card.metadata.author || '';
 	const authorHandle = card.metadata.authorHandle || '';
 	const authorAvatar = card.metadata.authorAvatar || '';
 	// Decode HTML entities that may have been encoded by the scraper/API
 	const tweetText = decodeHtmlEntities(card.content || card.title || '');
+	// Multi-image support
+	const tweetImages = card.metadata.images as string[] | undefined;
+	const imageCount = tweetImages?.length ?? (card.imageUrl ? 1 : 0);
+	const hasImage = card.imageUrl && !imageError;
 
 	return (
 		<article
@@ -99,17 +104,29 @@ export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: T
 				</p>
 			</div>
 
-			{/* Image if exists */}
-			{card.imageUrl && (
+			{/* Image if exists - with multi-image badge and error handling */}
+			{hasImage && (
 				<div className="relative aspect-video w-full overflow-hidden border-t border-[var(--border)]">
 					<Image
-						src={card.imageUrl}
+						src={card.imageUrl!}
 						alt="Tweet media"
 						fill
 						sizes="(max-width: 640px) 100vw, 400px"
 						className="object-cover"
 						loading="lazy"
+						onError={() => setImageError(true)}
 					/>
+					{/* Multi-image count badge */}
+					{imageCount > 1 && (
+						<div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 backdrop-blur-sm">
+							<svg className="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+								<path d="M3 9h18" />
+								<path d="M9 3v18" />
+							</svg>
+							<span className="text-[10px] font-medium text-white">{imageCount}</span>
+						</div>
+					)}
 				</div>
 			)}
 

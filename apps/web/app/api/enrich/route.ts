@@ -29,6 +29,7 @@ import { detectPlatform } from '@/lib/platforms';
 
 const MAX_RETRIES = 2;
 const INITIAL_BACKOFF_MS = 1000; // 1 second
+const MAX_ENRICHMENT_MS = 50000; // 50s overall timeout (safety net for serverless limits)
 
 /**
  * Sleep helper for exponential backoff
@@ -134,6 +135,9 @@ export async function POST(request: NextRequest) {
                         }
                 });
 
+                // Wrap enrichment in overall timeout to prevent serverless function timeout
+                const enrichmentResult = await Promise.race([
+                        (async () => {
                 // 2. Ensure we have content (scrape if missing)
                 let contentToAnalyze = card.content;
                 let scrapedDate: string | undefined;
@@ -312,10 +316,14 @@ export async function POST(request: NextRequest) {
 
                 console.log(`[Enrich API] Success for card: ${cardId}`);
 
-                return NextResponse.json({
-                        success: true,
-                        classification
-                });
+                return { success: true, classification };
+                        })(),
+                        new Promise<never>((_, reject) =>
+                                setTimeout(() => reject(new Error(`Enrichment timed out after ${MAX_ENRICHMENT_MS / 1000}s`)), MAX_ENRICHMENT_MS)
+                        ),
+                ]);
+
+                return NextResponse.json(enrichmentResult);
 
         } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown enrichment error';

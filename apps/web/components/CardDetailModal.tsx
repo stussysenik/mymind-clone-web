@@ -543,6 +543,79 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 />
                                                         </div>
                                                 </div>
+                                        ) : images.length > 0 && card.url && (card.url.includes('twitter.com') || card.url.includes('x.com')) ? (
+                                                /* Twitter/X with image(s) - show native tweet layout with image */
+                                                <div className="relative w-full h-full overflow-y-auto"
+                                                        style={{
+                                                                background: `linear-gradient(135deg,
+                                                                        hsl(220, 15%, 96%) 0%,
+                                                                        hsl(210, 10%, 92%) 50%,
+                                                                        hsl(200, 15%, 88%) 100%)`
+                                                        }}
+                                                >
+                                                        <div className="w-full max-w-lg mx-auto py-8 md:py-12 px-6 md:px-8">
+                                                                {/* Author header */}
+                                                                <div className="flex items-center gap-3 mb-5">
+                                                                        {card.metadata?.authorAvatar ? (
+                                                                                <Image
+                                                                                        src={card.metadata.authorAvatar}
+                                                                                        alt={card.metadata?.authorName || ''}
+                                                                                        width={48}
+                                                                                        height={48}
+                                                                                        className="rounded-full"
+                                                                                />
+                                                                        ) : (
+                                                                                <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center flex-shrink-0">
+                                                                                        <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                                                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                                                                        </svg>
+                                                                                </div>
+                                                                        )}
+                                                                        <div>
+                                                                                <p className="font-semibold text-gray-900 text-lg">
+                                                                                        {card.metadata?.authorName || 'Unknown'}
+                                                                                </p>
+                                                                                {card.metadata?.authorHandle && (
+                                                                                        <p className="text-gray-500 text-sm">@{card.metadata.authorHandle}</p>
+                                                                                )}
+                                                                        </div>
+                                                                        <div className="ml-auto">
+                                                                                <svg className="h-6 w-6 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                                                                </svg>
+                                                                        </div>
+                                                                </div>
+                                                                {/* Tweet text */}
+                                                                <p className="text-lg md:text-xl text-gray-800 leading-relaxed font-serif whitespace-pre-wrap mb-5">
+                                                                        {decodeHtmlEntities(card.content || card.title || '')}
+                                                                </p>
+                                                                {/* Tweet image(s) */}
+                                                                <div className={`rounded-2xl overflow-hidden border border-gray-200 ${images.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
+                                                                        {images.map((img, idx) => (
+                                                                                <div key={idx} className={`relative ${images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
+                                                                                        <Image
+                                                                                                src={img}
+                                                                                                alt={`Tweet image ${idx + 1}`}
+                                                                                                fill
+                                                                                                className="object-cover"
+                                                                                                sizes="(max-width: 768px) 100vw, 40vw"
+                                                                                                onError={(e) => {
+                                                                                                        e.currentTarget.style.display = 'none';
+                                                                                                }}
+                                                                                        />
+                                                                                </div>
+                                                                        ))}
+                                                                </div>
+                                                                {/* Engagement metrics */}
+                                                                {card.metadata?.engagement && (card.metadata.engagement.likes || card.metadata.engagement.retweets || card.metadata.engagement.views) && (
+                                                                        <div className="flex items-center gap-5 mt-4 pt-4 border-t border-gray-200 text-sm text-gray-500">
+                                                                                {card.metadata.engagement.views ? <span>{Number(card.metadata.engagement.views).toLocaleString()} views</span> : null}
+                                                                                {card.metadata.engagement.retweets ? <span>{Number(card.metadata.engagement.retweets).toLocaleString()} reposts</span> : null}
+                                                                                {card.metadata.engagement.likes ? <span>{Number(card.metadata.engagement.likes).toLocaleString()} likes</span> : null}
+                                                                        </div>
+                                                                )}
+                                                        </div>
+                                                </div>
                                         ) : images.length > 0 ? (
                                                 <div className="relative w-full h-full flex items-center justify-center bg-black/5">
                                                         {/* Blurred Backdrop */}
@@ -602,8 +675,8 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 </>
                                                         )}
                                                 </div>
-                                        ) : card.url ? (
-                                                /* URL without image - show website screenshot preview */
+                                        ) : card.url && !card.url.includes('twitter.com') && !card.url.includes('x.com') ? (
+                                                /* URL without image - show website screenshot preview (skip social platforms that block screenshots) */
                                                 <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
                                                         <div className="relative w-full max-w-xl aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/20">
                                                                 <Image
@@ -619,6 +692,118 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 />
                                                         </div>
                                                         <p className="mt-4 text-sm text-gray-600 font-medium">{domain}</p>
+                                                </div>
+                                        ) : card.url && (card.url.includes('twitter.com') || card.url.includes('x.com')) ? (
+                                                /* Twitter/X URL without image - show tweet content with embedded link preview */
+                                                (() => {
+                                                        // Extract non-Twitter URLs from tweet text for link preview card
+                                                        const tweetContent = card.content || card.title || '';
+                                                        const urlMatches = tweetContent.match(/https?:\/\/[^\s]+/g) || [];
+                                                        const embeddedUrl = urlMatches.find(u =>
+                                                                !u.includes('twitter.com') && !u.includes('x.com') && !u.includes('t.co')
+                                                        );
+                                                        // For t.co links, use them as fallback (they redirect to the real URL)
+                                                        const tcoUrl = !embeddedUrl ? urlMatches.find(u => u.includes('t.co')) : null;
+                                                        const linkPreviewUrl = embeddedUrl || tcoUrl;
+                                                        // Clean tweet text: remove the URL being previewed for cleaner display
+                                                        const cleanText = linkPreviewUrl
+                                                                ? tweetContent.replace(linkPreviewUrl, '').trim()
+                                                                : tweetContent;
+
+                                                        return (
+                                                <div className="relative w-full h-full overflow-y-auto"
+                                                        style={{
+                                                                background: `linear-gradient(135deg,
+                                                                        hsl(220, 15%, 96%) 0%,
+                                                                        hsl(210, 10%, 92%) 50%,
+                                                                        hsl(200, 15%, 88%) 100%)`
+                                                        }}
+                                                >
+                                                        <div className="w-full max-w-lg mx-auto py-8 md:py-12 px-6 md:px-8">
+                                                                {/* Author header */}
+                                                                <div className="flex items-center gap-3 mb-5">
+                                                                        {card.metadata?.authorAvatar ? (
+                                                                                <Image
+                                                                                        src={card.metadata.authorAvatar}
+                                                                                        alt={card.metadata?.authorName || ''}
+                                                                                        width={48}
+                                                                                        height={48}
+                                                                                        className="rounded-full"
+                                                                                />
+                                                                        ) : (
+                                                                                <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center flex-shrink-0">
+                                                                                        <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                                                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                                                                        </svg>
+                                                                                </div>
+                                                                        )}
+                                                                        <div>
+                                                                                <p className="font-semibold text-gray-900 text-lg">
+                                                                                        {card.metadata?.authorName || 'Unknown'}
+                                                                                </p>
+                                                                                {card.metadata?.authorHandle && (
+                                                                                        <p className="text-gray-500 text-sm">@{card.metadata.authorHandle}</p>
+                                                                                )}
+                                                                        </div>
+                                                                        <div className="ml-auto">
+                                                                                <svg className="h-6 w-6 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                                                                </svg>
+                                                                        </div>
+                                                                </div>
+                                                                {/* Tweet text */}
+                                                                <p className="text-lg md:text-xl text-gray-800 leading-relaxed font-serif whitespace-pre-wrap mb-5">
+                                                                        {decodeHtmlEntities(cleanText)}
+                                                                </p>
+                                                                {/* Link preview card for embedded URLs */}
+                                                                {linkPreviewUrl && (
+                                                                        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-sm">
+                                                                                <div className="relative aspect-video">
+                                                                                        <Image
+                                                                                                src={`https://api.microlink.io/?url=${encodeURIComponent(linkPreviewUrl)}&screenshot=true&meta=false&embed=screenshot.url`}
+                                                                                                alt="Link preview"
+                                                                                                fill
+                                                                                                className="object-cover"
+                                                                                                sizes="(max-width: 768px) 100vw, 40vw"
+                                                                                                onError={(e) => {
+                                                                                                        // Hide if screenshot fails
+                                                                                                        (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
+                                                                                                }}
+                                                                                        />
+                                                                                </div>
+                                                                                <div className="px-4 py-3 border-t border-gray-100">
+                                                                                        <p className="text-xs text-gray-400 truncate">
+                                                                                                {(() => { try { return new URL(linkPreviewUrl).hostname.replace('www.', ''); } catch { return linkPreviewUrl; } })()}
+                                                                                        </p>
+                                                                                </div>
+                                                                        </div>
+                                                                )}
+                                                                {/* Engagement metrics */}
+                                                                {card.metadata?.engagement && (card.metadata.engagement.likes || card.metadata.engagement.retweets || card.metadata.engagement.views) && (
+                                                                        <div className="flex items-center gap-5 mt-4 pt-4 border-t border-gray-200 text-sm text-gray-500">
+                                                                                {card.metadata.engagement.views ? <span>{Number(card.metadata.engagement.views).toLocaleString()} views</span> : null}
+                                                                                {card.metadata.engagement.retweets ? <span>{Number(card.metadata.engagement.retweets).toLocaleString()} reposts</span> : null}
+                                                                                {card.metadata.engagement.likes ? <span>{Number(card.metadata.engagement.likes).toLocaleString()} likes</span> : null}
+                                                                        </div>
+                                                                )}
+                                                        </div>
+                                                </div>
+                                                        );
+                                                })()
+                                        ) : card.url ? (
+                                                /* Other URL without image - show nicely formatted content */
+                                                <div className="relative w-full h-full flex flex-col items-center justify-center p-8"
+                                                        style={{
+                                                                background: `linear-gradient(135deg,
+                                                                        hsl(${(card.title?.charCodeAt(0) || 0) % 360}, 70%, 95%) 0%,
+                                                                        hsl(${((card.title?.charCodeAt(1) || 50) + 120) % 360}, 60%, 90%) 50%,
+                                                                        hsl(${((card.title?.charCodeAt(2) || 100) + 240) % 360}, 50%, 85%) 100%)`
+                                                        }}
+                                                >
+                                                        <p className="text-xl text-gray-700 font-serif text-center max-w-lg leading-relaxed">
+                                                                {decodeHtmlEntities(card.content || card.title || '')}
+                                                        </p>
+                                                        <p className="mt-4 text-sm text-gray-500 font-medium">{domain}</p>
                                                 </div>
                                         ) : (
                                                 /* Note/text content - show nicely formatted */

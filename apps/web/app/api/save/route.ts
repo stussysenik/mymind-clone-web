@@ -137,10 +137,9 @@ async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?
 		};
 	} catch (error) {
 		console.log('[Save] URL scrape failed:', error);
-		// Fallback to minimal screenshot if scrape fails
-		return {
-			imageUrl: `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
-		};
+		// No fallback - raw Microlink URLs should never be stored in the database
+		// They're redirect URLs that produce broken screenshots for social media sites
+		return {};
 	}
 }
 
@@ -484,6 +483,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			authorName?: string;
 			authorHandle?: string;
 			authorAvatar?: string;
+			engagement?: { likes?: number; retweets?: number; replies?: number; views?: number };
 		} = {};
 
 		// Check if this is an Instagram URL - use fast path for immediate response
@@ -531,48 +531,62 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			// Standard path for non-Instagram URLs
 			const scraped = await scrapeUrl(url);
 
-			// Fallback to self-hosted Playwright screenshot if no image found in metadata
-			// Uses Playwright (content-focused, zero cost) with fallback to Microlink
-			let fallbackImage: string | undefined;
+			const isTwitter = url.includes('twitter.com') || url.includes('x.com');
 
-			if (!scraped.imageUrl) {
-				const isTwitter = url.includes('twitter.com') || url.includes('x.com');
-				if (isTwitter) {
-					console.log('[Save] Twitter: Taking optimized screenshot with popup dismissal');
+			// For Twitter: persist API-extracted images to Supabase Storage
+			// This avoids Playwright entirely (X.com blocks headless browsers)
+			let persistedImageUrl: string | undefined;
+			if (isTwitter && scraped.imageUrl) {
+				try {
+					console.log('[Save] Twitter: Persisting API image to storage');
+					const imgRes = await fetch(scraped.imageUrl, { signal: AbortSignal.timeout(10000) });
+					if (imgRes.ok) {
+						const buffer = Buffer.from(await imgRes.arrayBuffer());
+						const uploadedUrl = await uploadScreenshotToStorage(buffer, url);
+						if (uploadedUrl) {
+							persistedImageUrl = uploadedUrl;
+							console.log('[Save] Twitter: Image persisted to storage');
+						}
+					}
+				} catch (err) {
+					console.warn('[Save] Twitter: Image persistence failed, using direct URL:', err);
 				}
+			}
 
+			// Fallback to Playwright screenshot only for non-Twitter URLs with no image
+			let fallbackImage: string | undefined;
+			if (!scraped.imageUrl && !isTwitter) {
 				try {
 					const result = await captureWithPlaywright(url);
 					if (result.success && result.buffer.length > 0) {
-						// Upload to Supabase Storage
 						const uploadedUrl = await uploadScreenshotToStorage(result.buffer, url);
 						fallbackImage = uploadedUrl ?? undefined;
-						if (isTwitter && fallbackImage) {
-							console.log('[Save] Twitter: Screenshot captured and uploaded successfully');
-						}
 					}
 
-					// If Playwright failed or storage upload failed, fallback to Microlink
 					if (!fallbackImage) {
 						console.warn('[Save] Playwright screenshot failed or upload failed, falling back to Microlink');
 						fallbackImage = getMicrolinkFallback(url);
 					}
 				} catch (error) {
 					console.warn('[Save] Screenshot capture failed:', error);
-					// Final fallback to Microlink
 					fallbackImage = getMicrolinkFallback(url);
 				}
+			} else if (!scraped.imageUrl && isTwitter) {
+				// Twitter with no images from API - NO fallback screenshot
+				// Microlink screenshots of x.com show login walls, which is useless
+				fallbackImage = undefined;
 			}
 
 			preview = {
 				title: scraped.title,
-				imageUrl: scraped.imageUrl ?? fallbackImage,
+				imageUrl: persistedImageUrl ?? scraped.imageUrl ?? fallbackImage,
 				content: scraped.content,
 				description: scraped.description,
 				images: scraped.images,
 				authorName: scraped.authorName,
 				authorHandle: scraped.authorHandle,
 				authorAvatar: scraped.authorAvatar,
+				engagement: scraped.engagement,
 			};
 		}
 
@@ -597,13 +611,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			metadata: {
 				processing: !tags, // Flag as processing if we need AI
 				platform: quickMeta.platform !== 'unknown' ? quickMeta.platform : undefined, // Store detected platform
-				images: preview.images, // Store carousel images
+				images: preview.images, // Store carousel/multi images
 				isCarousel: preview.isCarousel, // Track if this is a carousel
 				carouselPending: !!(preview.isCarousel && preview.shortcode), // Background extraction pending
 				// Author info extracted from social platforms
 				authorName: preview.authorName,
 				authorHandle: preview.authorHandle,
 				authorAvatar: preview.authorAvatar,
+				// Engagement metrics (Twitter, etc.)
+				engagement: preview.engagement,
 			},
 			tags: tags ?? [], // Empty tags, will be filled by AI
 		};

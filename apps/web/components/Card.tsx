@@ -163,7 +163,9 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                 }
 
                 // 2. Fallback: Automatic Screenshot (Microlink) - Fixed Golden Ratio for consistency
-                if (hasValidUrl && !screenshotError) {
+                // Skip for social platforms that block screenshots (twitter/x show login walls)
+                const isSocialUrl = card.url && (card.url.includes('twitter.com') || card.url.includes('x.com') || card.url.includes('instagram.com'));
+                if (hasValidUrl && !screenshotError && !isSocialUrl) {
                         const screenshotUrl = `https://api.microlink.io/?url=${encodeURIComponent(card.url!)}&screenshot=true&meta=false&embed=screenshot.url`;
                         return (
                                 <div className="relative aspect-[1.618/1] w-full overflow-hidden bg-gray-50 group-hover:bg-gray-100 transition-colors">

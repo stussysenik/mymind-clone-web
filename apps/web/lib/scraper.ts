@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { extractTitleWithDSPy, extractAssetsWithDSPy, extractContentWithDSPy } from './dspy-client';
 import { extractInstagramImages } from './instagram-scraper';
+import { extractTweet } from './twitter-extractor';
 import { decodeHtmlEntities } from './text-utils';
 
 // =============================================================================
@@ -59,6 +60,13 @@ export interface ScrapedContent {
         mentions?: string[]; // Extracted @mentions from content
         /** Flag for screenshot to use mobile viewport for better aspect ratio */
         needsMobileScreenshot?: boolean;
+        /** Engagement metrics (Twitter likes, retweets, etc.) */
+        engagement?: {
+                likes?: number;
+                retweets?: number;
+                replies?: number;
+                views?: number;
+        };
 }
 
 /**
@@ -147,74 +155,51 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                 }
 
                 // =============================================================
-                // TWITTER/X SPECIAL HANDLING (oEmbed API + Playwright screenshot)
+                // TWITTER/X SPECIAL HANDLING (FxTwitter API + Syndication API)
                 // =============================================================
                 if (domain.includes('twitter.com') || domain.includes('x.com')) {
                         try {
-                                // Extract tweet ID from URL
-                                const tweetIdMatch = url.match(/status\/(\d+)/);
-                                if (tweetIdMatch) {
-                                        const tweetId = tweetIdMatch[1];
-                                        console.log('[Scraper] Twitter/X: Extracting tweet', tweetId);
+                                const tweet = await extractTweet(url);
+                                if (tweet) {
+                                        const author = tweet.authorName || tweet.authorHandle || 'Unknown';
 
-                                        // Normalize URL to twitter.com format for oEmbed
-                                        const twitterUrl = url.replace('x.com', 'twitter.com');
+                                        // Format title
+                                        let title = `${author}: "${tweet.text.slice(0, 100)}${tweet.text.length > 100 ? '...' : ''}"`;
 
-                                        // Use Twitter oEmbed API (official, more reliable)
-                                        const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(twitterUrl)}&omit_script=true`;
-                                        const oembedRes = await fetch(oembedUrl, {
-                                                headers: {
-                                                        'Accept': 'application/json',
-                                                        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-                                                },
-                                        });
-
-                                        if (oembedRes.ok) {
-                                                const oembedData = await oembedRes.json();
-                                                console.log('[Scraper] Twitter oEmbed success');
-
-                                                // Parse tweet text from HTML blockquote
-                                                const htmlMatch = oembedData.html?.match(/<p[^>]*>([^<]+)<\/p>/);
-                                                const tweetText = htmlMatch ? decodeHtmlEntities(htmlMatch[1]) : '';
-
-                                                const authorName = oembedData.author_name || 'Unknown';
-                                                const authorHandle = oembedData.author_url?.split('/').pop() || '';
-                                                const author = authorName || authorHandle || 'Unknown';
-
-                                                // Format title
-                                                let title = `${author}: "${tweetText.slice(0, 100)}${tweetText.length > 100 ? '...' : ''}"`;
-
-                                                // DSPy Enhancement: Optionally use DSPy for better title extraction
-                                                try {
-                                                        const dspyTitle = await extractTitleWithDSPy(tweetText, authorHandle, 'twitter');
-                                                        if (dspyTitle.confidence > 0.7) {
-                                                                title = `${author}: "${dspyTitle.title}"`;
-                                                                console.log(`[Scraper] DSPy improved Twitter title (confidence: ${dspyTitle.confidence})`);
-                                                        }
-                                                } catch {
-                                                        // DSPy not available, use standard format
+                                        // DSPy Enhancement: Optionally use DSPy for better title extraction
+                                        try {
+                                                const dspyTitle = await extractTitleWithDSPy(tweet.text, tweet.authorHandle, 'twitter');
+                                                if (dspyTitle.confidence > 0.7) {
+                                                        title = `${author}: "${dspyTitle.title}"`;
+                                                        console.log(`[Scraper] DSPy improved Twitter title (confidence: ${dspyTitle.confidence})`);
                                                 }
-
-                                                // Note: oEmbed doesn't provide images directly
-                                                // Screenshot will be taken by the save route for visual preview
-                                                return {
-                                                        title,
-                                                        description: tweetText,
-                                                        imageUrl: null, // Will trigger Playwright screenshot
-                                                        images: [],
-                                                        content: tweetText,
-                                                        author,
-                                                        authorName,
-                                                        authorHandle,
-                                                        authorAvatar: '', // oEmbed doesn't provide avatar
-                                                        domain: 'x.com',
-                                                        url,
-                                                        // Flag for screenshot to use mobile viewport for better aspect ratio
-                                                        needsMobileScreenshot: true,
-                                                };
+                                        } catch {
+                                                // DSPy not available, use standard format
                                         }
-                                        console.warn('[Scraper] Twitter oEmbed failed, falling back to HTML');
+
+                                        return {
+                                                title,
+                                                description: tweet.text,
+                                                imageUrl: tweet.images[0] ?? null,
+                                                images: tweet.images,
+                                                content: tweet.text,
+                                                author,
+                                                authorName: tweet.authorName,
+                                                authorHandle: tweet.authorHandle,
+                                                authorAvatar: tweet.authorAvatar,
+                                                domain: 'x.com',
+                                                url,
+                                                hashtags: extractHashtags(tweet.text),
+                                                mentions: extractMentions(tweet.text),
+                                                engagement: {
+                                                        likes: tweet.likes,
+                                                        retweets: tweet.retweets,
+                                                        replies: tweet.replies,
+                                                        views: tweet.views,
+                                                },
+                                        };
                                 }
+                                console.warn('[Scraper] Twitter API extraction failed, falling back to HTML scrape');
                         } catch (twitterErr) {
                                 console.warn('[Scraper] Twitter special handling error:', twitterErr);
                         }

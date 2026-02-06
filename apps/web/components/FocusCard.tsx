@@ -101,8 +101,8 @@ export function FocusCard({ card, onOpenDetail, isAnimating = false, direction =
 							priority
 						/>
 					</>
-				) : card.url && !card.url.startsWith('local-') ? (
-					// Screenshot fallback for URLs
+				) : card.url && !card.url.startsWith('local-') && !card.url.includes('twitter.com') && !card.url.includes('x.com') ? (
+					// Screenshot fallback for URLs (skip social platforms that block screenshots)
 					<Image
 						src={`https://api.microlink.io/?url=${encodeURIComponent(card.url)}&screenshot=true&meta=false&embed=screenshot.url`}
 						alt="Site Preview"
