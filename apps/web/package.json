@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "rm -f .next/dev/lock",
+    "predev": "rm -f .next/dev/lock && lsof -ti :3737 | xargs kill -9 2>/dev/null || true",
     "dev": "next dev --port 3737",
     "build": "next build",
     "start": "next start --port 3737",
