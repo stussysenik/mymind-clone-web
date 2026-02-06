@@ -87,4 +87,7 @@ CRITICAL INSTRUCTIONS:
    DO NOT use generic tags like "website", "link", "page", "content".
 
 3. PLATFORMS: Detect platforms like Are.na, Pinterest, Mastodon, Bluesky, GitHub.
-4. PRODUCTS: If the item is clearly a product, shopping item, or commercial tool, classify type as "product".`;
+4. PRODUCTS: If the item is clearly a product, shopping item, or commercial tool, classify type as "product".
+
+RESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):
+{"type": "article|image|note|product|book|video|audio|social|movie", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "source platform"}`;

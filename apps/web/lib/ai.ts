@@ -74,9 +74,14 @@ async function callGLM(
         const body: Record<string, unknown> = {
                 model,
                 messages,
-                max_tokens: 2000,
+                // GLM-4.7 is a reasoning model — reasoning tokens consume the budget,
+                // so we need generous max_tokens to get full output
+                max_tokens: 4000,
         };
 
+        // NOTE: Tool calling is disabled for GLM-4.7 (reasoning model).
+        // Tool call arguments come back empty/truncated because reasoning tokens
+        // consume the budget. Instead, we ask for JSON in the response content.
         if (tools) {
                 body.tools = tools;
                 body.tool_choice = { type: 'function', function: { name: tools[0].function.name } };
@@ -89,6 +94,7 @@ async function callGLM(
                         'Authorization': `Bearer ${ZHIPU_API_KEY}`,
                 },
                 body: JSON.stringify(body),
+                signal: AbortSignal.timeout(30000), // 30s timeout — prevents infinite hangs
         });
 
         if (!response.ok) {
@@ -362,7 +368,7 @@ export async function classifyContent(
                         const textParts: string[] = [];
                         if (url) textParts.push(`Source URL: ${url}`);
                         if (content) textParts.push(`Text content: ${content.slice(0, 800)}`);
-                        textParts.push('Analyze this image and metadata. Include ONE abstract VIBE tag (e.g., "kinetic", "minimalist", "atmospheric", "raw", "elegant") alongside specific subject tags.');
+                        textParts.push('Analyze this image and metadata. Include ONE abstract VIBE tag (e.g., "kinetic", "minimalist", "atmospheric", "raw", "elegant") alongside specific subject tags.\n\nRESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):\n{"type": "article|image|note|product|book|video|audio|social|movie", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "source platform"}');
 
                         messages.push({
                                 role: 'user',
@@ -388,33 +394,39 @@ export async function classifyContent(
 
                 console.log(`[AI] Using ${model} for classification${hasImage ? ' (with image analysis)' : ''}`);
 
-                const response = await callGLM(
-                        model,
-                        messages,
-                        [CLASSIFICATION_TOOL]
-                );
+                // GLM-4.7 is a reasoning model — tool calling is broken (empty arguments).
+                // Instead, ask for JSON directly in the response content.
+                const response = await callGLM(model, messages);
 
-
-                // Extract function call result
-                const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-                if (toolCall?.function?.arguments) {
-                        const result = JSON.parse(toolCall.function.arguments) as ClassificationResult;
-                        // Normalize type to allowed values
-                        result.type = normalizeType(result.type);
-                        return result;
-                }
-
-                // Try parsing from content if no tool call
+                // Parse JSON from response content (may be wrapped in ```json blocks)
                 const content_text = response.choices[0]?.message?.content;
                 if (content_text) {
                         try {
-                                const parsed = JSON.parse(content_text);
-                                if (parsed.type && parsed.title) {
-                                        return parsed as ClassificationResult;
+                                // Extract JSON from markdown code blocks or raw JSON
+                                const jsonMatch = content_text.match(/```(?:json)?\s*([\s\S]*?)```/) || content_text.match(/(\{[\s\S]*\})/);
+                                if (jsonMatch) {
+                                        const parsed = JSON.parse(jsonMatch[1]) as ClassificationResult;
+                                        if (parsed.type && parsed.title) {
+                                                parsed.type = normalizeType(parsed.type);
+                                                console.log(`[AI] Classification result: type=${parsed.type}, title="${parsed.title?.slice(0, 40)}..."`);
+                                                return parsed;
+                                        }
                                 }
-                        } catch {
-                                // Not JSON, use fallback
+                        } catch (parseErr) {
+                                console.warn('[AI] Failed to parse classification JSON:', parseErr);
                         }
+                }
+
+                // Fallback: try tool calls (for non-reasoning models that support it)
+                const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+                if (toolCall?.function?.arguments) {
+                        try {
+                                const result = JSON.parse(toolCall.function.arguments) as ClassificationResult;
+                                if (result.type) {
+                                        result.type = normalizeType(result.type);
+                                        return result;
+                                }
+                        } catch { /* ignore */ }
                 }
 
                 throw new Error('No valid classification in response');

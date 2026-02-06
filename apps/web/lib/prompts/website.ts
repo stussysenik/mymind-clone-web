@@ -88,6 +88,9 @@ Example output for design blog:
 }
 
 CRITICAL: Users recall websites by their VISUAL PRESENTATION - color scheme, layout, typography, and imagery. Capture the visual "feel" of the page.
+
+RESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):
+{"type": "article|image|product|video", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "source platform"}
 `;
 }
 

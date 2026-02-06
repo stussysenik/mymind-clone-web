@@ -65,7 +65,10 @@ Example output for food carousel:
   "tags": ["food", "ramen", "cooking", "japanese-cuisine", "contemplative"],
   "summary": "This Instagram carousel contains 5 images documenting a ramen-making process. The visual sequence shows: (1) raw ingredients arranged on a wooden board, (2) noodles being hand-pulled, (3) broth simmering with aromatic spices, (4) plating with precision, (5) final bowl in dramatic lighting. The caption celebrates slow food and mindful cooking. Visual mood: WARM, TACTILE, MEDITATIVE. Hashtags emphasize #homemade and #japanesefood themes.",
   "platform": "Instagram"
-}`;
+}
+
+RESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):
+{"type": "image", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "Instagram"}`;
 }
 
 /**

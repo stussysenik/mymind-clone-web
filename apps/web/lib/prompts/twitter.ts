@@ -84,6 +84,9 @@ Example output for tech announcement thread:
 }
 
 CRITICAL: Users remember tweets by their VISUAL LAYOUT - line breaks, spacing, and formatting create the tweet's personality. Capture this in your summary.
+
+RESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):
+{"type": "social", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "Twitter"}
 `;
 }
 
