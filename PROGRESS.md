@@ -15,6 +15,30 @@
 
 #### Week 6 (Feb 3 - Feb 9)
 
+**UI Polish, Mobile Hydration Fix & Scraper Modules (Feb 6)**
+- **Add Modal Close Button Fix**: Close button was clipped by `overflow-hidden` and nearly invisible (`text-gray-400`). Moved inside bounds with `overflow-visible`, increased contrast (`text-gray-600`, `shadow-lg`), added 44x44px min tap target, responsive offsets, and `aria-label`
+- **Mobile Layout Shift Fix**: `windowWidth` defaulted to 1200px (desktop), causing 4+ column flash on mobile before correcting to 1. Fixed by using CSS-based column classes (`columns-1 sm:columns-2 lg:columns-3...`) as SSR fallback, only switching to JS-calculated columns after mount
+- **No-Transition Hydration Guard**: Existing `.no-transition` CSS class was defined but never used. Now applied via inline design-tokens script during initial render, removed after 2 animation frames to suppress color/layout transition flashes
+- **Instagram Scraper Module Split**: Created 4 missing modules (`browser-factory.ts`, `scraper-config.ts`, `selectors.ts`, `scraper-metrics.ts`) that the refactored `instagram-scraper.ts` was importing but were never committed
+- **Dev Server Port Cleanup**: Updated `predev` script to auto-kill stale processes on port 3737 before starting
+
+**Key Commits:**
+- `fix(ui): improve add modal close button visibility and mobile responsiveness`
+- `fix(ssr): eliminate mobile layout shift with CSS column fallback`
+- `feat(scraper): add browser-factory and scraper module split`
+
+**Artifacts:**
+- `apps/web/components/AddModal.tsx` — Visible close button, 44px tap target
+- `apps/web/components/CardGridClient.tsx` — CSS column fallback for SSR
+- `apps/web/lib/design-tokens.ts` — No-transition hydration guard
+- `apps/web/lib/browser-factory.ts` — Stealth Playwright page factory
+- `apps/web/lib/scraper-config.ts` — Scraper configuration constants
+- `apps/web/lib/selectors.ts` — Instagram DOM selectors and CDN patterns
+- `apps/web/lib/scraper-metrics.ts` — Scraper event recording
+- `apps/web/package.json` — predev port cleanup script
+
+---
+
 **UI/UX Enhancements & Platform Support (Feb 5)**
 - **Golden Ratio Design System**: Added CSS custom properties based on φ ≈ 1.618 for spacing
 - **Card Size Slider**: Adjustable masonry grid density (0.7 compact to 1.5 expanded) with localStorage persistence
@@ -334,4 +358,4 @@ apps/web/
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*
