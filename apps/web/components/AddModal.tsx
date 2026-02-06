@@ -278,7 +278,8 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                         <div
                                 className={`
                                         fixed inset-x-4 top-[15%] z-[70] mx-auto max-w-2xl
-                                        rounded-2xl shadow-2xl overflow-hidden
+                                        sm:inset-x-6
+                                        rounded-2xl shadow-2xl overflow-visible
                                         animate-modal-enter
                                         transition-colors duration-300 ease-out
                                         ${mode === 'link' ? 'bg-blue-50/30' : 'bg-white'}
@@ -288,20 +289,21 @@ export function AddModal({ isOpen, onClose }: AddModalProps) {
                                 onDragLeave={() => setIsDragOver(false)}
                                 onDrop={handleDrop}
                         >
-                                {/* Close Button - positioned outside input area */}
+                                {/* Close Button */}
                                 <button
                                         onClick={onClose}
                                         className="
-                                                absolute -top-3 -right-3 z-10
-                                                group p-2 rounded-full
-                                                bg-white text-gray-400 shadow-md border border-gray-100
+                                                absolute -top-2 -right-2 sm:-top-3 sm:-right-3 z-10
+                                                group min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full
+                                                bg-white text-gray-600 shadow-lg border border-gray-200
                                                 transition-all duration-200 ease-out
-                                                hover:bg-gray-50 hover:text-gray-600 hover:shadow-lg
-                                                active:scale-95 active:shadow-sm
-                                                focus-visible:ring-2 focus-visible:ring-gray-300 focus-visible:outline-none
+                                                hover:bg-gray-100 hover:text-gray-900 hover:shadow-xl
+                                                active:scale-95 active:shadow-md
+                                                focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:outline-none
                                         "
+                                        aria-label="Close"
                                 >
-                                        <X className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
+                                        <X className="w-5 h-5 transition-transform duration-200 group-hover:rotate-90" />
                                 </button>
 
                                 <div className="p-1">

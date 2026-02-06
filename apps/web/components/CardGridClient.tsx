@@ -497,13 +497,11 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
         // Calculate masonry styles based on card size using inline styles
         // This bypasses Tailwind CSS generation issues with dynamic responsive classes
         // cardSize 0.7 = compact (more columns), 1.0 = default, 1.5 = expanded (fewer columns)
-        // IMPORTANT: Use consistent initial value (1200) for SSR/client hydration match
-        const [windowWidth, setWindowWidth] = useState(1200);
+        const [windowWidth, setWindowWidth] = useState(0);
 
         // Track window resize for responsive column calculation
-        // Set actual width on mount to avoid hydration mismatch
+        // Set actual width on mount — before mount, CSS classes handle columns
         useEffect(() => {
-                // Set actual width immediately on mount
                 setWindowWidth(window.innerWidth);
                 const handleResize = () => setWindowWidth(window.innerWidth);
                 window.addEventListener('resize', handleResize);
@@ -511,7 +509,10 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
         }, []);
 
         // Calculate column count based on viewport and card size
+        // Returns null before mount — CSS columns are used as SSR fallback
         const masonryStyle = useMemo(() => {
+                if (windowWidth === 0) return null; // Not mounted yet, use CSS fallback
+
                 // Base columns per breakpoint (default at cardSize = 1.0)
                 let baseColumns: number;
                 if (windowWidth < 640) baseColumns = 1;        // mobile
@@ -747,7 +748,10 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                         ) : (
                                 <>
                                         {viewMode === 'grid' ? (
-                                                <div className="masonry-golden" style={masonryStyle}>
+                                                <div
+                                                className={masonryStyle ? 'masonry-golden' : 'columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5'}
+                                                style={masonryStyle ?? undefined}
+                                        >
                                                         {uniqueCards.map((card) => (
                                                                 <div key={card.id} className="mb-4 break-inside-avoid">
                                                                         <CardComponent

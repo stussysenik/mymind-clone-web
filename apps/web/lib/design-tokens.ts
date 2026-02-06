@@ -298,5 +298,13 @@ export const designTokensScript = `
       if (tokens.fontSerif) root.setProperty('--font-serif', tokens.fontSerif);
     }
   } catch (e) {}
+
+  // Suppress transitions during initial render to prevent visual flash
+  document.documentElement.classList.add('no-transition');
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      document.documentElement.classList.remove('no-transition');
+    });
+  });
 })();
 `;
