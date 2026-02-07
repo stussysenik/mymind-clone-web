@@ -79,7 +79,7 @@ export function FocusCard({ card, onOpenDetail, isAnimating = false, direction =
 			onClick={onOpenDetail}
 		>
 			{/* Large Image Container */}
-			<div className="aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-2xl bg-gray-100 relative">
+			<div className="aspect-[4/3] w-full overflow-hidden rounded-[var(--radius-xl)] shadow-[var(--shadow-xl)] bg-[var(--surface-secondary)] relative">
 				{card.imageUrl ? (
 					<>
 						{/* Blurred backdrop */}

@@ -50,7 +50,7 @@ export function TwitterCard({ card, onDelete, onArchive, onRestore, onClick }: T
 
 	return (
 		<article
-			className={`relative flex flex-col overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-black ${onClick ? 'cursor-pointer' : ''}`}
+			className={`relative flex flex-col overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow border-l-[3px] border-black ${onClick ? 'cursor-pointer' : ''}`}
 			onClick={onClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}

@@ -59,7 +59,7 @@ export function MovieCard({ card, onDelete, onArchive, onRestore, onClick }: Mov
 
 	return (
 		<article
-			className={`relative overflow-hidden rounded-lg bg-white card-shadow ${onClick ? 'cursor-pointer' : ''}`}
+			className={`relative overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow ${onClick ? 'cursor-pointer' : ''}`}
 			style={{
 				borderLeft: `3px solid ${borderColor}`,
 				// Apply subtle gradient from extracted dominant color (IMDB only)

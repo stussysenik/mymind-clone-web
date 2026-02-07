@@ -53,7 +53,7 @@ export function SpaceCard({ tag, count, onHide, onDelete }: SpaceCardProps) {
 	return (
 		<Link
 			href={`/?q=%23${encodeURIComponent(tag)}`}
-			className="group relative bg-white rounded-xl shadow-sm border border-[var(--border)] hover:shadow-md transition-all p-3 flex items-center gap-3"
+			className="group relative bg-[var(--surface-card)] rounded-[var(--radius-md)] shadow-[var(--shadow-sm)] border border-[var(--border)] hover:shadow-[var(--shadow-md)] transition-all p-3 flex items-center gap-3"
 		>
 			{/* Action Buttons (appear on hover) - top right corner */}
 			<div className="absolute top-2 right-2 flex gap-1 z-10">

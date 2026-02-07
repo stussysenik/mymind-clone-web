@@ -232,10 +232,8 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                         data-card-id={card.id}
                         onClick={onClick}
                         className={`
-                                group relative flex flex-col overflow-hidden rounded-lg
-                                bg-[var(--card-bg)] card-shadow
-                                transition-all duration-200
-                                hover:card-shadow-hover hover:-translate-y-1
+                                group relative flex flex-col overflow-hidden
+                                bg-[var(--surface-card)] card-base
                                 physics-press animate-fade-up
                                 ${onClick ? 'cursor-pointer' : ''}
                         `}

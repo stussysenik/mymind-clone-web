@@ -15,6 +15,40 @@
 
 #### Week 6 (Feb 3 - Feb 9)
 
+**AI Enrichment Reliability + Design System Overhaul (Feb 7)**
+- **AI 3-tier fallback**: Vision model GLM-4.6V (45s timeout) → Text model GLM-4.7 (30s) → Rule-based (instant). Eliminates generic fallback tags — every save now gets content-aware AI tags
+- **Timing telemetry**: All GLM calls now log `[AI] GLM ${model} responded in ${ms}ms` for observability
+- **Atomic claim enrichment**: Conditional UPDATE prevents duplicate enrichment processing (TOCTOU race fix)
+- **Time budget management**: Reduced MAX_RETRIES 2→1, increased budget 50s→55s, skip tag normalization if <15s remaining
+- **`processing: false` fix**: Initial card insert no longer pre-sets `processing: true`, allowing the enrich route to claim atomically
+- **60/30/10 design token system**: Centralized CSS variables for surfaces (`--surface-primary`, `--surface-card`, `--surface-elevated`), elevation (`--shadow-xs` through `--shadow-xl`), radius (`--radius-sm` 6px through `--radius-full`), and borders (`--border-subtle`, `--border-default`, `--border-emphasis`)
+- **`.card-base` utility class**: Unified card styling foundation (radius, shadow, hover lift) used by all card types
+- **Platform card unification**: All 6 platform cards (Instagram, Twitter, YouTube, Reddit, Amazon, Movie) updated from hardcoded `bg-white`/`rounded-lg` to design tokens
+- **CardDetailModal**: Frosted glass overlay (`bg-black/60 backdrop-blur-xl` replacing heavy `bg-black/90`), all internal surfaces use tokens
+- **Mobile search bar**: Moved to fixed bottom position with gradient fade for thumb accessibility
+- **FAB repositioned**: Floating action button moves above mobile search bar (`bottom-[calc(4.5rem+env(safe-area-inset-bottom))]`)
+- **Dark mode audit**: All surfaces use CSS variables — no broken `bg-white` in dark mode
+- **Instagram CDN migration script**: New `migrate-instagram-images.mjs` for batch repair of expired CDN URLs to Supabase storage
+
+**Key Commits:**
+- `feat: AI enrichment reliability + design system overhaul + Instagram CDN migration`
+
+**Artifacts:**
+- `apps/web/lib/ai.ts` — 3-tier fallback, timing telemetry, `tryGLMClassification()` helper
+- `apps/web/app/api/enrich/route.ts` — Atomic claim, time budget, reduced retries
+- `apps/web/app/api/save/route.ts` — `processing: false` fix, enrichmentTiming
+- `apps/web/app/globals.css` — 60/30/10 design tokens, `.card-base` utility
+- `apps/web/app/page.tsx` — Mobile bottom search bar layout
+- `apps/web/components/CardDetailModal.tsx` — Frosted glass overlay + token migration
+- `apps/web/components/Card.tsx` — card-base integration
+- `apps/web/components/SearchBar.tsx` — Design token migration
+- `apps/web/components/AddButton.tsx` — FAB repositioning
+- `apps/web/components/Header.tsx` — `border-subtle` editorial border
+- `apps/web/components/cards/*.tsx` — All 6 platform cards unified
+- `apps/web/scripts/migrate-instagram-images.mjs` — CDN migration script
+
+---
+
 **Fix Instagram Extraction on Vercel — InstaFix Primary Strategy (Feb 7)**
 - **Root Cause: Instagram blocks datacenter IPs** — All three existing strategies (GraphQL, Embed HTML, OG Tags) fail on Vercel because Instagram blocks AWS/datacenter IPs. Worked fine on localhost (residential IP)
 - **Fix: Added InstaFix (`ddinstagram.com`) as primary strategy** — InstaFix is the Instagram equivalent of FxTwitter, proxying through its own infrastructure. Works from any IP including Vercel
@@ -311,6 +345,10 @@
 | Card size slider | ✅ Done | Adjustable grid density, mobile support |
 | Platform filters | ✅ Done | Priority platforms, expandable pills, touch scroll |
 | Perplexity.ai support | ✅ Done | Platform detection, screenshots, type mapping |
+| Design token system | ✅ Done | 60/30/10 surfaces, elevation, radius, borders |
+| AI enrichment reliability | ✅ Done | 3-tier GLM fallback, atomic claim, timing telemetry |
+| Mobile-first search | ✅ Done | Bottom search bar on mobile, gradient fade, FAB above |
+| Instagram CDN migration | ✅ Done | Batch repair of expired CDN URLs to Supabase storage |
 
 ### iOS App
 
@@ -387,6 +425,8 @@
 | Save response | <200ms | ✅ ~150ms |
 | Search response | <300ms | ✅ ~200ms |
 | Grid render | <100ms | ✅ ~80ms |
+| AI enrichment (vision) | <45s | ✅ 19-39s (GLM-4.6V) |
+| AI enrichment (text fallback) | <30s | ✅ ~20s (GLM-4.7) |
 | Share Extension cold start | <500ms | 🔄 TBD (native) |
 
 ### Code Stats

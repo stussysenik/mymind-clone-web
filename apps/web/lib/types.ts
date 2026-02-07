@@ -69,6 +69,8 @@ export interface CardMetadata {
 
         /** Whether the card is currently being processed by AI */
         processing?: boolean;
+        /** Whether the card needs AI enrichment (set on save, cleared by enrich route) */
+        needsEnrichment?: boolean;
         /** Error message if enrichment failed */
         enrichmentError?: string;
         /** Timestamp when enrichment failed */
@@ -118,6 +120,8 @@ export interface CardMetadata {
 	mediaPersisted?: boolean;
 	/** Original CDN URLs before persistence */
 	originalCdnUrls?: string[];
+	/** Timestamp when CDN URLs were migrated to storage */
+	migratedAt?: string;
 
 	// Enrichment timing for real-time ETA display
 	/** Enrichment timing data for ETA calculation */

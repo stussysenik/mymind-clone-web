@@ -48,7 +48,7 @@ export function RedditCard({ card, onDelete, onArchive, onRestore, onClick }: Re
 
 	return (
 		<article
-			className={`relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#FF4500] ${onClick ? 'cursor-pointer' : ''}`}
+			className={`relative overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow border-l-[3px] border-[#FF4500] ${onClick ? 'cursor-pointer' : ''}`}
 			onClick={onClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}

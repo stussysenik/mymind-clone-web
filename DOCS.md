@@ -134,6 +134,72 @@ apps/web/
 
 ---
 
+## Design System (60/30/10)
+
+The design system follows the **60/30/10 color rule** for visual hierarchy:
+- **60% dominant**: Background surfaces (`--surface-primary`)
+- **30% secondary**: Card surfaces (`--surface-card`, `--surface-elevated`)
+- **10% accent**: Interactive elements (`--accent-primary`)
+
+### Surface Tokens
+```css
+--surface-primary    /* Main background (60%) */
+--surface-secondary  /* Grouped/nested backgrounds */
+--surface-card       /* Card backgrounds (30%) */
+--surface-elevated   /* Modals, popovers */
+--surface-overlay    /* Backdrop overlays: rgba(0,0,0,0.6) */
+```
+
+### Elevation System
+```css
+--shadow-xs   /* Subtle: tags, badges */
+--shadow-sm   /* Default: cards at rest */
+--shadow-md   /* Hover: cards on hover */
+--shadow-lg   /* Elevated: search bar, FAB */
+--shadow-xl   /* Prominent: modals, detail views */
+```
+
+### Radius System
+```css
+--radius-sm: 6px     /* Tags, badges */
+--radius-md: 10px    /* Grid cards */
+--radius-lg: 14px    /* Search bar */
+--radius-xl: 18px    /* Modals */
+--radius-full: 9999px /* Pills, FAB */
+```
+
+### Border System
+```css
+--border-subtle      /* Editorial: rgba(0,0,0,0.03) */
+--border-default     /* Standard: rgba(0,0,0,0.06) */
+--border-emphasis    /* Strong: rgba(0,0,0,0.12) */
+```
+
+### `.card-base` Utility Class
+All cards in the masonry grid use this shared foundation:
+```css
+.card-base {
+  border-radius: var(--radius-md);
+  background-color: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+  /* Hover: shadow-md + translateY(-2px) */
+}
+```
+
+### Dark Mode
+All tokens have dark variants in `[data-theme="dark"]`:
+```css
+[data-theme="dark"] {
+  --surface-primary: var(--background);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), ...;
+  --border-subtle: rgba(255, 255, 255, 0.04);
+}
+```
+
+**File**: `apps/web/app/globals.css`
+
+---
+
 ## Key Features
 
 ### Instagram Carousel Support
@@ -204,6 +270,33 @@ node scripts/reextract-instagram-carousels.mjs
 #   --limit N     Only process N cards
 #   --force       Re-extract all Instagram cards
 ```
+
+### AI Enrichment Pipeline
+
+**3-Tier Classification Fallback:**
+```
+Vision model GLM-4.6V (45s) → Text model GLM-4.7 (30s) → Rule-based (instant)
+```
+
+When the vision model times out (e.g. large images), the text model produces content-aware tags from URL + content + metadata. Only if both AI models fail does the system fall back to generic platform-based tags.
+
+**Atomic Claim Deduplication:**
+Multiple triggers (client-side SWR, `after()` callback, Card component) can call `/api/enrich` for the same card. An atomic conditional UPDATE prevents duplicate processing:
+```sql
+UPDATE cards SET metadata.processing=true
+WHERE id=$1 AND (metadata.processing IS NULL OR metadata.processing = false)
+```
+If 0 rows affected → another worker already claimed it → return `already_claimed`.
+
+**Time Budget Management:**
+- `MAX_ENRICHMENT_MS = 55000` (Vercel 60s limit, 5s buffer)
+- `MAX_RETRIES = 1` (prevents 63s starvation from retry + backoff + retry)
+- `TAG_NORMALIZATION_BUDGET_MS = 15000` — skip normalization if insufficient time remaining
+
+**Timing Telemetry:**
+All GLM calls log: `[AI] GLM ${model} responded in ${elapsedMs}ms`
+
+**Files**: `apps/web/lib/ai.ts`, `apps/web/app/api/enrich/route.ts`
 
 ### Platform-Specific AI
 
@@ -442,8 +535,9 @@ Save a new card with optimistic response.
     "title": "Example",
     "imageUrl": "https://...",
     "metadata": {
-      "processing": true,
-      "images": ["url1", "url2"] // For Instagram carousels
+      "processing": false,
+      "needsEnrichment": true,
+      "images": ["url1", "url2"]
     }
   }
 }
@@ -451,12 +545,13 @@ Save a new card with optimistic response.
 
 ### POST /api/enrich
 
-Enrich a card with AI-generated tags and summary.
+Enrich a card with AI-generated tags and summary. Uses atomic claim pattern — only one worker processes each card.
 
 **Request:**
 ```json
 {
-  "cardId": "xxx"
+  "cardId": "xxx",
+  "force": false
 }
 ```
 
@@ -468,6 +563,10 @@ Enrich a card with AI-generated tags and summary.
   "summary": "AI-generated summary",
   "type": "article"
 }
+// Or if another worker claimed it:
+{ "success": true, "skipped": true, "reason": "already_claimed" }
+// Or if already enriched:
+{ "success": true, "skipped": true, "reason": "already_enriched" }
 ```
 
 ---
@@ -583,4 +682,29 @@ Response: { "success": true, "url": "...", "source": "playwright", "platform": "
 **Performance:** 1-2s warm, 3-5s cold, ~720k/month capacity on Vercel Hobby.
 
 **See:** `apps/web/lib/screenshot-playwright.ts`
+
+### Instagram CDN Migration
+
+Old Instagram cards may have `image_url` pointing to expired CDN URLs (`scontent.cdninstagram.com`, `instagram.fprg5-1.fna.fbcdn.net`) that return 403. The migration script re-persists these to Supabase storage.
+
+```bash
+# Preview affected cards
+node scripts/migrate-instagram-images.mjs --dry-run
+
+# Migrate first 10 cards
+node scripts/migrate-instagram-images.mjs --limit 10
+
+# Migrate all affected cards
+node scripts/migrate-instagram-images.mjs
+```
+
+**How it works:**
+1. Queries Instagram cards with non-Supabase `image_url`
+2. Extracts shortcode from URL → calls Instagram extractor for fresh CDN URLs
+3. Downloads images → uploads to Supabase Storage (`instagram/{userId}/{shortcode}/`)
+4. Updates card: `image_url`, `metadata.images`, `metadata.mediaPersisted`, `metadata.migratedAt`
+
+**Does NOT require dev server** — runs standalone with Supabase service key.
+
+**See:** `apps/web/scripts/migrate-instagram-images.mjs`
 

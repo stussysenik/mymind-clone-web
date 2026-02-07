@@ -27,9 +27,10 @@ import { detectPlatform } from '@/lib/platforms';
 // RETRY CONFIGURATION
 // =============================================================================
 
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 1; // Reduced from 2: prevents 63s classification (30s + backoff + 30s + backoff)
 const INITIAL_BACKOFF_MS = 1000; // 1 second
-const MAX_ENRICHMENT_MS = 50000; // 50s overall timeout (safety net for serverless limits)
+const MAX_ENRICHMENT_MS = 55000; // 55s overall timeout (Vercel 60s limit, 5s buffer)
+const TAG_NORMALIZATION_BUDGET_MS = 15000; // Skip tag normalization if less than 15s remaining
 
 /**
  * Sleep helper for exponential backoff
@@ -111,19 +112,44 @@ export async function POST(request: NextRequest) {
                         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
                 }
 
-                // Idempotency guard: skip if already enriched (prevents duplicate work
-                // from server-side after() + client-side retry racing)
-                const isAlreadyEnriched = card.metadata?.enrichedAt && !card.metadata?.enrichmentError;
-                const isCurrentlyProcessing = card.metadata?.processing === true &&
-                        card.metadata?.enrichmentTiming?.startedAt &&
-                        (Date.now() - card.metadata.enrichmentTiming.startedAt) < 120000; // < 2 min old
-
                 // Allow re-enrichment via explicit force flag (for Re-analyze button)
                 const forceReEnrich = body.force === true;
 
-                if (!forceReEnrich && isCurrentlyProcessing) {
-                        console.log(`[Enrich API] Skipping - already processing card: ${cardId}`);
-                        return NextResponse.json({ success: true, skipped: true, reason: 'already_processing' });
+                // Idempotency guard: skip if already enriched or currently processing
+                if (!forceReEnrich) {
+                        const isAlreadyEnriched = card.metadata?.enrichedAt && !card.metadata?.enrichmentError;
+                        if (isAlreadyEnriched) {
+                                console.log(`[Enrich API] Skipping - already enriched card: ${cardId}`);
+                                return NextResponse.json({ success: true, skipped: true, reason: 'already_enriched' });
+                        }
+
+                        const isCurrentlyProcessing = card.metadata?.processing === true &&
+                                card.metadata?.enrichmentTiming?.startedAt &&
+                                (Date.now() - card.metadata.enrichmentTiming.startedAt) < 60000; // < 1 min (tighter window)
+
+                        if (isCurrentlyProcessing) {
+                                console.log(`[Enrich API] Skipping - already processing card: ${cardId}`);
+                                return NextResponse.json({ success: true, skipped: true, reason: 'already_processing' });
+                        }
+                }
+
+                // Atomic claim: conditionally set processing=true only if not already claimed
+                // This prevents TOCTOU race between after() and any other trigger
+                if (!forceReEnrich) {
+                        const { data: claimed } = await client
+                                .from('cards')
+                                .update({
+                                        metadata: { ...card.metadata, processing: true, enrichmentTiming: { startedAt: Date.now() } }
+                                })
+                                .eq('id', cardId)
+                                .or('metadata->>processing.is.null,metadata->>processing.eq.false')
+                                .select('id')
+                                .single();
+
+                        if (!claimed) {
+                                console.log(`[Enrich API] Skipping - another worker already claimed card: ${cardId}`);
+                                return NextResponse.json({ success: true, skipped: true, reason: 'already_claimed' });
+                        }
                 }
 
                 console.log(`[Enrich API] Starting enrichment for card: ${cardId}`);
@@ -217,14 +243,19 @@ export async function POST(request: NextRequest) {
                 // 4. Normalize tags against existing database tags ("Gardener Bot")
                 // Defensive: ensure classification.tags is always an array before iteration
                 let finalTags: string[] = Array.isArray(classification?.tags) ? classification.tags : [];
-                try {
-                        const existingTags = await getUniqueTags(userId);
-                        const existingTagNames = (existingTags ?? []).map(t => t.tag);
-                        if (existingTagNames.length > 0 && finalTags.length > 0) {
-                                finalTags = await normalizeTagsToExisting(finalTags, existingTagNames);
+                const timeRemaining = MAX_ENRICHMENT_MS - (Date.now() - timing.startedAt);
+                if (timeRemaining > TAG_NORMALIZATION_BUDGET_MS) {
+                        try {
+                                const existingTags = await getUniqueTags(userId);
+                                const existingTagNames = (existingTags ?? []).map(t => t.tag);
+                                if (existingTagNames.length > 0 && finalTags.length > 0) {
+                                        finalTags = await normalizeTagsToExisting(finalTags, existingTagNames);
+                                }
+                        } catch (normError) {
+                                console.warn('[Enrich API] Tag normalization skipped:', normError);
                         }
-                } catch (normError) {
-                        console.warn('[Enrich API] Tag normalization skipped:', normError);
+                } else {
+                        console.warn(`[Enrich API] Skipping tag normalization — only ${timeRemaining}ms remaining (need ${TAG_NORMALIZATION_BUDGET_MS}ms)`);
                 }
 
                 // 5. Update Card with successful enrichment

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "predev": "rm -f .next/dev/lock && lsof -ti :3737 | xargs kill -9 2>/dev/null || true",
-    "dev": "next dev --port 3737",
+    "dev": "next dev --port 3737 --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --port 3737",
     "lint": "eslint"

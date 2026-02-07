@@ -30,7 +30,7 @@ function CardGridSkeleton() {
       {Array.from({ length: 12 }).map((_, i) => (
         <div
           key={i}
-          className="mb-4 break-inside-avoid rounded-lg bg-white card-shadow overflow-hidden"
+          className="mb-4 break-inside-avoid rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow overflow-hidden"
         >
           <div className="aspect-[4/3] w-full animate-shimmer" />
           <div className="p-3 space-y-2">
@@ -57,8 +57,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       {/* Main Content - flex-1 to push footer down */}
       <main className="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-8 flex-1 w-full">
-        {/* Search Section */}
-        <section className="py-6">
+        {/* Search Section — desktop: top, mobile: fixed bottom (see below) */}
+        <section className="hidden md:block py-6">
           <SearchBar />
         </section>
 
@@ -69,8 +69,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
         )}
 
+        {/* Mobile: spacer for top (no search bar) */}
+        <div className="md:hidden h-2" />
+
         {/* Card Grid */}
-        <section className="pb-12">
+        <section className="pb-24 md:pb-12">
           <Suspense fallback={<CardGridSkeleton />}>
             <CardGrid searchQuery={searchQuery} platformFilter={platformFilter} mode={mode} />
           </Suspense>
@@ -91,6 +94,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </a>
         </p>
       </footer>
+
+      {/* Mobile: Fixed bottom search bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 bg-gradient-to-t from-[var(--surface-primary)] via-[var(--surface-primary)]/95 to-transparent">
+        <SearchBar />
+      </div>
 
       {/* Add Button (FAB) */}
       <AddButton />

@@ -46,7 +46,7 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 
 	return (
 		<article
-			className={`relative overflow-hidden rounded-lg bg-white card-shadow border-l-[3px] border-[#E4405F] ${onClick ? 'cursor-pointer' : ''}`}
+			className={`relative overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow border-l-[3px] border-[#E4405F] ${onClick ? 'cursor-pointer' : ''}`}
 			onClick={onClick}
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}

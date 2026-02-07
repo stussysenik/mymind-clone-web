@@ -535,6 +535,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 						console.warn('[Save] Instagram: Image persistence failed, using CDN URL:', e);
 					}
 
+					// Replace CDN URL in images[0] with persisted Supabase URL
+					// so metadata.images doesn't store expiring CDN URLs
+					if (persistedImageUrl && igPost.images.length > 0) {
+						igPost.images[0] = persistedImageUrl;
+					}
+
 					preview = {
 						title: igPost.caption.slice(0, 80).trim() || 'Instagram Post',
 						imageUrl: persistedImageUrl || igPost.images[0],
@@ -655,7 +661,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			url: (isInstagram ? resolvedInstagramUrl : url) ?? null,
 			image_url: finalImageUrl ?? preview.imageUrl ?? null,
 			metadata: {
-				processing: !tags, // Flag as processing if we need AI
+				processing: false, // Let the enrich route claim this atomically
+				needsEnrichment: !tags, // Signal that AI enrichment is needed
 				platform: quickMeta.platform !== 'unknown' ? quickMeta.platform : undefined, // Store detected platform
 				images: preview.images, // Store carousel/multi images
 				isCarousel: preview.isCarousel, // Track if this is a carousel

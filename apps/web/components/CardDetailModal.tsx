@@ -60,7 +60,17 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
         // Carousel state
         const [currentImageIndex, setCurrentImageIndex] = useState(0);
-        const images = card?.metadata?.images?.length ? card.metadata.images : (card?.imageUrl ? [card.imageUrl] : []);
+        const images = (() => {
+                const metaImages = card?.metadata?.images as string[] | undefined;
+                if (metaImages?.length) {
+                        // If first image is an expired CDN URL and we have a persisted imageUrl, substitute it
+                        if (card?.imageUrl && metaImages[0] && !metaImages[0].includes('supabase')) {
+                                return [card.imageUrl, ...metaImages.slice(1)];
+                        }
+                        return metaImages;
+                }
+                return card?.imageUrl ? [card.imageUrl] : [];
+        })();
 
         // Mobile responsive state
         const isMobile = useMediaQuery('(max-width: 767px)');
@@ -456,14 +466,14 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                         aria-modal="true"
                         className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8"
                 >
-                        <div className="absolute inset-0 bg-black/90 backdrop-blur-md transition-opacity duration-300" onClick={onClose} />
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-xl transition-opacity duration-300" onClick={onClose} />
 
-                        <div className="relative w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
+                        <div className="relative w-full max-w-7xl h-[90vh] bg-[var(--surface-elevated)] rounded-[var(--radius-xl)] shadow-[var(--shadow-xl)] overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
 
                                 {/* Desktop Close Button (Hidden on mobile - mobile uses header) */}
                                 <button
                                         onClick={onClose}
-                                        className="hidden md:flex absolute top-4 right-4 z-[110] p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+                                        className="hidden md:flex absolute top-4 right-4 z-[110] p-2 bg-[var(--surface-secondary)] hover:bg-[var(--border-emphasis)] rounded-full text-[var(--foreground-muted)] transition-colors"
                                 >
                                         <X className="w-5 h-5" />
                                 </button>
@@ -473,7 +483,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                         <div className={`sticky top-0 z-[110] flex items-center justify-between gap-3 px-4 py-3 backdrop-blur-md shrink-0 ${
                                                 mobileView === 'visual'
                                                         ? 'bg-gradient-to-b from-black/60 via-black/40 to-transparent border-b border-white/10'
-                                                        : 'bg-white/95 border-b border-gray-100'
+                                                        : 'bg-[var(--surface-elevated)]/95 border-b border-[var(--border)]'
                                         }`}>
                                                 {/* Tab Segmented Control */}
                                                 <div className={`flex flex-1 backdrop-blur-sm rounded-lg p-1 max-w-[200px] ${
@@ -483,9 +493,9 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 onClick={() => setMobileView('visual')}
                                                                 className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all min-h-[44px] ${
                                                                         mobileView === 'visual'
-                                                                                ? 'bg-white text-gray-900 shadow-sm'
+                                                                                ? 'bg-[var(--surface-card)] text-[var(--foreground)] shadow-sm'
                                                                                 : mobileView === 'text'
-                                                                                        ? 'text-gray-600 hover:text-gray-900 active:bg-gray-200'
+                                                                                        ? 'text-[var(--foreground-muted)] hover:text-[var(--foreground)] active:bg-[var(--surface-secondary)]'
                                                                                         : 'text-white/80 hover:text-white active:bg-white/10'
                                                                 }`}
                                                         >
@@ -495,10 +505,10 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                 onClick={() => setMobileView('text')}
                                                                 className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all min-h-[44px] ${
                                                                         mobileView === 'text'
-                                                                                ? 'bg-white text-gray-900 shadow-sm'
+                                                                                ? 'bg-[var(--surface-card)] text-[var(--foreground)] shadow-sm'
                                                                                 : mobileView === 'visual'
                                                                                         ? 'text-white/80 hover:text-white active:bg-white/10'
-                                                                                        : 'text-gray-600 hover:text-gray-900 active:bg-gray-200'
+                                                                                        : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)] active:bg-[var(--surface-secondary)]'
                                                                 }`}
                                                         >
                                                                 Details
@@ -839,7 +849,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
                                 {/* RIGHT: Metadata & Notes - hidden on mobile when showing visual */}
                                 <div
-                                        className={`w-full md:w-1/3 flex-1 md:h-full bg-white flex flex-col border-l border-gray-100 ${isMobile && mobileView === 'visual' ? 'hidden' : ''}`}
+                                        className={`w-full md:w-1/3 flex-1 md:h-full bg-[var(--surface-elevated)] flex flex-col border-l border-[var(--border)] ${isMobile && mobileView === 'visual' ? 'hidden' : ''}`}
                                         {...(isMobile ? swipeHandlers : {})}
                                 >
                                         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
@@ -1047,7 +1057,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                         </div>
 
                                         {/* Bottom Actions Bar - Sticky on mobile */}
-                                        <div className="p-4 md:p-6 border-t border-gray-100 flex items-center justify-center gap-3 md:gap-4 bg-white shrink-0">
+                                        <div className="p-4 md:p-6 border-t border-[var(--border)] flex items-center justify-center gap-3 md:gap-4 bg-[var(--surface-elevated)] shrink-0">
                                                 {/* Add to Space Button */}
                                                 <div className="relative">
                                                         <button

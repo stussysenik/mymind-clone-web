@@ -163,11 +163,11 @@ export function SearchBar({
                         {/* Search Container */}
                         <div
                                 className={`
-					flex items-center gap-3 py-3 px-4 rounded-xl
+					flex items-center gap-3 py-3 px-4 rounded-[var(--radius-lg)]
 					transition-all duration-300 ease-out border
                                         ${isFocused
-                                                ? 'bg-white shadow-xl ring-1 ring-black/5 transform -translate-y-0.5'
-                                                : 'bg-white/50 border border-gray-100 hover:bg-white hover:shadow-md'
+                                                ? 'bg-[var(--surface-card)] shadow-[var(--shadow-lg)] ring-1 ring-black/5 transform -translate-y-0.5'
+                                                : 'bg-[var(--surface-card)]/80 border border-[var(--border-default)] hover:bg-[var(--surface-card)] hover:shadow-[var(--shadow-md)]'
                                         }
                                         ${mode === 'smart' ? 'ring-1 ring-purple-500/30 shadow-[0_4px_20px_-12px_rgba(168,85,247,0.4)]' : ''}
 				`}

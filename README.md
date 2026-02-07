@@ -89,6 +89,9 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | Platform-specific AI | ✅ Production |
 | Serendipity mode | ✅ Production |
 | Consistent domain links | ✅ Production |
+| Design system (60/30/10) | ✅ Production |
+| Mobile-first search | ✅ Production |
+| AI enrichment reliability | ✅ Production |
 | iOS Share Sheet | 🔄 [Native app](https://github.com/stussysenik/mymind-clone-ios) |
 | Chrome extension | 📋 Planned |
 
@@ -101,7 +104,7 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 | Framework | Next.js 16 (App Router) |
 | UI | React 19 + Tailwind CSS 4 |
 | Database | Supabase (PostgreSQL + Auth + RLS) |
-| AI | Zhipu GLM-4.7 |
+| AI | Zhipu GLM-4.7 + GLM-4.6V (vision) |
 | Screenshots | Self-hosted Playwright (zero cost) |
 | Testing | Playwright |
 | Dev Environment | Nix Flakes (Node 20.x, pnpm, Python 3.12) |

@@ -44,12 +44,12 @@ export function AddButton() {
                                 onClick={() => setIsModalOpen(true)}
                                 data-testid="add-button"
                                 className="
-          fixed bottom-6 right-6 z-50
+          fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 right-6 z-50
           flex h-14 w-14 items-center justify-center
           rounded-full bg-[var(--accent-primary)] text-white
-          shadow-lg shadow-purple-500/30
+          shadow-[var(--shadow-lg)]
           transition-all duration-200
-          hover:scale-110 hover:shadow-xl hover:shadow-purple-500/40
+          hover:scale-110 hover:shadow-[var(--shadow-xl)]
           active:scale-95
         "
                                 aria-label="Add new item"

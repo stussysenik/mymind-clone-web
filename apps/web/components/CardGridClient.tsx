@@ -674,10 +674,10 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                                                 )}
 
                                                 {/* View Toggle */}
-                                                <div className="flex items-center bg-gray-100 p-1 rounded-lg">
+                                                <div className="flex items-center bg-[var(--surface-secondary)] p-1 rounded-lg">
                                                         <button
                                                                 onClick={() => setViewMode('grid')}
-                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
+                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-[var(--surface-card)] shadow-sm text-[var(--foreground)]' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
                                                                         }`}
                                                                 aria-label="Grid View"
                                                         >
@@ -685,7 +685,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                                                         </button>
                                                         <button
                                                                 onClick={() => setViewMode('list')}
-                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'
+                                                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-[var(--surface-card)] shadow-sm text-[var(--foreground)]' : 'text-[var(--foreground-muted)] hover:text-[var(--foreground)]'
                                                                         }`}
                                                                 aria-label="List View"
                                                         >

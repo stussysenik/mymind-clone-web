@@ -137,7 +137,96 @@ function isContentImage(url: string): boolean {
 async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | null> {
 	const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
 
-	// Sub-strategy A: Try oEmbed API first (structured JSON)
+	// Sub-strategy A: Fetch ddinstagram HTML page and parse OG tags (carousel-aware)
+	// HTML is tried first because it extracts ALL og:image tags and correctly sets
+	// isCarousel and slideCount, while oEmbed only returns a single thumbnail.
+	try {
+		const ddUrl = `https://ddinstagram.com/p/${shortcode}/`;
+		const res = await fetch(ddUrl, {
+			signal: AbortSignal.timeout(5000),
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+			},
+		});
+
+		if (!res.ok) {
+			throw new Error(`InstaFix HTML returned ${res.status}`);
+		}
+
+		const html = await res.text();
+
+		// Extract OG tags from InstaFix page
+		const ogImage = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:image"/)?.[1];
+		const ogTitle = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:title"/)?.[1];
+		const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:description"/)?.[1];
+		const ogVideo = html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:video"/)?.[1];
+
+		// Also look for additional images (carousel support via multiple og:image tags)
+		const allImages: string[] = [];
+		const ogImageRegex = /<meta[^>]+property="og:image"[^>]+content="([^"]*)"/g;
+		const ogImageRegex2 = /<meta[^>]+content="([^"]*)"[^>]+property="og:image"/g;
+		let imgMatch;
+		while ((imgMatch = ogImageRegex.exec(html)) !== null) {
+			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
+				allImages.push(imgMatch[1]);
+			}
+		}
+		while ((imgMatch = ogImageRegex2.exec(html)) !== null) {
+			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
+				allImages.push(imgMatch[1]);
+			}
+		}
+
+		const images = allImages.length > 0 ? allImages : ogImage ? [ogImage] : [];
+
+		if (images.length === 0) {
+			throw new Error('InstaFix HTML: no images found');
+		}
+
+		// Parse author from title
+		let authorName = '';
+		let caption = ogDesc || '';
+		if (ogTitle) {
+			const authorMatch = ogTitle.match(/^(.+?)\s+on\s+Instagram/i)
+				|| ogTitle.match(/^@?(\S+)/);
+			if (authorMatch) {
+				authorName = authorMatch[1].trim().replace(/^@/, '');
+			}
+		}
+
+		// Clean metrics prefix from description
+		caption = caption.replace(/^\d+[KM]?\s*(?:likes?|comments?)[,\s-]*/gi, '').trim();
+
+		const isVideo = !!ogVideo;
+
+		console.log(`[Instagram] InstaFix HTML success: ${images.length} images, author="${authorName}"`);
+
+		return {
+			shortcode,
+			caption,
+			authorName,
+			authorHandle: authorName,
+			authorAvatar: '',
+			images,
+			isVideo,
+			videoUrl: ogVideo || null,
+			isCarousel: images.length > 1,
+			slideCount: images.length,
+			likes: 0,
+			comments: 0,
+			timestamp: '',
+			source: 'instafix',
+		};
+	} catch (error) {
+		console.warn('[Instagram] InstaFix HTML failed:', error instanceof Error ? error.message : error);
+	}
+
+	// Sub-strategy B: oEmbed API fallback (structured JSON, single thumbnail only)
 	try {
 		const oembedUrl = `https://ddinstagram.com/oembed?url=${encodeURIComponent(canonicalUrl)}`;
 		const res = await fetch(oembedUrl, {
@@ -188,95 +277,7 @@ async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | 
 		console.warn('[Instagram] InstaFix oEmbed failed:', error instanceof Error ? error.message : error);
 	}
 
-	// Sub-strategy B: Fetch ddinstagram HTML page and parse OG tags
-	try {
-		const ddUrl = `https://ddinstagram.com/p/${shortcode}/`;
-		const res = await fetch(ddUrl, {
-			signal: AbortSignal.timeout(5000),
-			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
-				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-			},
-		});
-
-		if (!res.ok) {
-			console.warn(`[Instagram] InstaFix HTML returned ${res.status}`);
-			return null;
-		}
-
-		const html = await res.text();
-
-		// Extract OG tags from InstaFix page
-		const ogImage = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1]
-			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:image"/)?.[1];
-		const ogTitle = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1]
-			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:title"/)?.[1];
-		const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1]
-			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:description"/)?.[1];
-		const ogVideo = html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]*)"/)?.[1]
-			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:video"/)?.[1];
-
-		// Also look for additional images (carousel support via multiple og:image tags)
-		const allImages: string[] = [];
-		const ogImageRegex = /<meta[^>]+property="og:image"[^>]+content="([^"]*)"/g;
-		const ogImageRegex2 = /<meta[^>]+content="([^"]*)"[^>]+property="og:image"/g;
-		let imgMatch;
-		while ((imgMatch = ogImageRegex.exec(html)) !== null) {
-			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
-				allImages.push(imgMatch[1]);
-			}
-		}
-		while ((imgMatch = ogImageRegex2.exec(html)) !== null) {
-			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
-				allImages.push(imgMatch[1]);
-			}
-		}
-
-		const images = allImages.length > 0 ? allImages : ogImage ? [ogImage] : [];
-
-		if (images.length === 0) {
-			console.warn('[Instagram] InstaFix HTML: no images found');
-			return null;
-		}
-
-		// Parse author from title
-		let authorName = '';
-		let caption = ogDesc || '';
-		if (ogTitle) {
-			const authorMatch = ogTitle.match(/^(.+?)\s+on\s+Instagram/i)
-				|| ogTitle.match(/^@?(\S+)/);
-			if (authorMatch) {
-				authorName = authorMatch[1].trim().replace(/^@/, '');
-			}
-		}
-
-		// Clean metrics prefix from description
-		caption = caption.replace(/^\d+[KM]?\s*(?:likes?|comments?)[,\s-]*/gi, '').trim();
-
-		const isVideo = !!ogVideo;
-
-		console.log(`[Instagram] InstaFix HTML success: ${images.length} images, author="${authorName}"`);
-
-		return {
-			shortcode,
-			caption,
-			authorName,
-			authorHandle: authorName,
-			authorAvatar: '',
-			images,
-			isVideo,
-			videoUrl: ogVideo || null,
-			isCarousel: images.length > 1,
-			slideCount: images.length,
-			likes: 0,
-			comments: 0,
-			timestamp: '',
-			source: 'instafix',
-		};
-	} catch (error) {
-		console.warn('[Instagram] InstaFix HTML failed:', error instanceof Error ? error.message : error);
-		return null;
-	}
+	return null;
 }
 
 // =============================================================================

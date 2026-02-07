@@ -69,7 +69,7 @@ export function Header() {
 	];
 
 	return (
-		<header className="sticky top-0 z-50 w-full bg-[var(--background)] border-b border-[var(--border)]">
+		<header className="sticky top-0 z-50 w-full bg-[var(--surface-primary)] border-b border-[var(--border-subtle)]">
 			<div className="flex h-14 items-center px-4">
 				{/* Left: Brand - Logo icon is weight 10 (always visible), brand text is weight 3 */}
 				<div className="flex items-center min-w-[44px] md:min-w-[120px]">
