@@ -41,3 +41,7 @@ playwright-report/
 # .env.local
 # .env.*
 .vercel
+
+# WIP debug/dev files
+debug-scraper.ts
+test-scraper.ts

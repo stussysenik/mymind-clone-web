@@ -100,6 +100,16 @@ export interface CardMetadata {
 	/** Error message if extraction failed */
 	carouselExtractionError?: string;
 
+	// Social engagement metrics (Twitter, Instagram, etc.)
+	/** Engagement metrics for social posts */
+	engagement?: {
+		likes?: number | string;
+		retweets?: number | string;
+		views?: number | string;
+		comments?: number | string;
+		replies?: number | string;
+	};
+
 	// Media persistence fields (Instagram storage)
 	/** Type of each media item in carousel order ('image' or 'video') */
 	mediaTypes?: ('image' | 'video')[];

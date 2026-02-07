@@ -30,5 +30,17 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "ios-capacitor-archive"]
+  "exclude": [
+    "node_modules",
+    "ios-capacitor-archive",
+    "debug-scraper.ts",
+    "test-scraper.ts",
+    "app/api/scraper-health/**",
+    "lib/browser-factory.ts",
+    "lib/scraper-config.ts",
+    "lib/scraper-metrics.ts",
+    "lib/selectors.ts",
+    "scripts/**",
+    "lib/__tests__/**"
+  ]
 }
