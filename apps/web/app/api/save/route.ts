@@ -10,7 +10,7 @@
  * @fileoverview Save card API endpoint with async AI processing
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
@@ -143,7 +143,7 @@ import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
 import { scrapeInstagramQuick, extractInstagramImages } from '@/lib/instagram-scraper';
-import { extractInstagramPost } from '@/lib/instagram-extractor';
+import { extractInstagramPost, resolveInstagramShareUrl } from '@/lib/instagram-extractor';
 import { persistInstagramMedia, isPersistedUrl } from '@/lib/instagram-storage';
 import { extractTweet } from '@/lib/twitter-extractor';
 
@@ -532,12 +532,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		} = {};
 
 		// Check if this is an Instagram URL - use fast path for immediate response
-		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/'));
+		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/') || url.includes('instagram.com/share/'));
 
-		// Extract Instagram shortcode early (needed for background processing)
+		// Resolve mobile /share/ URLs to canonical (302 redirect) before shortcode extraction
+		let instagramUrl = url;
+		if (isInstagram && url?.includes('instagram.com/share/')) {
+			instagramUrl = await resolveInstagramShareUrl(url);
+			console.log(`[Save] Resolved Instagram share URL: ${url} → ${instagramUrl}`);
+		}
+
+		// Extract Instagram shortcode from canonical URL (needed for background processing)
 		let instagramShortcode: string | undefined;
-		if (isInstagram && url) {
-			const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+		if (isInstagram && instagramUrl) {
+			const shortcodeMatch = instagramUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
 			instagramShortcode = shortcodeMatch?.[2];
 		}
 
@@ -551,7 +558,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			// Strategy 1: Try API-based extraction first (5-layer fallback, Vercel-safe)
 			// This gives us caption, author, and high-quality images for GLM-4.7
 			try {
-				extractedData = await extractInstagramPost(url);
+				extractedData = await extractInstagramPost(instagramUrl ?? url);
 				if (extractedData && extractedData.images.length > 0) {
 					ogImageUrl = extractedData.images[0];
 					console.log(`[Save] Instagram: API extractor success: ${extractedData.images.length} images, author="${extractedData.authorHandle}"`);
@@ -731,6 +738,33 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			// Fire and forget - don't await
 			extractInstagramCarouselBackground(insertedRow.id, instagramShortcode).catch(err => {
 				console.error('[Save] Background carousel extraction failed:', err);
+			});
+		}
+
+		// SERVER-SIDE ENRICHMENT: Trigger after response is sent
+		// Ensures enrichment runs even if client-side keepalive fetch is dropped (mobile browsers)
+		// The enrich route's idempotency guard prevents double-processing
+		if (!tags) {
+			const enrichCardId = insertedRow.id;
+			const enrichBaseUrl = request.url;
+			const enrichCookie = request.headers.get('cookie') || '';
+			const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+			after(async () => {
+				try {
+					const enrichUrl = new URL('/api/enrich', enrichBaseUrl);
+					await fetch(enrichUrl, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Cookie': enrichCookie,
+							'x-service-key': serviceKey,
+						},
+						body: JSON.stringify({ cardId: enrichCardId }),
+						signal: AbortSignal.timeout(55000),
+					});
+				} catch (err) {
+					console.error('[Save] Server-side enrichment trigger failed:', err);
+				}
 			});
 		}
 

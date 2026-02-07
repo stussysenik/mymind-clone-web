@@ -55,6 +55,22 @@ export async function POST(request: NextRequest) {
                                 break;
                         }
 
+                        case 'archive-all': {
+                                // Archive all active cards for this user
+                                const { data, error } = await client
+                                        .from('cards')
+                                        .update({ archived_at: new Date().toISOString() })
+                                        .eq('user_id', user.id)
+                                        .is('deleted_at', null)
+                                        .is('archived_at', null)
+                                        .select('id');
+
+                                if (error) throw error;
+                                affectedCount = data?.length || 0;
+                                console.log(`[Bulk] Archive all: archived ${affectedCount} cards for user ${user.id}`);
+                                break;
+                        }
+
                         default:
                                 return NextResponse.json(
                                         { success: false, error: `Unknown action: ${action}` },

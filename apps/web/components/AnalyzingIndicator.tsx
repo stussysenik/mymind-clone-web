@@ -148,7 +148,7 @@ export function AnalyzingIndicator({
 	const timeoutLabels = {
 		normal: null, // Use default label
 		warning: 'Taking longer...',
-		stuck: 'May have failed',
+		stuck: 'Retry',
 	};
 
 	// Use timeout label if in warning/stuck state, otherwise use provided label or default

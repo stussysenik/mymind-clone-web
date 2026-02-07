@@ -8,9 +8,11 @@
  */
 
 import { getDemoCards } from '@/lib/demo-data';
-import { fetchCards, searchCards, fetchArchivedCards, fetchDeletedCards, isSupabaseConfigured } from '@/lib/supabase';
+import { fetchCardsPaginated, searchCards, fetchArchivedCards, fetchDeletedCards, isSupabaseConfigured } from '@/lib/supabase';
 import { rowToCard } from '@/lib/types';
 import { CardGridClient } from './CardGridClient';
+
+const PAGE_SIZE = 20;
 
 // =============================================================================
 // PROPS
@@ -37,27 +39,48 @@ interface CardGridProps {
 export async function CardGrid({ searchQuery, platformFilter, typeFilter, mode = 'default' }: CardGridProps) {
         // Fetch cards from server
         let cards;
+        let totalCount = 0;
+        let hasMore = false;
 
         if (isSupabaseConfigured()) {
-                let rows;
                 if (searchQuery) {
-                        rows = await searchCards(searchQuery);
-                        // TODO: Filter locally if search results include mixed types and we want strictly archive
+                        // Search doesn't use pagination (returns all matches up to limit)
+                        const rows = await searchCards(searchQuery);
+                        cards = rows?.map(rowToCard) ?? [];
+                        totalCount = cards.length;
                 } else if (mode === 'archive') {
-                        rows = await fetchArchivedCards();
+                        const rows = await fetchArchivedCards();
+                        cards = rows?.map(rowToCard) ?? [];
+                        totalCount = cards.length;
                 } else if (mode === 'trash') {
-                        rows = await fetchDeletedCards();
+                        const rows = await fetchDeletedCards();
+                        cards = rows?.map(rowToCard) ?? [];
+                        totalCount = cards.length;
                 } else {
-                        rows = await fetchCards();
+                        // Default mode: use pagination
+                        const result = await fetchCardsPaginated(undefined, PAGE_SIZE, 1);
+                        cards = result?.data.map(rowToCard) ?? [];
+                        totalCount = result?.total ?? 0;
+                        hasMore = result?.hasMore ?? false;
                 }
-                cards = rows?.map(rowToCard) ?? [];
         } else {
                 cards = getDemoCards(); // Always get full demo data, client will filter
+                totalCount = cards.length;
         }
 
         // Pass to client wrapper which handles localStorage merge and client-side filtering
         // Client-side filtering provides instant response for platform filters
-        return <CardGridClient serverCards={cards} searchQuery={searchQuery} platformFilter={platformFilter || typeFilter} mode={mode} />;
+        return (
+                <CardGridClient
+                        serverCards={cards}
+                        searchQuery={searchQuery}
+                        platformFilter={platformFilter || typeFilter}
+                        mode={mode}
+                        initialTotalCount={totalCount}
+                        initialHasMore={hasMore}
+                        pageSize={PAGE_SIZE}
+                />
+        );
 }
 
 export default CardGrid;

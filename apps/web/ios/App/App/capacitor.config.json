@@ -1,0 +1,18 @@
+{
+	"appId": "com.mymind.app",
+	"appName": "MyMind",
+	"webDir": "out",
+	"server": {
+		"cleartext": true
+	},
+	"ios": {
+		"scheme": "MyMind",
+		"contentInset": "automatic"
+	},
+	"plugins": {
+		"Preferences": {}
+	},
+	"packageClassList": [
+		"PreferencesPlugin"
+	]
+}

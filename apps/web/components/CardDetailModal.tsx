@@ -876,10 +876,10 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
 
                                 {/* RIGHT: Metadata & Notes - hidden on mobile when showing visual */}
                                 <div
-                                        className={`w-full md:w-1/3 flex-1 md:h-full bg-[var(--surface-elevated)] flex flex-col border-l border-[var(--border)] ${isMobile && mobileView === 'visual' ? 'hidden' : ''}`}
+                                        className={`w-full md:w-1/3 flex-1 min-h-0 h-full bg-[var(--surface-elevated)] flex flex-col border-l border-[var(--border)] ${isMobile && mobileView === 'visual' ? 'hidden' : ''}`}
                                         {...(isMobile ? swipeHandlers : {})}
                                 >
-                                        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+                                        <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 custom-scrollbar overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
 
                                                 {/* Title + Dates */}
                                                 <div className="mb-6 pb-6 border-b border-gray-100">

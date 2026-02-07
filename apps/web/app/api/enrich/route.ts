@@ -23,11 +23,14 @@ import { cleanMovieTitle, isMoviePlatform } from '@/lib/dspy-client';
 import { createEnrichmentTiming, updateEnrichmentTiming, type EnrichmentTiming } from '@/lib/enrichment-timing';
 import { detectPlatform } from '@/lib/platforms';
 
+// Next.js route config: override vercel.json's 30s default for this AI-heavy route
+export const maxDuration = 60;
+
 // =============================================================================
 // RETRY CONFIGURATION
 // =============================================================================
 
-const MAX_RETRIES = 1; // Reduced from 2: prevents 63s classification (30s + backoff + 30s + backoff)
+const MAX_RETRIES = 2; // With 25s per-call GLM timeout: attempt + backoff + retry = 51s max
 const INITIAL_BACKOFF_MS = 1000; // 1 second
 const MAX_ENRICHMENT_MS = 55000; // 55s overall timeout (Vercel 60s limit, 5s buffer)
 const TAG_NORMALIZATION_BUDGET_MS = 15000; // Skip tag normalization if less than 15s remaining

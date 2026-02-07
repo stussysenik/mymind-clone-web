@@ -67,7 +67,8 @@ async function callGLM(
                         description: string;
                         parameters: Record<string, unknown>;
                 };
-        }>
+        }>,
+        timeoutMs: number = 25000
 ): Promise<GLMResponse> {
         const endpoint = `${ZHIPU_API_BASE}/chat/completions`;
 
@@ -89,6 +90,7 @@ async function callGLM(
                         'Authorization': `Bearer ${ZHIPU_API_KEY}`,
                 },
                 body: JSON.stringify(body),
+                signal: AbortSignal.timeout(timeoutMs),
         });
 
         if (!response.ok) {
@@ -795,7 +797,7 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResul
                                                         },
                                                 ],
                                         },
-                                ]);
+                                ], undefined, 20000);
 
                                 const content = response.choices[0]?.message?.content;
                                 if (content) {
@@ -1036,7 +1038,7 @@ EXISTING: ${JSON.stringify(existingTags.slice(0, 50))}
 
 Return only the JSON array.`,
                         },
-                ]);
+                ], undefined, 10000);
 
                 const content = response.choices[0]?.message?.content;
                 if (content) {

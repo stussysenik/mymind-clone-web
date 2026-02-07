@@ -112,12 +112,23 @@ export function getSupabaseClient(isServer: boolean = false): SupabaseClient | n
  * @param userId - The user ID to fetch cards for (optional in demo)
  * @param limit - Maximum number of cards to return
  */
+export interface PaginatedResult<T> {
+        data: T[];
+        total: number;
+        page: number;
+        pageSize: number;
+        hasMore: boolean;
+}
+
 export async function fetchCards(
         userId?: string,
-        limit: number = 100
+        limit: number = 20,
+        page: number = 1
 ): Promise<CardRow[] | null> {
         const client = getSupabaseClient(true);
         if (!client) return null;
+
+        const offset = (page - 1) * limit;
 
         let query = client
                 .from('cards')
@@ -125,7 +136,7 @@ export async function fetchCards(
                 .is('deleted_at', null)
                 .is('archived_at', null)
                 .order('created_at', { ascending: false })
-                .limit(limit);
+                .range(offset, offset + limit - 1);
 
         if (userId) {
                 query = query.eq('user_id', userId);
@@ -159,6 +170,69 @@ export async function fetchCards(
         }
 
         return data as CardRow[];
+}
+
+/**
+ * Fetches cards with pagination support and total count.
+ * Returns paginated result with metadata.
+ */
+export async function fetchCardsPaginated(
+        userId?: string,
+        pageSize: number = 20,
+        page: number = 1
+): Promise<PaginatedResult<CardRow> | null> {
+        const client = getSupabaseClient(true);
+        if (!client) return null;
+
+        const offset = (page - 1) * pageSize;
+
+        // Get count first
+        let countQuery = client
+                .from('cards')
+                .select('*', { count: 'exact', head: true })
+                .is('deleted_at', null)
+                .is('archived_at', null);
+
+        if (userId) {
+                countQuery = countQuery.eq('user_id', userId);
+        }
+
+        const { count, error: countError } = await countQuery;
+
+        if (countError) {
+                console.error('[Supabase] Error counting cards:', countError.message);
+                return null;
+        }
+
+        // Get paginated data
+        let query = client
+                .from('cards')
+                .select('*')
+                .is('deleted_at', null)
+                .is('archived_at', null)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + pageSize - 1);
+
+        if (userId) {
+                query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+                console.error('[Supabase] Error fetching paginated cards:', error.message);
+                return null;
+        }
+
+        const total = count ?? 0;
+
+        return {
+                data: data as CardRow[],
+                total,
+                page,
+                pageSize,
+                hasMore: offset + pageSize < total
+        };
 }
 
 /**

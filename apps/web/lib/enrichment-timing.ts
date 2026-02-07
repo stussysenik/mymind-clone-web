@@ -242,16 +242,16 @@ export function updateEnrichmentTiming(
 /**
  * Maximum time (ms) before considering enrichment "stuck".
  * After this time, we assume something went wrong and stop showing the loading indicator.
- * 5 minutes = 300,000 ms
+ * 2 minutes = 120,000 ms
  */
-export const STUCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const STUCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
  * Checks if a card's enrichment is stuck (processing for too long).
  *
  * A card is considered stuck if:
  * - metadata.processing === true AND
- * - enrichmentTiming.startedAt is older than STUCK_TIMEOUT_MS (5 minutes)
+ * - enrichmentTiming.startedAt is older than STUCK_TIMEOUT_MS (2 minutes)
  *
  * If stuck, the card should be treated as "done" (with or without AI data).
  */
@@ -274,8 +274,9 @@ export function isEnrichmentStuck(metadata: {
 	}
 
 	if (!startedAt) {
-		// No timestamp - can't determine, assume not stuck yet
-		// But if processing without a timestamp, that's suspicious after a while
+		// No timestamp - can't determine stuck from server data alone
+		// Card.tsx passes card.created_at as startTime fallback to AnalyzingIndicator,
+		// which handles the timeout transition client-side (60s → "Retry")
 		return { stuck: false, failed: false, elapsedMs: 0 };
 	}
 

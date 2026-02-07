@@ -700,15 +700,37 @@ export function CardGridClient({
                         {/* Controls Bar (Only show if we have cards) */}
                         {uniqueCards.length > 0 && (
                                 <div className="flex items-center justify-between mb-6">
-                                        {/* Items count */}
-                                        <p className="text-xs text-[var(--foreground-muted)]">
-                                                {mounted && localCards.length > 0 && !similarityId
-                                                        ? `${localCards.length} saved locally • `
-                                                        : ''}
-                                                {mode === 'default' && totalCount > uniqueCards.length
-                                                        ? `Showing ${uniqueCards.length} of ${totalCount} items`
-                                                        : `${totalCount} items`}
-                                        </p>
+                                        {/* Items count + Archive All */}
+                                        <div className="flex items-center gap-3">
+                                                <p className="text-xs text-[var(--foreground-muted)]">
+                                                        {mounted && localCards.length > 0 && !similarityId
+                                                                ? `${localCards.length} saved locally • `
+                                                                : ''}
+                                                        {mode === 'default' && totalCount > uniqueCards.length
+                                                                ? `Showing ${uniqueCards.length} of ${totalCount} items`
+                                                                : `${uniqueCards.length} ${uniqueCards.length === 1 ? 'item' : 'items'}`}
+                                                </p>
+                                                {mode === 'default' && (
+                                                        <button
+                                                                onClick={async () => {
+                                                                        if (!confirm(`Archive all ${uniqueCards.length} items?`)) return;
+                                                                        try {
+                                                                                await fetch('/api/cards/bulk', {
+                                                                                        method: 'POST',
+                                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                                        body: JSON.stringify({ action: 'archive-all' }),
+                                                                                });
+                                                                                router.refresh();
+                                                                        } catch (err) {
+                                                                                console.error('[ArchiveAll] Failed:', err);
+                                                                        }
+                                                                }}
+                                                                className="text-xs text-[var(--foreground-muted)] hover:text-[var(--accent-primary)] transition-colors"
+                                                        >
+                                                                Archive All
+                                                        </button>
+                                                )}
+                                        </div>
 
                                         <div className="flex items-center gap-4">
                                                 {/* Card Size Slider (only show in grid view) */}

@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Globe, ExternalLink, Play, StickyNote, FileText, ShoppingBag, BookOpen, Trash2, RotateCcw, Twitter, Volume2, MessageSquare, Archive, Film, Users } from 'lucide-react';
@@ -121,6 +121,18 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
         const domain = extractDomain(card.url);
         const TypeIcon = TYPE_ICONS[card.type];
         const isVideo = card.url?.includes('vimeo');
+
+        // Auto-refresh when card is processing to pick up enrichment completion
+        useEffect(() => {
+                const state = getProcessingState(card.metadata);
+                if (state === 'idle') return;
+
+                const interval = setInterval(() => {
+                        router.refresh();
+                }, 10000);
+
+                return () => clearInterval(interval);
+        }, [card.metadata?.processing, card.metadata?.enrichedAt, router]);
 
         /**
          * Renders the card visual content.
@@ -320,7 +332,7 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                                         variant="dark"
                                                         accentColor={platformInfo.color}
                                                         size="sm"
-                                                        startTime={card.metadata?.enrichmentTiming?.startedAt}
+                                                        startTime={card.metadata?.enrichmentTiming?.startedAt || new Date(card.createdAt).getTime()}
                                                         failed={processingState === 'failed' || processingState === 'stuck'}
                                                         onRetry={handleRetry}
                                                 />
