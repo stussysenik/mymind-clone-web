@@ -106,6 +106,7 @@ export async function resolveInstagramShareUrl(url: string): Promise<string> {
 
 function cleanCdnUrl(url: string): string {
 	return url
+		.replace(/&amp;/g, '&')       // HTML entity decode
 		.replace(/\\u0026/g, '&')
 		.replace(/\\\//g, '/')
 		.replace(/\\"/g, '"');
@@ -182,7 +183,9 @@ async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | 
 			}
 		}
 
-		const images = allImages.length > 0 ? allImages : ogImage ? [ogImage] : [];
+		// Apply cleanCdnUrl to decode HTML entities (&amp; -> &) in OG image URLs
+		const images = (allImages.length > 0 ? allImages : ogImage ? [ogImage] : [])
+			.map(cleanCdnUrl);
 
 		if (images.length === 0) {
 			throw new Error('InstaFix HTML: no images found');
@@ -259,7 +262,7 @@ async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | 
 						authorName: authorHandle,
 						authorHandle,
 						authorAvatar: '',
-						images: [data.thumbnail_url],
+						images: [cleanCdnUrl(data.thumbnail_url)],
 						isVideo: false,
 						videoUrl: null,
 						isCarousel: false,
@@ -647,7 +650,7 @@ async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | nu
 			authorName: author,
 			authorHandle: author.replace(/\s/g, '').toLowerCase(),
 			authorAvatar: '',
-			images: [ogImage],
+			images: [cleanCdnUrl(ogImage)],
 			isVideo: false,
 			videoUrl: null,
 			isCarousel: false,
@@ -664,14 +667,85 @@ async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | nu
 }
 
 // =============================================================================
+// STRATEGY 5: Instagram Official oEmbed (Most Reliable)
+// =============================================================================
+
+/**
+ * Instagram's official oEmbed endpoint - the most reliable option.
+ * Works from any IP without authentication.
+ * Returns: thumbnail_url, author_name, title (caption)
+ *
+ * Note: This is rate-limited but very reliable.
+ */
+async function fetchViaOfficialOEmbed(url: string): Promise<InstagramPostData | null> {
+	try {
+		const oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}&omitscript=true`;
+
+		const res = await fetch(oembedUrl, {
+			signal: AbortSignal.timeout(8000),
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+				'Accept': 'application/json',
+			},
+		});
+
+		if (!res.ok) {
+			console.warn(`[Instagram] Official oEmbed returned ${res.status}`);
+			return null;
+		}
+
+		const data = await res.json();
+
+		if (!data.thumbnail_url) {
+			console.warn('[Instagram] Official oEmbed: no thumbnail_url');
+			return null;
+		}
+
+		// Extract shortcode from URL for consistency
+		const shortcode = extractShortcode(url) || 'unknown';
+
+		// Parse author from author_name
+		const authorName = data.author_name || '';
+		const authorHandle = authorName.replace(/^@/, '').replace(/\s/g, '').toLowerCase();
+
+		// Caption from title
+		let caption = data.title || '';
+		// Clean metrics prefix if present
+		caption = caption.replace(/^\d+[KM]?\s*(?:likes?|comments?)[,\s-]*/gi, '').trim();
+
+		console.log(`[Instagram] Official oEmbed success: author="${authorHandle}"`);
+
+		return {
+			shortcode,
+			caption,
+			authorName,
+			authorHandle,
+			authorAvatar: '',
+			images: [cleanCdnUrl(data.thumbnail_url)],
+			isVideo: data.type === 'video',
+			videoUrl: null,
+			isCarousel: false,
+			slideCount: 1,
+			likes: 0,
+			comments: 0,
+			timestamp: '',
+			source: 'instafix', // Use instafix source since it's similar quality
+		};
+	} catch (error) {
+		console.warn('[Instagram] Official oEmbed failed:', error instanceof Error ? error.message : error);
+		return null;
+	}
+}
+
+// =============================================================================
 // PUBLIC API
 // =============================================================================
 
 /**
  * Extract Instagram post data from a URL.
- * Uses a layered fallback chain: InstaFix → GraphQL → Embed HTML → OG Tags → null
+ * Uses a layered fallback chain: InstaFix → Official oEmbed → GraphQL → Embed HTML → OG Tags → null
  *
- * InstaFix is tried first because it works from any IP (including Vercel/datacenter).
+ * InstaFix and Official oEmbed are tried first because they work from any IP (Vercel-safe).
  * GraphQL is faster and richer but fails from datacenter IPs (Instagram blocks them).
  *
  * @returns InstagramPostData or null if all strategies fail
@@ -693,21 +767,28 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 		return instaFixResult;
 	}
 
-	// Layer 2: GraphQL API (fastest, richest data — may fail on Vercel)
+	// Layer 2: Official Instagram oEmbed API (most reliable — Vercel-safe)
+	const officialOEmbedResult = await fetchViaOfficialOEmbed(resolvedUrl);
+	if (officialOEmbedResult) {
+		console.log(`[Instagram] Official oEmbed success: author="${officialOEmbedResult.authorHandle}"`);
+		return officialOEmbedResult;
+	}
+
+	// Layer 3: GraphQL API (fastest, richest data — may fail on Vercel)
 	const graphqlResult = await fetchViaGraphQL(shortcode);
 	if (graphqlResult) {
 		console.log(`[Instagram] GraphQL success: ${graphqlResult.images.length} images, author="${graphqlResult.authorHandle}"`);
 		return graphqlResult;
 	}
 
-	// Layer 3: Static Embed HTML parsing (no browser needed — may fail on Vercel)
+	// Layer 4: Static Embed HTML parsing (no browser needed — may fail on Vercel)
 	const embedResult = await fetchViaEmbedHTML(shortcode);
 	if (embedResult) {
 		console.log(`[Instagram] Embed HTML success: ${embedResult.images.length} images`);
 		return embedResult;
 	}
 
-	// Layer 4: Direct page OG tags with Googlebot UA (least data, always works)
+	// Layer 5: Direct page OG tags with Googlebot UA (least data, always works)
 	const ogResult = await fetchViaOGTags(shortcode);
 	if (ogResult) {
 		console.log(`[Instagram] OG tags success: ${ogResult.images.length} images`);
