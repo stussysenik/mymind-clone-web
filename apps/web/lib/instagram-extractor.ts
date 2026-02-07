@@ -2,9 +2,10 @@
  * MyMind Clone - Instagram Content Extractor
  *
  * Extracts Instagram post data using fast HTTP-only methods (no Playwright):
- * 1. Instagram GraphQL API (primary) - rich JSON with media, caption, author
- * 2. Static embed HTML parsing (fallback) - parse embedded JSON from script tags
- * 3. Direct page OG tags (last resort) - basic metadata
+ * 1. InstaFix/ddinstagram (primary) - works from any IP (Vercel-safe)
+ * 2. Instagram GraphQL API - rich JSON with media, caption, author
+ * 3. Static embed HTML parsing (fallback) - parse embedded JSON from script tags
+ * 4. Direct page OG tags with Googlebot UA (last resort) - basic metadata
  *
  * Replaces the previous Playwright-based approach which was slow (5-15s),
  * inconsistent across mobile/desktop, and resource-heavy.
@@ -32,7 +33,7 @@ export interface InstagramPostData {
 	likes: number;
 	comments: number;
 	timestamp: string;
-	source: 'graphql' | 'embed-html' | 'og-tags';
+	source: 'instafix' | 'graphql' | 'embed-html' | 'og-tags';
 }
 
 // =============================================================================
@@ -122,7 +123,164 @@ function isContentImage(url: string): boolean {
 }
 
 // =============================================================================
-// STRATEGY 1: Instagram GraphQL API
+// STRATEGY 1: InstaFix (ddinstagram.com) — works from any IP
+// =============================================================================
+
+/**
+ * InstaFix is the Instagram equivalent of FxTwitter — it runs its own scraper
+ * infrastructure that handles IP blocking. Works from Vercel/datacenter IPs.
+ *
+ * Two sub-strategies:
+ * A. oEmbed API — structured JSON with thumbnail URL, author, title
+ * B. HTML page OG tags — richer images (full resolution)
+ */
+async function fetchViaInstaFix(shortcode: string): Promise<InstagramPostData | null> {
+	const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+	// Sub-strategy A: Try oEmbed API first (structured JSON)
+	try {
+		const oembedUrl = `https://ddinstagram.com/oembed?url=${encodeURIComponent(canonicalUrl)}`;
+		const res = await fetch(oembedUrl, {
+			signal: AbortSignal.timeout(5000),
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; MyMindBot/1.0)',
+				'Accept': 'application/json',
+			},
+		});
+
+		if (res.ok) {
+			const contentType = res.headers.get('content-type') || '';
+			if (contentType.includes('application/json') || contentType.includes('text/json')) {
+				const data = await res.json();
+				if (data && data.thumbnail_url) {
+					console.log(`[Instagram] InstaFix oEmbed success: thumbnail found`);
+
+					// Parse author from author_name field
+					const authorName = data.author_name || '';
+					const authorHandle = authorName.replace(/^@/, '');
+
+					// Parse caption from title (InstaFix puts caption in title)
+					let caption = data.title || '';
+					// Clean metrics prefix if present
+					caption = caption.replace(/^\d+[KM]?\s*(?:likes?|comments?)[,\s-]*/gi, '').trim();
+
+					return {
+						shortcode,
+						caption,
+						authorName: authorHandle,
+						authorHandle,
+						authorAvatar: '',
+						images: [data.thumbnail_url],
+						isVideo: false,
+						videoUrl: null,
+						isCarousel: false,
+						slideCount: 1,
+						likes: 0,
+						comments: 0,
+						timestamp: '',
+						source: 'instafix',
+					};
+				}
+			}
+		}
+		console.warn(`[Instagram] InstaFix oEmbed returned ${res.status}`);
+	} catch (error) {
+		console.warn('[Instagram] InstaFix oEmbed failed:', error instanceof Error ? error.message : error);
+	}
+
+	// Sub-strategy B: Fetch ddinstagram HTML page and parse OG tags
+	try {
+		const ddUrl = `https://ddinstagram.com/p/${shortcode}/`;
+		const res = await fetch(ddUrl, {
+			signal: AbortSignal.timeout(5000),
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+			},
+		});
+
+		if (!res.ok) {
+			console.warn(`[Instagram] InstaFix HTML returned ${res.status}`);
+			return null;
+		}
+
+		const html = await res.text();
+
+		// Extract OG tags from InstaFix page
+		const ogImage = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:image"/)?.[1];
+		const ogTitle = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:title"/)?.[1];
+		const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:description"/)?.[1];
+		const ogVideo = html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]*)"/)?.[1]
+			|| html.match(/<meta[^>]+content="([^"]*)"[^>]+property="og:video"/)?.[1];
+
+		// Also look for additional images (carousel support via multiple og:image tags)
+		const allImages: string[] = [];
+		const ogImageRegex = /<meta[^>]+property="og:image"[^>]+content="([^"]*)"/g;
+		const ogImageRegex2 = /<meta[^>]+content="([^"]*)"[^>]+property="og:image"/g;
+		let imgMatch;
+		while ((imgMatch = ogImageRegex.exec(html)) !== null) {
+			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
+				allImages.push(imgMatch[1]);
+			}
+		}
+		while ((imgMatch = ogImageRegex2.exec(html)) !== null) {
+			if (imgMatch[1] && !allImages.includes(imgMatch[1])) {
+				allImages.push(imgMatch[1]);
+			}
+		}
+
+		const images = allImages.length > 0 ? allImages : ogImage ? [ogImage] : [];
+
+		if (images.length === 0) {
+			console.warn('[Instagram] InstaFix HTML: no images found');
+			return null;
+		}
+
+		// Parse author from title
+		let authorName = '';
+		let caption = ogDesc || '';
+		if (ogTitle) {
+			const authorMatch = ogTitle.match(/^(.+?)\s+on\s+Instagram/i)
+				|| ogTitle.match(/^@?(\S+)/);
+			if (authorMatch) {
+				authorName = authorMatch[1].trim().replace(/^@/, '');
+			}
+		}
+
+		// Clean metrics prefix from description
+		caption = caption.replace(/^\d+[KM]?\s*(?:likes?|comments?)[,\s-]*/gi, '').trim();
+
+		const isVideo = !!ogVideo;
+
+		console.log(`[Instagram] InstaFix HTML success: ${images.length} images, author="${authorName}"`);
+
+		return {
+			shortcode,
+			caption,
+			authorName,
+			authorHandle: authorName,
+			authorAvatar: '',
+			images,
+			isVideo,
+			videoUrl: ogVideo || null,
+			isCarousel: images.length > 1,
+			slideCount: images.length,
+			likes: 0,
+			comments: 0,
+			timestamp: '',
+			source: 'instafix',
+		};
+	} catch (error) {
+		console.warn('[Instagram] InstaFix HTML failed:', error instanceof Error ? error.message : error);
+		return null;
+	}
+}
+
+// =============================================================================
+// STRATEGY 2: Instagram GraphQL API
 // =============================================================================
 
 /**
@@ -246,7 +404,7 @@ async function fetchViaGraphQL(shortcode: string): Promise<InstagramPostData | n
 }
 
 // =============================================================================
-// STRATEGY 2: Static Embed HTML Parsing
+// STRATEGY 3: Static Embed HTML Parsing
 // =============================================================================
 
 /**
@@ -426,12 +584,13 @@ async function fetchViaEmbedHTML(shortcode: string): Promise<InstagramPostData |
 }
 
 // =============================================================================
-// STRATEGY 3: Direct Page OG Tags
+// STRATEGY 4: Direct Page OG Tags (Googlebot UA)
 // =============================================================================
 
 /**
  * Fetch the direct post page with Googlebot UA and extract OG meta tags.
- * Least data but most reliable - Instagram usually serves OG tags to crawlers.
+ * Least data but most reliable — Instagram serves OG metadata to known search
+ * crawlers (Googlebot) regardless of IP, so this works on Vercel/datacenter IPs.
  */
 async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | null> {
 	try {
@@ -440,8 +599,8 @@ async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | nu
 		const res = await fetch(postUrl, {
 			signal: AbortSignal.timeout(5000),
 			headers: {
-				// Mobile UA for better compatibility
-				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+				// Googlebot UA — Instagram serves OG tags to search crawlers from any IP
+				'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',
 				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			},
 		});
@@ -509,7 +668,10 @@ async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | nu
 
 /**
  * Extract Instagram post data from a URL.
- * Uses a layered fallback chain: GraphQL → Embed HTML → OG Tags → null
+ * Uses a layered fallback chain: InstaFix → GraphQL → Embed HTML → OG Tags → null
+ *
+ * InstaFix is tried first because it works from any IP (including Vercel/datacenter).
+ * GraphQL is faster and richer but fails from datacenter IPs (Instagram blocks them).
  *
  * @returns InstagramPostData or null if all strategies fail
  */
@@ -523,21 +685,28 @@ export async function extractInstagramPost(url: string): Promise<InstagramPostDa
 
 	console.log(`[Instagram] Extracting post ${shortcode}`);
 
-	// Layer 1: GraphQL API (fastest, richest data)
+	// Layer 1: InstaFix (works from any IP — Vercel-safe)
+	const instaFixResult = await fetchViaInstaFix(shortcode);
+	if (instaFixResult) {
+		console.log(`[Instagram] InstaFix success: ${instaFixResult.images.length} images, author="${instaFixResult.authorHandle}"`);
+		return instaFixResult;
+	}
+
+	// Layer 2: GraphQL API (fastest, richest data — may fail on Vercel)
 	const graphqlResult = await fetchViaGraphQL(shortcode);
 	if (graphqlResult) {
 		console.log(`[Instagram] GraphQL success: ${graphqlResult.images.length} images, author="${graphqlResult.authorHandle}"`);
 		return graphqlResult;
 	}
 
-	// Layer 2: Static Embed HTML parsing (no browser needed)
+	// Layer 3: Static Embed HTML parsing (no browser needed — may fail on Vercel)
 	const embedResult = await fetchViaEmbedHTML(shortcode);
 	if (embedResult) {
 		console.log(`[Instagram] Embed HTML success: ${embedResult.images.length} images`);
 		return embedResult;
 	}
 
-	// Layer 3: Direct page OG tags (least data, most reliable)
+	// Layer 4: Direct page OG tags with Googlebot UA (least data, always works)
 	const ogResult = await fetchViaOGTags(shortcode);
 	if (ogResult) {
 		console.log(`[Instagram] OG tags success: ${ogResult.images.length} images`);

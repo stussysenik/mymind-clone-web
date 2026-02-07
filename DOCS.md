@@ -124,7 +124,7 @@ apps/web/
 │   │   ├── instagram.ts   # Instagram-specific
 │   │   ├── twitter.ts     # Twitter-specific
 │   │   └── website.ts     # General website
-│   ├── instagram-extractor.ts # API-first Instagram extraction (GraphQL)
+│   ├── instagram-extractor.ts # Instagram extraction (InstaFix + GraphQL)
 │   ├── twitter-extractor.ts   # FxTwitter API extraction
 │   ├── scraper.ts         # URL metadata extraction (platform router)
 │   ├── screenshot-playwright.ts # Self-hosted screenshots
@@ -150,34 +150,34 @@ Supporting modules for the Playwright fallback:
 - `selectors.ts` — Instagram DOM selectors and CDN patterns
 - `scraper-metrics.ts` — Scraper event recording for observability
 
-**API-First Extraction (Primary — instagram-extractor.ts):**
-Uses Instagram's GraphQL API directly — no browser, no login:
-1. POST to `instagram.com/api/graphql` with `doc_id` and shortcode
-2. **CRITICAL**: Must use mobile User-Agent (iPhone) — desktop UA returns HTML login wall
-3. Parse `XDTGraphSidecar` typename for carousels (NOT `GraphSidecar`)
-4. Extract all `display_url` values from `edge_sidecar_to_children.edges[]`
-5. Returns all carousel images in ~200ms
+**InstaFix-First Extraction (Primary — instagram-extractor.ts):**
+Uses InstaFix (`ddinstagram.com`) as primary — works from any IP including Vercel/datacenter:
+1. **InstaFix oEmbed** (`ddinstagram.com/oembed?url=...`) — structured JSON with thumbnail, author
+2. **InstaFix HTML** (`ddinstagram.com/p/{shortcode}/`) with Discordbot UA — OG tags, carousel images
+3. Falls back to GraphQL API if InstaFix is down (requires mobile UA, fails on datacenter IPs)
+4. Last resort: direct page OG tags with Googlebot UA (always works, minimal data)
 
 **Fallback Chain:**
 ```typescript
-// Strategy 1: Instagram GraphQL API (BEST — O(1), ~200ms, all carousel images)
+// Strategy 1: InstaFix (works from any IP — Vercel-safe)
+fetchViaInstaFix(shortcode)  // oEmbed API + HTML OG tags
+
+// Strategy 2: Instagram GraphQL API (rich data, fails on Vercel)
 fetchViaGraphQL(shortcode)  // Mobile UA required!
 
-// Strategy 2: Embed HTML parsing (broken as of Feb 2026 — login wall)
+// Strategy 3: Embed HTML parsing (broken as of Feb 2026 — login wall)
 fetchViaEmbedHTML(shortcode)
 
-// Strategy 3: OG Tags (last resort — only 1 image)
-fetchViaOGTags(shortcode)
-
-// Strategy 4 (background): Playwright fallback if API fails
-extractInstagramImages(url)  // Full browser with carousel navigation
+// Strategy 4: OG Tags with Googlebot UA (minimal data, always works)
+fetchViaOGTags(shortcode)  // Googlebot UA bypasses IP blocking
 ```
 
 **Important Notes:**
+- **Instagram blocks datacenter IPs** — GraphQL, Embed, and mobile-UA OG tags all fail on Vercel
+- InstaFix proxies through its own infrastructure, similar to FxTwitter for Twitter/X
+- Googlebot UA on OG tags endpoint works from any IP (Instagram serves crawlers)
 - Instagram rotates `doc_id` values every 2-4 weeks. Current working: `10015901848480474`
-- Desktop User-Agent on GraphQL returns 755KB HTML login wall instead of JSON
 - Always check `content-type` header before calling `res.json()`
-- Embed HTML endpoint (`/embed/captioned/`) is dead as of Feb 2026
 
 **Detection:**
 ```typescript

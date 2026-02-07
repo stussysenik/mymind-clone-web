@@ -111,12 +111,13 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 ## Visual Features
 
 ### Instagram Support
-- **API-first extraction**: GraphQL API returns all carousel images in ~200ms (no browser needed)
+- **Vercel-safe extraction**: InstaFix (`ddinstagram.com`) as primary — works from datacenter IPs
+- **4-layer fallback**: InstaFix → GraphQL API → Embed HTML → OG Tags (Googlebot)
 - **Full carousel support**: All images extracted (8, 10, 20+ slides) via `XDTGraphSidecar` parsing
 - **Carousel indicators**: "1/X" badge on multi-image posts
 - **Hashtag extraction**: Instagram hashtags become searchable tags
 - **Media persistence**: Images uploaded to Supabase Storage (CDN URLs expire)
-- **No login required**: Uses mobile User-Agent with public GraphQL endpoint
+- **No login required**: All strategies use public endpoints, no auth tokens needed
 
 ### Twitter/X Support
 - **FxTwitter API**: Primary extraction via `api.fxtwitter.com` (no auth, rich JSON, ~200ms)

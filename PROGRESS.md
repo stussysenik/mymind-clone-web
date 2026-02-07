@@ -15,6 +15,23 @@
 
 #### Week 6 (Feb 3 - Feb 9)
 
+**Fix Instagram Extraction on Vercel — InstaFix Primary Strategy (Feb 7)**
+- **Root Cause: Instagram blocks datacenter IPs** — All three existing strategies (GraphQL, Embed HTML, OG Tags) fail on Vercel because Instagram blocks AWS/datacenter IPs. Worked fine on localhost (residential IP)
+- **Fix: Added InstaFix (`ddinstagram.com`) as primary strategy** — InstaFix is the Instagram equivalent of FxTwitter, proxying through its own infrastructure. Works from any IP including Vercel
+- **InstaFix oEmbed API** (`ddinstagram.com/oembed?url=...`) — Structured JSON with thumbnail, author, caption
+- **InstaFix HTML parsing** (`ddinstagram.com/p/{shortcode}/`) with Discordbot UA — OG tags with carousel support (multiple `og:image` tags), video detection via `og:video`
+- **OG Tags fallback upgraded to Googlebot UA** — Instagram serves OG metadata to known search crawlers regardless of IP, making the last-resort strategy always work on Vercel
+- **New 4-layer fallback chain**: InstaFix → GraphQL → Embed HTML → OG Tags (Googlebot)
+- **Result**: Instagram posts now save successfully on Vercel production, not just localhost
+
+**Key Commits:**
+- `fix(instagram): add InstaFix as primary strategy for Vercel compatibility`
+
+**Artifacts:**
+- `apps/web/lib/instagram-extractor.ts` — InstaFix strategy, Googlebot UA for OG tags, 4-layer fallback
+
+---
+
 **Fix Instagram Carousel Extraction — All Images Now Captured (Feb 7)**
 - **Root Cause: Desktop User-Agent on GraphQL API** — Instagram's GraphQL endpoint returns a 755KB HTML login wall when hit with a desktop Chrome UA. Switched to iPhone mobile UA, which returns proper JSON with full carousel data
 - **Root Cause: Wrong typename check** — Instagram's API now returns `XDTGraphSidecar` for carousel posts, but the code only checked `GraphSidecar`. Carousel loop was skipped, only the cover image was extracted
@@ -283,7 +300,7 @@
 | Supabase auth | ✅ Done | OAuth + RLS |
 | Archive/Trash | ✅ Done | Full lifecycle |
 | Vercel deployment | ✅ Done | Edge functions |
-| Instagram carousels | ✅ Done | GraphQL API extraction with mobile UA, all carousel images (1080px+) |
+| Instagram carousels | ✅ Done | InstaFix primary (Vercel-safe), GraphQL fallback, all carousel images |
 | Platform-specific AI | ✅ Done | Instagram, Twitter, website prompts |
 | Dark mode | ✅ Done | Auto + manual with settings modal |
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
@@ -385,6 +402,6 @@ apps/web/
 ---
 
 | Twitter/X extraction | ✅ Done | FxTwitter API primary, syndication backup, no auth needed |
-| Instagram API extractor | ✅ Done | GraphQL API with mobile UA, O(1) extraction, no Playwright |
+| Instagram API extractor | ✅ Done | InstaFix primary (Vercel-safe), GraphQL fallback, Googlebot OG tags |
 
 *Last updated: 2026-02-07*
