@@ -111,6 +111,21 @@ export async function POST(request: NextRequest) {
                         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
                 }
 
+                // Idempotency guard: skip if already enriched (prevents duplicate work
+                // from server-side after() + client-side retry racing)
+                const isAlreadyEnriched = card.metadata?.enrichedAt && !card.metadata?.enrichmentError;
+                const isCurrentlyProcessing = card.metadata?.processing === true &&
+                        card.metadata?.enrichmentTiming?.startedAt &&
+                        (Date.now() - card.metadata.enrichmentTiming.startedAt) < 120000; // < 2 min old
+
+                // Allow re-enrichment via explicit force flag (for Re-analyze button)
+                const forceReEnrich = body.force === true;
+
+                if (!forceReEnrich && isCurrentlyProcessing) {
+                        console.log(`[Enrich API] Skipping - already processing card: ${cardId}`);
+                        return NextResponse.json({ success: true, skipped: true, reason: 'already_processing' });
+                }
+
                 console.log(`[Enrich API] Starting enrichment for card: ${cardId}`);
 
                 // Initialize timing tracking

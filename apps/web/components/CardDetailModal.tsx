@@ -94,10 +94,11 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                 try {
                         // Fire request without waiting (keepalive ensures it completes)
                         // The API will set processing=true immediately
+                        // force: true bypasses idempotency guard for user-initiated re-analysis
                         fetch('/api/enrich', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ cardId: card.id }),
+                                body: JSON.stringify({ cardId: card.id, force: true }),
                                 keepalive: true,
                         }).then(response => {
                                 if (!response.ok) {

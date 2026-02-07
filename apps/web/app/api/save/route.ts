@@ -10,7 +10,7 @@
  * @fileoverview Save card API endpoint with async AI processing
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
@@ -121,7 +121,7 @@ function extractQuickMetadata(url: string | null, content: string | null): { tit
 import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
-import { extractInstagramPost } from '@/lib/instagram-extractor';
+import { extractInstagramPost, isInstagramShareUrl, resolveInstagramShareUrl } from '@/lib/instagram-extractor';
 import { extractInstagramImages } from '@/lib/instagram-scraper';
 import { persistInstagramMedia, isPersistedUrl } from '@/lib/instagram-storage';
 import type { InstagramMediaItem } from '@/lib/instagram-scraper';
@@ -369,6 +369,20 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 }
 
 // =============================================================================
+// INTERNAL API HELPERS
+// =============================================================================
+
+/**
+ * Get the base URL for internal API calls.
+ * Works on Vercel (VERCEL_URL), custom domains (NEXT_PUBLIC_SITE_URL), and localhost.
+ */
+function getBaseUrl(): string {
+	if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+	return 'http://localhost:3737';
+}
+
+// =============================================================================
 // ROUTE HANDLER
 // =============================================================================
 
@@ -470,12 +484,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		} = {};
 
 		// Check if this is an Instagram URL - use fast path for immediate response
-		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/'));
+		const isInstagramShare = url ? isInstagramShareUrl(url) : false;
+		const isInstagram = url && (
+			url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') ||
+			url.includes('instagram.com/tv/') || isInstagramShare
+		);
+
+		// Resolve share URLs to canonical URLs before shortcode extraction
+		let resolvedInstagramUrl = url;
+		if (isInstagramShare && url) {
+			resolvedInstagramUrl = await resolveInstagramShareUrl(url);
+		}
 
 		// Extract Instagram shortcode early (needed for background processing)
 		let instagramShortcode: string | undefined;
-		if (isInstagram && url) {
-			const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+		if (isInstagram && resolvedInstagramUrl) {
+			const shortcodeMatch = resolvedInstagramUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
 			instagramShortcode = shortcodeMatch?.[2];
 		}
 
@@ -484,7 +508,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			console.log('[Save] Instagram detected - using API-first extraction');
 
 			try {
-				const igPost = await extractInstagramPost(url);
+				const igPost = await extractInstagramPost(resolvedInstagramUrl || url);
 
 				if (igPost && igPost.images.length > 0) {
 					console.log(`[Save] Instagram: ${igPost.source} extracted ${igPost.images.length} images in O(1)`);
@@ -628,7 +652,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			type: type ?? quickMeta.type,
 			title: title ?? preview.title ?? quickMeta.title,
 			content: finalContent,
-			url: url ?? null,
+			url: (isInstagram ? resolvedInstagramUrl : url) ?? null,
 			image_url: finalImageUrl ?? preview.imageUrl ?? null,
 			metadata: {
 				processing: !tags, // Flag as processing if we need AI
@@ -655,17 +679,53 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			);
 		}
 
-		// INSTAGRAM BACKGROUND EXTRACTION: Always trigger for Instagram URLs
-		// This runs in the background - we don't wait for it
-		if (isInstagram && instagramShortcode) {
-			console.log(`[Save] Triggering background extraction for Instagram shortcode: ${instagramShortcode}`);
-			// Fire and forget - don't await
-			extractInstagramCarouselBackground(insertedRow.id, instagramShortcode).catch(err => {
-				console.error('[Save] Background carousel extraction failed:', err);
-			});
-		}
+		// STEP 3: Schedule background work via after() for fault-tolerance
+		// after() keeps the serverless function alive after the response is sent,
+		// ensuring background tasks complete even if the user navigates away.
+		// Without after(), Vercel kills fire-and-forget promises after response.
+		const cardId = insertedRow.id;
+		const needsEnrichment = !tags;
 
-		// STEP 3: Return immediately to client (< 200ms)
+		after(async () => {
+			// 3a. Instagram carousel extraction (await - needs to complete first)
+			if (isInstagram && instagramShortcode) {
+				console.log(`[Save:after] Starting Instagram extraction for ${instagramShortcode}`);
+				try {
+					await extractInstagramCarouselBackground(cardId, instagramShortcode);
+					console.log(`[Save:after] Instagram extraction complete for ${instagramShortcode}`);
+				} catch (err) {
+					console.error('[Save:after] Instagram extraction failed:', err);
+				}
+			}
+
+			// 3b. Auto-trigger enrichment server-side (separate function invocation)
+			// This ensures enrichment runs even if the user closes the browser.
+			if (needsEnrichment) {
+				const baseUrl = getBaseUrl();
+				console.log(`[Save:after] Triggering enrichment for card ${cardId}`);
+				try {
+					const enrichRes = await fetch(`${baseUrl}/api/enrich`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'x-service-key': process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+						},
+						body: JSON.stringify({ cardId }),
+						signal: AbortSignal.timeout(55000),
+					});
+					if (!enrichRes.ok) {
+						const errBody = await enrichRes.text().catch(() => 'unknown');
+						console.error(`[Save:after] Enrichment returned ${enrichRes.status}: ${errBody}`);
+					} else {
+						console.log(`[Save:after] Enrichment completed for card ${cardId}`);
+					}
+				} catch (err) {
+					console.error('[Save:after] Enrichment trigger failed:', err);
+				}
+			}
+		});
+
+		// STEP 4: Return immediately to client (< 200ms)
 		const savedCard = {
 			id: insertedRow.id,
 			userId: insertedRow.user_id,

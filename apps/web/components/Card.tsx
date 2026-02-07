@@ -298,10 +298,11 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                         try {
                                                 // Fire enrichment request (don't wait for completion)
                                                 // Use keepalive so request continues even if component unmounts
+                                                // force: true bypasses idempotency guard for user-initiated retries
                                                 fetch('/api/enrich', {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ cardId: card.id }),
+                                                        body: JSON.stringify({ cardId: card.id, force: true }),
                                                         keepalive: true,
                                                 }).catch(err => console.error('Enrichment failed:', err));
 

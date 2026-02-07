@@ -52,6 +52,54 @@ export function extractShortcode(url: string): string | null {
 }
 
 // =============================================================================
+// SHARE URL RESOLUTION
+// =============================================================================
+
+/**
+ * Instagram mobile app generates /share/ URLs when users tap "Copy Link":
+ * - instagram.com/share/reel/BARSSL4rTu (opaque share ID, NOT a shortcode)
+ * - instagram.com/share/p/BACiUUUYQV
+ *
+ * These 302-redirect to canonical URLs (/reel/DHbVbT4Jx0c/, /p/C6q-XdvsU5v/).
+ */
+const INSTAGRAM_SHARE_RE = /instagram\.com\/share\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/;
+
+export function isInstagramShareUrl(url: string): boolean {
+	return INSTAGRAM_SHARE_RE.test(url);
+}
+
+export async function resolveInstagramShareUrl(url: string): Promise<string> {
+	if (!isInstagramShareUrl(url)) return url;
+
+	console.log(`[Instagram] Resolving share URL: ${url}`);
+	try {
+		const res = await fetch(url, {
+			method: 'GET',
+			redirect: 'manual',
+			signal: AbortSignal.timeout(5000),
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+				'Accept': 'text/html',
+			},
+		});
+
+		if (res.status >= 300 && res.status < 400) {
+			const location = res.headers.get('location');
+			if (location) {
+				const resolved = new URL(location, url).toString();
+				console.log(`[Instagram] Share URL resolved: ${resolved}`);
+				return resolved;
+			}
+		}
+		console.warn(`[Instagram] Share URL returned ${res.status}, using original`);
+		return url;
+	} catch (err) {
+		console.warn(`[Instagram] Share URL resolution failed:`, err instanceof Error ? err.message : err);
+		return url;
+	}
+}
+
+// =============================================================================
 // HELPER: Clean Instagram CDN URLs
 // =============================================================================
 
@@ -466,7 +514,8 @@ async function fetchViaOGTags(shortcode: string): Promise<InstagramPostData | nu
  * @returns InstagramPostData or null if all strategies fail
  */
 export async function extractInstagramPost(url: string): Promise<InstagramPostData | null> {
-	const shortcode = extractShortcode(url);
+	const resolvedUrl = await resolveInstagramShareUrl(url);
+	const shortcode = extractShortcode(resolvedUrl);
 	if (!shortcode) {
 		console.warn('[Instagram] Could not extract shortcode from URL:', url);
 		return null;
