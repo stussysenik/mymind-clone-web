@@ -69,8 +69,6 @@ export interface CardMetadata {
 
         /** Whether the card is currently being processed by AI */
         processing?: boolean;
-        /** Whether the card needs AI enrichment (set on save, cleared by enrich route) */
-        needsEnrichment?: boolean;
         /** Error message if enrichment failed */
         enrichmentError?: string;
         /** Timestamp when enrichment failed */
@@ -102,26 +100,15 @@ export interface CardMetadata {
 	/** Error message if extraction failed */
 	carouselExtractionError?: string;
 
-	// Engagement metrics (Twitter, etc.)
-	/** Social engagement metrics from platform APIs */
-	engagement?: {
-		likes?: number;
-		retweets?: number;
-		replies?: number;
-		views?: number;
-	};
-
-	// Media persistence fields
-	/** Types of media items (image/video) */
+	// Media persistence fields (Instagram storage)
+	/** Type of each media item in carousel order ('image' or 'video') */
 	mediaTypes?: ('image' | 'video')[];
-	/** Positions of video items in media array */
+	/** Indices of video positions in carousel (e.g., [1, 3] means positions 1 and 3 are videos) */
 	videoPositions?: number[];
-	/** Whether media has been persisted to storage */
+	/** Whether media has been persisted to Supabase Storage (permanent URLs) */
 	mediaPersisted?: boolean;
-	/** Original CDN URLs before persistence */
+	/** Original CDN URLs before persistence (for debugging) */
 	originalCdnUrls?: string[];
-	/** Timestamp when CDN URLs were migrated to storage */
-	migratedAt?: string;
 
 	// Enrichment timing for real-time ETA display
 	/** Enrichment timing data for ETA calculation */

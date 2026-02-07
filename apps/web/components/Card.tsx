@@ -328,17 +328,18 @@ function GenericCard({ card, onDelete, onArchive, onRestore, onClick }: CardProp
                                 );
                         })()}
 
-                        {/* Always-visible External Link - bottom right, touch target compliant */}
+                        {/* Always-visible External Link - bottom right, 44px touch target on mobile */}
                         {card.url && (
                                 <a
                                         href={card.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
-                                        className="absolute bottom-2 right-2 p-2 md:p-1.5 rounded-full
+                                        className="absolute bottom-2 right-2 p-2.5 sm:p-2 md:p-1.5 rounded-full
                                                    bg-[var(--card-bg)]/90 shadow-sm text-[var(--foreground-muted)]
                                                    hover:text-[var(--foreground)] transition-colors z-10
-                                                   physics-press touch-target"
+                                                   physics-press touch-target min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0
+                                                   flex items-center justify-center"
                                         aria-label="Open original"
                                 >
                                         <ExternalLink className="h-4 w-4 md:h-3.5 md:w-3.5" />

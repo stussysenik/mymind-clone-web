@@ -10,7 +10,7 @@
  * @fileoverview Save card API endpoint with async AI processing
  */
 
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { insertCard, updateCard, isSupabaseConfigured, getSupabaseClient } from '@/lib/supabase';
 import { getUser } from '@/lib/supabase-server';
@@ -50,6 +50,27 @@ const PLATFORM_TYPE_MAP: Record<Platform, CardType> = {
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Check if an image URL is an Instagram placeholder logo.
+ * Instagram returns low-quality placeholder images for mobile user-agents.
+ * These are profile pic CDN paths, tiny sizes, or static assets.
+ */
+function isInstagramPlaceholder(imageUrl: string | null): boolean {
+	if (!imageUrl) return true;
+	const url = imageUrl.toLowerCase();
+	const placeholderPatterns = [
+		't51.2885-19',                    // Profile pic CDN path
+		's150x150',                       // Tiny size (profile pic)
+		's320x320',                       // Small size
+		'static.cdninstagram.com/rsrc',   // Static assets
+		'/static.cdninstagram.com/',      // Static assets
+		'instagram-brand',                // Brand assets
+		'data:image/',                    // Data URIs (placeholders)
+		'/images/instagram',              // Generic Instagram images
+	];
+	return placeholderPatterns.some(pattern => url.includes(pattern));
+}
 
 /**
  * Validate auth token and return user ID.
@@ -121,10 +142,10 @@ function extractQuickMetadata(url: string | null, content: string | null): { tit
 import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
-import { extractInstagramPost, isInstagramShareUrl, resolveInstagramShareUrl } from '@/lib/instagram-extractor';
-import { extractInstagramImages } from '@/lib/instagram-scraper';
+import { scrapeInstagramQuick, extractInstagramImages } from '@/lib/instagram-scraper';
+import { extractInstagramPost } from '@/lib/instagram-extractor';
 import { persistInstagramMedia, isPersistedUrl } from '@/lib/instagram-storage';
-import type { InstagramMediaItem } from '@/lib/instagram-scraper';
+import { extractTweet } from '@/lib/twitter-extractor';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
@@ -139,9 +160,10 @@ async function fetchUrlPreview(url: string): Promise<{ title?: string; imageUrl?
 		};
 	} catch (error) {
 		console.log('[Save] URL scrape failed:', error);
-		// No fallback - raw Microlink URLs should never be stored in the database
-		// They're redirect URLs that produce broken screenshots for social media sites
-		return {};
+		// Fallback to minimal screenshot if scrape fails
+		return {
+			imageUrl: `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`
+		};
 	}
 }
 
@@ -217,83 +239,70 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 		const userId = currentCard.user_id;
 		const currentMetadata = currentCard.metadata || {};
 
-		// Try O(1) API-first extractor, fall back to Playwright if it fails
+		// Use browser-based extraction first, then API-based fallback for Vercel compatibility
 		const url = `https://www.instagram.com/p/${shortcode}/`;
-		let images: string[] = [];
-		let mediaItems: InstagramMediaItem[] = [];
-		let caption = '';
-		let author = '';
-		let slideCount = 0;
-		let extractionSource = 'none';
 
-		// Strategy 1: O(1) API-first (fast, no browser)
-		try {
+		// Strategy 1: Browser-based extraction (local dev, rich data with carousel navigation)
+		let result = await extractInstagramImages(url);
+
+		// Strategy 2: API-based extraction fallback (Vercel-safe, works from any IP)
+		if (!result || result.images.length === 0) {
+			console.log(`[Save] Background: Browser extraction failed, trying API-based fallback`);
 			const apiResult = await extractInstagramPost(url);
 			if (apiResult && apiResult.images.length > 0) {
-				images = apiResult.images;
-				mediaItems = apiResult.images.map((imgUrl, i) => ({
-					url: imgUrl,
-					type: (apiResult.isVideo && i === 0 ? 'video' : 'image') as 'image' | 'video',
-				}));
-				caption = apiResult.caption;
-				author = apiResult.authorHandle;
-				slideCount = apiResult.slideCount;
-				extractionSource = `api:${apiResult.source}`;
-				console.log(`[Save] Background: API extracted ${images.length} images via ${apiResult.source}`);
-			}
-		} catch (apiErr) {
-			console.warn('[Save] Background: API extraction failed:', apiErr);
-		}
-
-		// Strategy 2: Playwright fallback (slow but reliable)
-		if (images.length === 0) {
-			console.log('[Save] Background: API returned no images, falling back to Playwright');
-			try {
-				const playwrightResult = await extractInstagramImages(url);
-				if (playwrightResult && playwrightResult.images.length > 0) {
-					images = playwrightResult.images;
-					mediaItems = playwrightResult.media;
-					caption = playwrightResult.caption;
-					author = playwrightResult.author;
-					slideCount = playwrightResult.slideCount;
-					extractionSource = 'playwright';
-					console.log(`[Save] Background: Playwright extracted ${images.length} images`);
-				}
-			} catch (pwErr) {
-				console.warn('[Save] Background: Playwright extraction also failed:', pwErr);
+				console.log(`[Save] Background: API extraction succeeded via ${apiResult.source}`);
+				result = {
+					images: apiResult.images,
+					caption: apiResult.caption,
+					author: apiResult.authorHandle || apiResult.authorName,
+					slideCount: apiResult.slideCount,
+					media: apiResult.images.map((imgUrl, idx) => ({
+						url: imgUrl,
+						type: (apiResult.isVideo && idx === 0) ? ('video' as const) : ('image' as const),
+						thumbnailUrl: undefined,
+					})),
+				};
 			}
 		}
 
-		if (images.length > 0) {
-			console.log(`[Save] Background: ${extractionSource} got ${images.length} images, caption: "${caption?.slice(0, 50)}..."`);
+		if (result && result.images.length > 0) {
+			console.log(`[Save] Background: Extracted ${result.images.length} images, caption: "${result.caption?.slice(0, 50)}..."`);
 
 			// PERSIST MEDIA TO SUPABASE STORAGE
-			let persistedUrls: string[] = images;
-			let mediaTypes: ('image' | 'video')[] = mediaItems.map(m => m.type);
-			let videoPositions: number[] = mediaItems.reduce<number[]>((acc, m, i) => m.type === 'video' ? [...acc, i] : acc, []);
-			let originalCdnUrls: string[] = images;
+			// This creates permanent URLs that won't expire like CDN URLs
+			let persistedUrls: string[] = result.images;
+			let mediaTypes: ('image' | 'video')[] = result.media?.map(m => m.type) || result.images.map(() => 'image');
+			let videoPositions: number[] = result.media?.filter(m => m.type === 'video').map((_, i) => {
+				const idx = result.media!.findIndex((m, j) => m.type === 'video' && result.media!.slice(0, j).filter(x => x.type === 'video').length === i);
+				return idx;
+			}) || [];
+			let originalCdnUrls: string[] = result.images;
 			let mediaPersisted = false;
 
-			try {
-				console.log(`[Save] Background: Persisting ${mediaItems.length} media items to storage`);
-				const persistResult = await persistInstagramMedia(mediaItems, userId, shortcode);
+			// Attempt to persist media to Supabase Storage
+			if (result.media && result.media.length > 0) {
+				try {
+					console.log(`[Save] Background: Persisting ${result.media.length} media items to storage`);
+					const persistResult = await persistInstagramMedia(result.media, userId, shortcode);
 
-				if (persistResult.urls.length > 0) {
-					persistedUrls = persistResult.urls;
-					mediaTypes = persistResult.mediaTypes;
-					videoPositions = persistResult.videoPositions;
-					originalCdnUrls = persistResult.originalCdnUrls;
-					mediaPersisted = persistResult.success;
+					if (persistResult.urls.length > 0) {
+						persistedUrls = persistResult.urls;
+						mediaTypes = persistResult.mediaTypes;
+						videoPositions = persistResult.videoPositions;
+						originalCdnUrls = persistResult.originalCdnUrls;
+						mediaPersisted = persistResult.success;
 
-					console.log(`[Save] Background: Persisted ${persistedUrls.length} media items`);
+						console.log(`[Save] Background: Persisted ${persistedUrls.length} media items, videos at positions: [${videoPositions.join(', ')}]`);
+					}
+				} catch (persistError) {
+					console.warn('[Save] Background: Media persistence failed, using CDN URLs:', persistError);
+					// Fall back to CDN URLs (original behavior)
 				}
-			} catch (persistError) {
-				console.warn('[Save] Background: Media persistence failed, using CDN URLs:', persistError);
 			}
 
 			// Generate title from caption (max 80 chars)
-			const generatedTitle = caption
-				? caption.slice(0, 80).trim() || 'Instagram Post'
+			const generatedTitle = result.caption
+				? result.caption.slice(0, 80).trim() || 'Instagram Post'
 				: 'Instagram Post';
 
 			// Update card with all carousel images and metadata
@@ -305,30 +314,29 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 					: {}),
 				// Only update content if empty
 				...((!currentCard.content || currentCard.content === '')
-					? { content: caption }
+					? { content: result.caption }
 					: {}),
 				metadata: {
 					...currentMetadata,
 					images: persistedUrls,
-					author,
+					author: result.author,
 					platform: 'instagram',
-					slideCount,
-					isCarousel: images.length > 1,
+					slideCount: result.slideCount,
+					isCarousel: result.images.length > 1,
 					carouselExtracted: true,
 					carouselPending: false,
 					carouselExtractedAt: new Date().toISOString(),
-					extractionSource,
-					// Media persistence fields
+					// NEW: Media persistence fields
 					mediaTypes,
 					videoPositions: videoPositions.length > 0 ? videoPositions : undefined,
 					mediaPersisted,
-					originalCdnUrls: mediaPersisted ? originalCdnUrls : undefined,
+					originalCdnUrls: mediaPersisted ? originalCdnUrls : undefined, // Only store if we persisted
 				}
 			});
 
 			console.log(`[Save] Background: Card ${cardId} updated with ${persistedUrls.length} images (persisted: ${mediaPersisted})`);
 		} else {
-			console.warn(`[Save] Background: No images extracted for ${shortcode} (API + Playwright both failed)`);
+			console.warn(`[Save] Background: No images extracted for ${shortcode}`);
 
 			// Mark as failed so we don't keep retrying
 			await updateCard(cardId, {
@@ -368,18 +376,59 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 	}
 }
 
-// =============================================================================
-// INTERNAL API HELPERS
-// =============================================================================
-
 /**
- * Get the base URL for internal API calls.
- * Works on Vercel (VERCEL_URL), custom domains (NEXT_PUBLIC_SITE_URL), and localhost.
+ * Quick Instagram extraction - returns immediately with first image
+ * Full carousel is extracted in background
  */
-function getBaseUrl(): string {
-	if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-	return 'http://localhost:3737';
+async function scrapeInstagramQuickly(url: string): Promise<{
+	title: string;
+	imageUrl: string | null;
+	content: string;
+	author: string;
+	isCarousel: boolean;
+	shortcode: string;
+}> {
+	// Extract shortcode
+	const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+	const shortcode = shortcodeMatch?.[2] || '';
+
+	if (!shortcode) {
+		return {
+			title: 'Instagram Post',
+			imageUrl: null,
+			content: '',
+			author: '',
+			isCarousel: false,
+			shortcode: '',
+		};
+	}
+
+	try {
+		const result = await scrapeInstagramQuick(shortcode);
+
+		if (result) {
+			return {
+				title: result.caption?.slice(0, 80) || 'Instagram Post',
+				imageUrl: result.firstImage,
+				content: result.caption,
+				author: result.author,
+				isCarousel: result.isCarousel,
+				shortcode,
+			};
+		}
+	} catch (error) {
+		console.warn('[Save] Quick Instagram extraction failed:', error);
+	}
+
+	// Fallback
+	return {
+		title: 'Instagram Post',
+		imageUrl: null,
+		content: '',
+		author: '',
+		isCarousel: true, // Assume carousel to trigger background extraction
+		shortcode,
+	};
 }
 
 // =============================================================================
@@ -480,165 +529,157 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			authorName?: string;
 			authorHandle?: string;
 			authorAvatar?: string;
-			engagement?: { likes?: number; retweets?: number; replies?: number; views?: number };
 		} = {};
 
 		// Check if this is an Instagram URL - use fast path for immediate response
-		const isInstagramShare = url ? isInstagramShareUrl(url) : false;
-		const isInstagram = url && (
-			url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') ||
-			url.includes('instagram.com/tv/') || isInstagramShare
-		);
-
-		// Resolve share URLs to canonical URLs before shortcode extraction
-		let resolvedInstagramUrl = url;
-		if (isInstagramShare && url) {
-			resolvedInstagramUrl = await resolveInstagramShareUrl(url);
-		}
+		const isInstagram = url && (url.includes('instagram.com/p/') || url.includes('instagram.com/reel/') || url.includes('instagram.com/tv/'));
 
 		// Extract Instagram shortcode early (needed for background processing)
 		let instagramShortcode: string | undefined;
-		if (isInstagram && resolvedInstagramUrl) {
-			const shortcodeMatch = resolvedInstagramUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+		if (isInstagram && url) {
+			const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
 			instagramShortcode = shortcodeMatch?.[2];
 		}
 
 		if (url && isInstagram) {
-			// INSTAGRAM FAST PATH: Use O(1) API-first extractor (no Playwright)
-			console.log('[Save] Instagram detected - using API-first extraction');
+			// INSTAGRAM FAST PATH: Try API extraction first for best data, fallback to Microlink OG
+			console.log('[Save] Instagram detected - using fast path with API extractor');
 
+			let ogImageUrl: string | undefined;
+			let extractedData: Awaited<ReturnType<typeof extractInstagramPost>> = null;
+
+			// Strategy 1: Try API-based extraction first (5-layer fallback, Vercel-safe)
+			// This gives us caption, author, and high-quality images for GLM-4.7
 			try {
-				const igPost = await extractInstagramPost(resolvedInstagramUrl || url);
-
-				if (igPost && igPost.images.length > 0) {
-					console.log(`[Save] Instagram: ${igPost.source} extracted ${igPost.images.length} images in O(1)`);
-
-					// Persist first image to Supabase Storage immediately
-					let persistedImageUrl: string | undefined;
-					try {
-						const imgRes = await fetch(igPost.images[0], {
-							signal: AbortSignal.timeout(8000),
-							headers: {
-								'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-								'Referer': 'https://www.instagram.com/',
-							},
-						});
-						if (imgRes.ok) {
-							const buffer = Buffer.from(await imgRes.arrayBuffer());
-							const uploadedUrl = await uploadScreenshotToStorage(buffer, url);
-							if (uploadedUrl) {
-								persistedImageUrl = uploadedUrl;
-								console.log('[Save] Instagram: Primary image persisted to storage');
-							}
-						}
-					} catch (e) {
-						console.warn('[Save] Instagram: Image persistence failed, using CDN URL:', e);
-					}
-
-					// Replace CDN URL in images[0] with persisted Supabase URL
-					// so metadata.images doesn't store expiring CDN URLs
-					if (persistedImageUrl && igPost.images.length > 0) {
-						igPost.images[0] = persistedImageUrl;
-					}
-
-					preview = {
-						title: igPost.caption.slice(0, 80).trim() || 'Instagram Post',
-						imageUrl: persistedImageUrl || igPost.images[0],
-						content: igPost.caption,
-						description: igPost.caption,
-						images: igPost.images,
-						isCarousel: igPost.isCarousel,
-						shortcode: instagramShortcode,
-						authorName: igPost.authorName,
-						authorHandle: igPost.authorHandle,
-						authorAvatar: igPost.authorAvatar,
-					};
-				} else {
-					console.warn('[Save] Instagram: API extraction returned no images');
-					preview = {
-						title: 'Instagram Post',
-						imageUrl: undefined,
-						content: '',
-						description: '',
-						images: undefined,
-						isCarousel: true,
-						shortcode: instagramShortcode,
-					};
+				extractedData = await extractInstagramPost(url);
+				if (extractedData && extractedData.images.length > 0) {
+					ogImageUrl = extractedData.images[0];
+					console.log(`[Save] Instagram: API extractor success: ${extractedData.images.length} images, author="${extractedData.authorHandle}"`);
 				}
 			} catch (e) {
-				console.warn('[Save] Instagram: Extraction failed:', e);
-				preview = {
-					title: 'Instagram Post',
-					imageUrl: undefined,
-					content: '',
-					description: '',
-					images: undefined,
-					isCarousel: true,
-					shortcode: instagramShortcode,
-				};
+				console.warn('[Save] Instagram: API extractor failed:', e);
 			}
 
-			console.log(`[Save] Instagram: shortcode=${instagramShortcode}, hasImage=${!!preview.imageUrl}, images=${preview.images?.length || 0}`);
-		} else if (url) {
-			// Standard path for non-Instagram URLs
-			const scraped = await scrapeUrl(url);
-
-			const isTwitter = url.includes('twitter.com') || url.includes('x.com');
-
-			// For Twitter: persist API-extracted images to Supabase Storage
-			// This avoids Playwright entirely (X.com blocks headless browsers)
-			let persistedImageUrl: string | undefined;
-			if (isTwitter && scraped.imageUrl) {
+			// Strategy 2: Fallback to Microlink for OG image if API extraction failed
+			if (!ogImageUrl) {
 				try {
-					console.log('[Save] Twitter: Persisting API image to storage');
-					const imgRes = await fetch(scraped.imageUrl, { signal: AbortSignal.timeout(10000) });
-					if (imgRes.ok) {
-						const buffer = Buffer.from(await imgRes.arrayBuffer());
-						const uploadedUrl = await uploadScreenshotToStorage(buffer, url);
-						if (uploadedUrl) {
-							persistedImageUrl = uploadedUrl;
-							console.log('[Save] Twitter: Image persisted to storage');
+					const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`;
+					const mlRes = await fetch(microlinkUrl, {
+						signal: AbortSignal.timeout(5000),
+						headers: {
+							'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+						}
+					});
+					if (mlRes.ok) {
+						const mlData = await mlRes.json();
+						if (mlData.data?.image?.url) {
+							const imageUrl = mlData.data.image.url;
+							// Validate it's not an Instagram placeholder logo
+							if (!isInstagramPlaceholder(imageUrl)) {
+								ogImageUrl = imageUrl;
+								console.log(`[Save] Instagram: Microlink fallback got OG image: ${imageUrl.slice(0, 60)}...`);
+							} else {
+								console.log(`[Save] Instagram: Microlink returned placeholder image, skipping`);
+							}
 						}
 					}
-				} catch (err) {
-					console.warn('[Save] Twitter: Image persistence failed, using direct URL:', err);
+				} catch (e) {
+					console.warn('[Save] Instagram: Microlink fallback failed:', e);
 				}
 			}
 
-			// Fallback to Playwright screenshot only for non-Twitter URLs with no image
+			// Build preview with best available data
+			preview = {
+				title: extractedData?.authorHandle
+					? `@${extractedData.authorHandle} on Instagram`
+					: 'Instagram Post',
+				imageUrl: ogImageUrl,
+				content: extractedData?.caption || '',
+				description: extractedData?.caption || '',
+				images: extractedData?.images,
+				isCarousel: extractedData?.isCarousel ?? true,
+				shortcode: instagramShortcode,
+				authorName: extractedData?.authorName,
+				authorHandle: extractedData?.authorHandle,
+			};
+
+			console.log(`[Save] Instagram fast path: shortcode=${instagramShortcode}, hasImage=${!!ogImageUrl}, hasCaption=${!!(extractedData?.caption)}`);
+		} else if (url && (url.includes('twitter.com/') || url.includes('x.com/'))) {
+			// TWITTER FAST PATH: Use API extractor (FxTwitter) for fast, reliable extraction
+			console.log('[Save] Twitter detected - using fast path with API extractor');
+
+			let tweetData: Awaited<ReturnType<typeof extractTweet>> = null;
+
+			try {
+				tweetData = await extractTweet(url);
+				if (tweetData) {
+					console.log(`[Save] Twitter: API extractor success: author="${tweetData.authorHandle}", ${tweetData.images.length} images`);
+				}
+			} catch (e) {
+				console.warn('[Save] Twitter: API extractor failed:', e);
+			}
+
+			// Build preview with extracted data
+			preview = {
+				title: tweetData?.authorHandle
+					? `@${tweetData.authorHandle}: ${tweetData.text.slice(0, 60)}${tweetData.text.length > 60 ? '...' : ''}`
+					: 'Tweet',
+				imageUrl: tweetData?.images[0] || tweetData?.videoThumbnail || undefined,
+				content: tweetData?.text || '',
+				description: tweetData?.text || '',
+				images: tweetData?.images,
+				authorName: tweetData?.authorName,
+				authorHandle: tweetData?.authorHandle,
+				authorAvatar: tweetData?.authorAvatar,
+			};
+
+			console.log(`[Save] Twitter fast path: author=${tweetData?.authorHandle}, hasImage=${!!preview.imageUrl}, hasText=${!!(tweetData?.text)}`);
+		} else if (url) {
+			// Standard path for other URLs
+			const scraped = await scrapeUrl(url);
+
+			// Fallback to self-hosted Playwright screenshot if no image found in metadata
+			// Uses Playwright (content-focused, zero cost) with fallback to Microlink
 			let fallbackImage: string | undefined;
-			if (!scraped.imageUrl && !isTwitter) {
+
+			if (!scraped.imageUrl) {
+				const isTwitter = url.includes('twitter.com') || url.includes('x.com');
+				if (isTwitter) {
+					console.log('[Save] Twitter: Taking optimized screenshot with popup dismissal');
+				}
+
 				try {
 					const result = await captureWithPlaywright(url);
 					if (result.success && result.buffer.length > 0) {
+						// Upload to Supabase Storage
 						const uploadedUrl = await uploadScreenshotToStorage(result.buffer, url);
 						fallbackImage = uploadedUrl ?? undefined;
+						if (isTwitter && fallbackImage) {
+							console.log('[Save] Twitter: Screenshot captured and uploaded successfully');
+						}
 					}
 
+					// If Playwright failed or storage upload failed, fallback to Microlink
 					if (!fallbackImage) {
 						console.warn('[Save] Playwright screenshot failed or upload failed, falling back to Microlink');
 						fallbackImage = getMicrolinkFallback(url);
 					}
 				} catch (error) {
 					console.warn('[Save] Screenshot capture failed:', error);
+					// Final fallback to Microlink
 					fallbackImage = getMicrolinkFallback(url);
 				}
-			} else if (!scraped.imageUrl && isTwitter) {
-				// Twitter with no images from API - NO fallback screenshot
-				// Microlink screenshots of x.com show login walls, which is useless
-				fallbackImage = undefined;
 			}
 
 			preview = {
 				title: scraped.title,
-				imageUrl: persistedImageUrl ?? scraped.imageUrl ?? fallbackImage,
+				imageUrl: scraped.imageUrl ?? fallbackImage,
 				content: scraped.content,
 				description: scraped.description,
 				images: scraped.images,
 				authorName: scraped.authorName,
 				authorHandle: scraped.authorHandle,
 				authorAvatar: scraped.authorAvatar,
-				engagement: scraped.engagement,
 			};
 		}
 
@@ -658,21 +699,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			type: type ?? quickMeta.type,
 			title: title ?? preview.title ?? quickMeta.title,
 			content: finalContent,
-			url: (isInstagram ? resolvedInstagramUrl : url) ?? null,
+			url: url ?? null,
 			image_url: finalImageUrl ?? preview.imageUrl ?? null,
 			metadata: {
-				processing: false, // Let the enrich route claim this atomically
-				needsEnrichment: !tags, // Signal that AI enrichment is needed
+				processing: !tags, // Flag as processing if we need AI
 				platform: quickMeta.platform !== 'unknown' ? quickMeta.platform : undefined, // Store detected platform
-				images: preview.images, // Store carousel/multi images
+				images: preview.images, // Store carousel images
 				isCarousel: preview.isCarousel, // Track if this is a carousel
 				carouselPending: !!(preview.isCarousel && preview.shortcode), // Background extraction pending
 				// Author info extracted from social platforms
 				authorName: preview.authorName,
 				authorHandle: preview.authorHandle,
 				authorAvatar: preview.authorAvatar,
-				// Engagement metrics (Twitter, etc.)
-				engagement: preview.engagement,
 			},
 			tags: tags ?? [], // Empty tags, will be filled by AI
 		};
@@ -686,53 +724,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 			);
 		}
 
-		// STEP 3: Schedule background work via after() for fault-tolerance
-		// after() keeps the serverless function alive after the response is sent,
-		// ensuring background tasks complete even if the user navigates away.
-		// Without after(), Vercel kills fire-and-forget promises after response.
-		const cardId = insertedRow.id;
-		const needsEnrichment = !tags;
+		// INSTAGRAM BACKGROUND EXTRACTION: Always trigger for Instagram URLs
+		// This runs in the background - we don't wait for it
+		if (isInstagram && instagramShortcode) {
+			console.log(`[Save] Triggering background extraction for Instagram shortcode: ${instagramShortcode}`);
+			// Fire and forget - don't await
+			extractInstagramCarouselBackground(insertedRow.id, instagramShortcode).catch(err => {
+				console.error('[Save] Background carousel extraction failed:', err);
+			});
+		}
 
-		after(async () => {
-			// 3a. Instagram carousel extraction (await - needs to complete first)
-			if (isInstagram && instagramShortcode) {
-				console.log(`[Save:after] Starting Instagram extraction for ${instagramShortcode}`);
-				try {
-					await extractInstagramCarouselBackground(cardId, instagramShortcode);
-					console.log(`[Save:after] Instagram extraction complete for ${instagramShortcode}`);
-				} catch (err) {
-					console.error('[Save:after] Instagram extraction failed:', err);
-				}
-			}
-
-			// 3b. Auto-trigger enrichment server-side (separate function invocation)
-			// This ensures enrichment runs even if the user closes the browser.
-			if (needsEnrichment) {
-				const baseUrl = getBaseUrl();
-				console.log(`[Save:after] Triggering enrichment for card ${cardId}`);
-				try {
-					const enrichRes = await fetch(`${baseUrl}/api/enrich`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'x-service-key': process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-						},
-						body: JSON.stringify({ cardId }),
-						signal: AbortSignal.timeout(55000),
-					});
-					if (!enrichRes.ok) {
-						const errBody = await enrichRes.text().catch(() => 'unknown');
-						console.error(`[Save:after] Enrichment returned ${enrichRes.status}: ${errBody}`);
-					} else {
-						console.log(`[Save:after] Enrichment completed for card ${cardId}`);
-					}
-				} catch (err) {
-					console.error('[Save:after] Enrichment trigger failed:', err);
-				}
-			}
-		});
-
-		// STEP 4: Return immediately to client (< 200ms)
+		// STEP 3: Return immediately to client (< 200ms)
 		const savedCard = {
 			id: insertedRow.id,
 			userId: insertedRow.user_id,

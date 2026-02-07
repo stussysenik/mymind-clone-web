@@ -111,6 +111,32 @@ export interface UnifiedResponse {
   };
 }
 
+/**
+ * Request for hierarchical tag generation via DSPy.
+ * Uses 3-layer tag hierarchy: primary (essence), contextual (subject), vibe (mood)
+ */
+export interface TagsRequest {
+  content: string;
+  platform: DSPyPlatform;
+  image_url?: string;
+  title?: string;
+  image_count?: number;
+}
+
+/**
+ * Response from DSPy tag generation.
+ * Structured hierarchical tags for cross-disciplinary discovery.
+ */
+export interface TagsResponse {
+  tags: {
+    primary: string[];     // 1-2 essence tags: "bmw", "terence-tao", "breakdance"
+    contextual: string[];  // 1-2 subject tags: "automotive", "mathematics", "dance"
+    vibe: string;          // 1 abstract mood: "kinetic", "minimalist", "contemplative"
+  };
+  confidence: number;
+  reasoning?: string;
+}
+
 // =============================================================================
 // CLIENT CLASS
 // =============================================================================
@@ -222,6 +248,25 @@ class DSPyClient {
       return response;
     } catch (error) {
       console.warn('[DSPy] Summary generation failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate hierarchical tags using DSPy signatures.
+   * Uses 3-layer structure: primary (essence), contextual (subject), vibe (mood)
+   * Enables cross-disciplinary discovery through abstract "vibe" tags.
+   */
+  async generateTags(req: TagsRequest): Promise<TagsResponse | null> {
+    if (!this.enabled) return null;
+
+    try {
+      const response = await this.post<TagsResponse>('/generate/tags', req);
+      const tagCount = response.tags.primary.length + response.tags.contextual.length + (response.tags.vibe ? 1 : 0);
+      console.log(`[DSPy] Tags generated (${tagCount} tags, confidence: ${response.confidence})`);
+      return response;
+    } catch (error) {
+      console.warn('[DSPy] Tag generation failed:', error);
       return null;
     }
   }
@@ -462,6 +507,49 @@ export async function extractContentWithDSPy(
     detected_author: rawData.author,
     json_data: rawData.json,
   });
+}
+
+/**
+ * Generate hierarchical tags using DSPy, with fallback to empty array.
+ * Uses 3-layer hierarchy for cross-disciplinary discovery:
+ * - PRIMARY (1-2): Essence - "bmw", "terence-tao", "breakdance"
+ * - CONTEXTUAL (1-2): Subject - "automotive", "mathematics", "dance"
+ * - VIBE (1): Abstract mood - "kinetic", "minimalist", "contemplative"
+ *
+ * @param content - Text content to analyze (caption, description, etc)
+ * @param platform - Source platform for context-aware tagging
+ * @param options - Optional image URL and title for multimodal analysis
+ * @returns Flattened array of tags with confidence score
+ */
+export async function generateTagsWithDSPy(
+  content: string,
+  platform: DSPyPlatform,
+  options: { imageUrl?: string; title?: string; imageCount?: number } = {}
+): Promise<{ tags: string[]; confidence: number }> {
+  // Try DSPy first (O(1) optimized inference)
+  const dspyResult = await dspyClient.generateTags({
+    content,
+    platform,
+    image_url: options.imageUrl,
+    title: options.title,
+    image_count: options.imageCount,
+  });
+
+  if (dspyResult && dspyResult.confidence > 0.5) {
+    // Flatten hierarchical tags to array
+    const flatTags = [
+      ...dspyResult.tags.primary,
+      ...dspyResult.tags.contextual,
+      dspyResult.tags.vibe,
+    ].filter(Boolean);
+
+    console.log(`[DSPy] Tags generated: [${flatTags.join(', ')}] (confidence: ${dspyResult.confidence})`);
+    return { tags: flatTags, confidence: dspyResult.confidence };
+  }
+
+  // Fallback to empty - GLM classification will handle tagging
+  console.log('[DSPy] Tag generation skipped or low confidence, falling back to GLM');
+  return { tags: [], confidence: 0 };
 }
 
 // =============================================================================

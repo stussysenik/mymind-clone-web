@@ -40,3 +40,4 @@ playwright-report/
 # .env
 # .env.local
 # .env.*
+.vercel

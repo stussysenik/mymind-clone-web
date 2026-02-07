@@ -56,3 +56,4 @@ logs/ralph/
 # Nix/Direnv local overrides
 .envrc.local
 .direnv/
+.env*.local

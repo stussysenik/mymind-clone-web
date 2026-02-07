@@ -72,6 +72,10 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                 return card?.imageUrl ? [card.imageUrl] : [];
         })();
 
+        // Video position tracking for carousel indicators
+        const videoPositions = card?.metadata?.videoPositions || [];
+        const isVideoSlide = (index: number) => videoPositions.includes(index);
+
         // Mobile responsive state
         const isMobile = useMediaQuery('(max-width: 767px)');
         const [mobileView, setMobileView] = useState<'visual' | 'text'>('visual');
@@ -652,6 +656,20 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                 e.currentTarget.style.display = 'none';
                                                                         }}
                                                                 />
+
+                                                                {/* Video Thumbnail Indicator */}
+                                                                {isVideoSlide(currentImageIndex) && (
+                                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-orange-500/90 shadow-xl">
+                                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0" className="ml-1">
+                                                                                                <polygon points="5 3 19 12 5 21 5 3" />
+                                                                                        </svg>
+                                                                                </div>
+                                                                                <span className="absolute bottom-4 text-sm font-medium text-white bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                                                                                        Video thumbnail (original on Instagram)
+                                                                                </span>
+                                                                        </div>
+                                                                )}
                                                         </div>
 
                                                         {/* Carousel Controls */}
@@ -670,7 +688,7 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                 <ChevronRight className="w-6 h-6" />
                                                                         </button>
 
-                                                                        {/* Dots */}
+                                                                        {/* Dots - with video indicators */}
                                                                         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 p-2 rounded-full bg-black/20 backdrop-blur-sm">
                                                                                 {images.map((_, idx) => (
                                                                                         <button
@@ -679,7 +697,16 @@ export function CardDetailModal({ card, isOpen, onClose, onDelete, onRestore, on
                                                                                                         e.stopPropagation();
                                                                                                         setCurrentImageIndex(idx);
                                                                                                 }}
-                                                                                                className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/50 hover:bg-white/80'}`}
+                                                                                                className={`w-2 h-2 rounded-full transition-all ${
+                                                                                                        idx === currentImageIndex
+                                                                                                                ? isVideoSlide(idx)
+                                                                                                                        ? 'bg-orange-400 w-4 ring-2 ring-orange-400/50'
+                                                                                                                        : 'bg-white w-4'
+                                                                                                                : isVideoSlide(idx)
+                                                                                                                        ? 'bg-orange-400/70 hover:bg-orange-400'
+                                                                                                                        : 'bg-white/50 hover:bg-white/80'
+                                                                                                }`}
+                                                                                                title={isVideoSlide(idx) ? 'Video (thumbnail)' : 'Image'}
                                                                                         />
                                                                                 ))}
                                                                         </div>

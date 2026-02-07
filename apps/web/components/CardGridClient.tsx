@@ -514,9 +514,11 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                 if (windowWidth === 0) return null; // Not mounted yet, use CSS fallback
 
                 // Base columns per breakpoint (default at cardSize = 1.0)
+                // 2-column on phones >=375px for better visual density
                 let baseColumns: number;
-                if (windowWidth < 640) baseColumns = 1;        // mobile
-                else if (windowWidth < 768) baseColumns = 2;   // sm
+                if (windowWidth < 375) baseColumns = 1;        // very narrow phones (iPhone SE, etc)
+                else if (windowWidth < 640) baseColumns = 2;   // phones 375px+ (iPhone 12/14/16)
+                else if (windowWidth < 768) baseColumns = 2;   // sm tablets
                 else if (windowWidth < 1024) baseColumns = 3;  // md
                 else if (windowWidth < 1280) baseColumns = 4;  // lg
                 else if (windowWidth < 1536) baseColumns = 5;  // xl

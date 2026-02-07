@@ -44,6 +44,12 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 	const authorHandle = card.metadata.authorHandle || card.metadata.author?.replace('@', '') || '';
 	const authorAvatar = card.metadata.authorAvatar || '';
 
+	// Video detection from new metadata fields
+	const videoPositions = card.metadata.videoPositions || [];
+	const hasVideos = videoPositions.length > 0 || isReel;
+	const videoCount = videoPositions.length || (isReel ? 1 : 0);
+	const imageCount = (card.metadata.images?.length || 1) - videoCount;
+
 	return (
 		<article
 			className={`relative overflow-hidden rounded-[var(--radius-md)] bg-[var(--surface-card)] card-shadow border-l-[3px] border-[#E4405F] ${onClick ? 'cursor-pointer' : ''}`}
@@ -95,6 +101,19 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 							<path d="M17 3v18" />
 						</svg>
 						<span className="text-xs font-medium text-white">1/{card.metadata.images.length}</span>
+						{hasVideos && (
+							<span className="ml-1 text-xs text-orange-400">
+								{videoCount === 1 ? '1 video' : `${videoCount} videos`}
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* Video Badge for Reels or posts with videos (when not a carousel) */}
+				{hasVideos && (!card.metadata.images || card.metadata.images.length <= 1) && (
+					<div className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 backdrop-blur-sm z-10">
+						<Play className="w-3 h-3 text-orange-400" fill="currentColor" />
+						<span className="text-xs font-medium text-orange-400">Video</span>
 					</div>
 				)}
 
@@ -110,17 +129,17 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 				{/* Gradient Overlay */}
 				<div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent" />
 
-				{/* Always-visible External Link */}
+				{/* Always-visible External Link - 44px touch target on mobile */}
 				{card.url && (
 					<a
 						href={card.url}
 						target="_blank"
 						rel="noopener noreferrer"
 						onClick={(e) => e.stopPropagation()}
-						className="absolute bottom-2 right-2 p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10"
+						className="absolute bottom-2 right-2 p-2.5 sm:p-1.5 rounded-full bg-white/90 shadow-sm text-gray-400 hover:text-gray-600 transition-colors z-10 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
 						aria-label="Open original"
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-3.5 sm:h-3.5">
 							<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
 							<polyline points="15 3 21 3 21 9" />
 							<line x1="10" x2="21" y1="14" y2="3" />
@@ -128,7 +147,7 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 					</a>
 				)}
 
-				{/* Hover Actions */}
+				{/* Hover Actions - 44px touch targets on mobile */}
 				{isHovered && (
 					<div className="absolute right-2 top-2 flex gap-1 z-20">
 						{onArchive && (
@@ -137,10 +156,10 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 									e.stopPropagation();
 									onArchive();
 								}}
-								className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-amber-400 transition-colors"
+								className="p-2.5 sm:p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-amber-400 transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
 								aria-label="Archive card"
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-3.5 sm:h-3.5">
 									<rect width="20" height="5" x="2" y="3" rx="1" />
 									<path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
 									<path d="M10 12h4" />
@@ -153,10 +172,10 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 									e.stopPropagation();
 									onDelete();
 								}}
-								className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-red-400 transition-colors"
+								className="p-2.5 sm:p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-red-400 transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
 								aria-label="Delete card"
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-3.5 sm:h-3.5">
 									<path d="M3 6h18" />
 									<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
 									<path d="M8 6V4c0-1 1-1 1-1h6c1 0 1 1 1 1v2" />
@@ -169,10 +188,10 @@ export function InstagramCard({ card, onDelete, onArchive, onRestore, onClick }:
 									e.stopPropagation();
 									onRestore();
 								}}
-								className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-green-400 transition-colors"
+								className="p-2.5 sm:p-1.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 hover:bg-black/70 hover:text-green-400 transition-colors min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
 								aria-label="Restore card"
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-3.5 sm:h-3.5">
 									<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
 									<path d="M3 3v5h5" />
 								</svg>

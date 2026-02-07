@@ -67,28 +67,21 @@ async function callGLM(
                         description: string;
                         parameters: Record<string, unknown>;
                 };
-        }>,
-        timeoutMs: number = 30000
+        }>
 ): Promise<GLMResponse> {
         const endpoint = `${ZHIPU_API_BASE}/chat/completions`;
 
         const body: Record<string, unknown> = {
                 model,
                 messages,
-                // GLM-4.7 is a reasoning model — reasoning tokens consume the budget,
-                // so we need generous max_tokens to get full output
-                max_tokens: 4000,
+                max_tokens: 2000,
         };
 
-        // NOTE: Tool calling is disabled for GLM-4.7 (reasoning model).
-        // Tool call arguments come back empty/truncated because reasoning tokens
-        // consume the budget. Instead, we ask for JSON in the response content.
         if (tools) {
                 body.tools = tools;
                 body.tool_choice = { type: 'function', function: { name: tools[0].function.name } };
         }
 
-        const startTime = Date.now();
         const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -96,11 +89,7 @@ async function callGLM(
                         'Authorization': `Bearer ${ZHIPU_API_KEY}`,
                 },
                 body: JSON.stringify(body),
-                signal: AbortSignal.timeout(timeoutMs),
         });
-
-        const elapsedMs = Date.now() - startTime;
-        console.log(`[AI] GLM ${model} responded in ${elapsedMs}ms`);
 
         if (!response.ok) {
                 const error = await response.text();
@@ -320,6 +309,7 @@ export async function classifyContent(
 ): Promise<ClassificationResult> {
         // Fallback to rule-based classification if GLM is not configured
         if (!ZHIPU_API_KEY) {
+                console.warn('[AI] ZHIPU_API_KEY not set - using rule-based classification fallback (no AI tags)');
                 return classifyContentFallback(url, content, imageUrl);
         }
 
@@ -373,7 +363,7 @@ export async function classifyContent(
                         const textParts: string[] = [];
                         if (url) textParts.push(`Source URL: ${url}`);
                         if (content) textParts.push(`Text content: ${content.slice(0, 800)}`);
-                        textParts.push('Analyze this image and metadata. Include ONE abstract VIBE tag (e.g., "kinetic", "minimalist", "atmospheric", "raw", "elegant") alongside specific subject tags.\n\nRESPONSE FORMAT: Return ONLY a JSON object (no markdown, no explanation):\n{"type": "article|image|note|product|book|video|audio|social|movie", "title": "concise title", "tags": ["tag1", "tag2", "tag3"], "summary": "holistic summary", "platform": "source platform"}');
+                        textParts.push('Analyze this image and metadata. Include ONE abstract VIBE tag (e.g., "kinetic", "minimalist", "atmospheric", "raw", "elegant") alongside specific subject tags.');
 
                         messages.push({
                                 role: 'user',
@@ -399,73 +389,49 @@ export async function classifyContent(
 
                 console.log(`[AI] Using ${model} for classification${hasImage ? ' (with image analysis)' : ''}`);
 
-                // Try primary model (vision 45s or text 30s)
-                const primaryTimeout = model === VISION_MODEL ? 45000 : 30000;
-                let result = await tryGLMClassification(model, messages, primaryTimeout);
-                if (result) return result;
+                const response = await callGLM(
+                        model,
+                        messages,
+                        [CLASSIFICATION_TOOL]
+                );
 
-                // FALLBACK 1: If vision model failed, retry with text-only model
-                // Text model can still produce rich tags from URL + content metadata
-                if (model === VISION_MODEL) {
-                        console.warn('[AI] Vision model failed, retrying with text-only model');
-                        const textMessages: GLMMessage[] = [
-                                { role: 'system', content: systemPrompt },
-                                { role: 'user', content: buildClassificationPrompt(url, content, imageUrl) },
-                        ];
-                        result = await tryGLMClassification(TEXT_MODEL, textMessages, 30000);
-                        if (result) return result;
-                }
 
-                throw new Error('No valid classification from any model');
-        } catch (error) {
-                // FALLBACK 2: Rule-based classification (instant, generic)
-                console.error('[AI] Classification error, using rule-based fallback:', error);
-                return classifyContentFallback(url, content, imageUrl);
-        }
-}
-
-/**
- * Attempt GLM classification and parse JSON response.
- * Returns null if the call fails or response is unparseable.
- */
-async function tryGLMClassification(
-        model: string,
-        messages: GLMMessage[],
-        timeoutMs: number
-): Promise<ClassificationResult | null> {
-        try {
-                const response = await callGLM(model, messages, undefined, timeoutMs);
-
-                // Parse JSON from response content (may be wrapped in ```json blocks)
-                const content_text = response.choices[0]?.message?.content;
-                if (content_text) {
-                        const jsonMatch = content_text.match(/```(?:json)?\s*([\s\S]*?)```/) || content_text.match(/(\{[\s\S]*\})/);
-                        if (jsonMatch) {
-                                const parsed = JSON.parse(jsonMatch[1]) as ClassificationResult;
-                                if (parsed.type && parsed.title) {
-                                        parsed.type = normalizeType(parsed.type);
-                                        console.log(`[AI] Classification result: type=${parsed.type}, title="${parsed.title?.slice(0, 40)}..."`);
-                                        return parsed;
-                                }
-                        }
-                }
-
-                // Try tool calls (for non-reasoning models)
+                // Extract function call result
                 const toolCall = response.choices[0]?.message?.tool_calls?.[0];
                 if (toolCall?.function?.arguments) {
-                        const toolResult = JSON.parse(toolCall.function.arguments) as ClassificationResult;
-                        if (toolResult.type) {
-                                toolResult.type = normalizeType(toolResult.type);
-                                return toolResult;
+                        console.log('[AI] Got tool_call response, parsing arguments');
+                        const result = JSON.parse(toolCall.function.arguments) as ClassificationResult;
+                        // Normalize type to allowed values
+                        result.type = normalizeType(result.type);
+                        // DEFENSIVE: Ensure tags is always an array (fix for missing tags issue)
+                        result.tags = Array.isArray(result.tags) ? result.tags : [];
+                        console.log(`[AI] Classification result: type=${result.type}, tags=[${result.tags.join(', ')}]`);
+                        return result;
+                }
+
+                // Try parsing from content if no tool call
+                const content_text = response.choices[0]?.message?.content;
+                console.log('[AI] No tool_call, trying to parse from content:', content_text?.slice(0, 200));
+                if (content_text) {
+                        try {
+                                const parsed = JSON.parse(content_text);
+                                if (parsed.type && parsed.title) {
+                                        // DEFENSIVE: Ensure tags is always an array
+                                        parsed.tags = Array.isArray(parsed.tags) ? parsed.tags : [];
+                                        console.log(`[AI] Parsed from content: type=${parsed.type}, tags=[${parsed.tags.join(', ')}]`);
+                                        return parsed as ClassificationResult;
+                                }
+                        } catch {
+                                // Not JSON, use fallback
+                                console.log('[AI] Content is not valid JSON');
                         }
                 }
 
-                console.warn(`[AI] ${model} returned unparseable response`);
-                return null;
+                console.warn('[AI] No valid classification in response, falling through to fallback');
+                throw new Error('No valid classification in response');
         } catch (error) {
-                const msg = error instanceof Error ? error.message : String(error);
-                console.warn(`[AI] ${model} classification failed: ${msg}`);
-                return null;
+                console.error('[AI] Classification error, using fallback:', error);
+                return classifyContentFallback(url, content, imageUrl);
         }
 }
 

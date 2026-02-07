@@ -184,12 +184,14 @@ export async function POST(request: NextRequest) {
                 let scrapedDate: string | undefined;
 
                 // If no content but we have a URL, try scraping it now
-                // OPTIMIZATION: Skip re-scraping for Instagram - the save route already extracted
-                // content via the O(1) API extractor, and re-scraping triggers slow Playwright chains
+                // OPTIMIZATION: Skip re-scraping for social platforms with API extractors
+                // The save route already extracted content via O(1) API, re-scraping triggers slow Playwright
                 const scrapeStartTime = Date.now();
                 const isInstagram = card.url && (card.url.includes('instagram.com/p/') || card.url.includes('instagram.com/reel/') || card.url.includes('instagram.com/tv/'));
+                const isTwitter = card.url && (card.url.includes('twitter.com/') || card.url.includes('x.com/'));
+                const isSocialWithApiExtractor = isInstagram || isTwitter;
 
-                if (!contentToAnalyze && card.url && !isInstagram) {
+                if (!contentToAnalyze && card.url && !isSocialWithApiExtractor) {
                         try {
                                 console.log(`[Enrich API] Content missing, re-scraping URL: ${card.url}`);
                                 const scraped = await scrapeUrl(card.url);
@@ -208,11 +210,11 @@ export async function POST(request: NextRequest) {
                         } catch (scrapeError) {
                                 console.warn(`[Enrich API] Re-scrape failed:`, scrapeError);
                         }
-                } else if (!contentToAnalyze && isInstagram) {
-                        // For Instagram, use whatever we have - title, URL, or metadata
-                        // The background extraction will fill in images/content later
-                        contentToAnalyze = card.title || card.url || 'Instagram post';
-                        console.log(`[Enrich API] Instagram: Using existing data for classification (skipping re-scrape)`);
+                } else if (!contentToAnalyze && isSocialWithApiExtractor) {
+                        // For social platforms with API extractors, use whatever we have
+                        // The save route already extracted via API, re-scraping would be slower
+                        contentToAnalyze = card.title || card.content || card.url || 'Social post';
+                        console.log(`[Enrich API] Social platform: Using existing data for classification (skipping re-scrape)`);
                 }
                 const scrapeMs = Date.now() - scrapeStartTime;
                 console.log(`[Enrich API] Scrape phase completed in ${scrapeMs}ms`);
