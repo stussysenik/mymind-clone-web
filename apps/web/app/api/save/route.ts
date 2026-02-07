@@ -121,8 +121,10 @@ function extractQuickMetadata(url: string | null, content: string | null): { tit
 import { scrapeUrl } from '@/lib/scraper';
 import { captureWithPlaywright, getMicrolinkFallback } from '@/lib/screenshot-playwright';
 import { uploadScreenshotToStorage } from '@/lib/supabase';
-import { scrapeInstagramQuick, extractInstagramImages } from '@/lib/instagram-scraper';
+import { extractInstagramPost } from '@/lib/instagram-extractor';
+import { extractInstagramImages } from '@/lib/instagram-scraper';
 import { persistInstagramMedia, isPersistedUrl } from '@/lib/instagram-storage';
+import type { InstagramMediaItem } from '@/lib/instagram-scraper';
 
 /**
  * Fetch URL metadata (OG image, title, content) using scraper
@@ -215,48 +217,83 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 		const userId = currentCard.user_id;
 		const currentMetadata = currentCard.metadata || {};
 
-		// Use the full extraction function with fallback chain (embed scraper first, then direct page)
+		// Try O(1) API-first extractor, fall back to Playwright if it fails
 		const url = `https://www.instagram.com/p/${shortcode}/`;
-		const result = await extractInstagramImages(url);
+		let images: string[] = [];
+		let mediaItems: InstagramMediaItem[] = [];
+		let caption = '';
+		let author = '';
+		let slideCount = 0;
+		let extractionSource = 'none';
 
-		if (result && result.images.length > 0) {
-			console.log(`[Save] Background: Extracted ${result.images.length} images, caption: "${result.caption?.slice(0, 50)}..."`);
+		// Strategy 1: O(1) API-first (fast, no browser)
+		try {
+			const apiResult = await extractInstagramPost(url);
+			if (apiResult && apiResult.images.length > 0) {
+				images = apiResult.images;
+				mediaItems = apiResult.images.map((imgUrl, i) => ({
+					url: imgUrl,
+					type: (apiResult.isVideo && i === 0 ? 'video' : 'image') as 'image' | 'video',
+				}));
+				caption = apiResult.caption;
+				author = apiResult.authorHandle;
+				slideCount = apiResult.slideCount;
+				extractionSource = `api:${apiResult.source}`;
+				console.log(`[Save] Background: API extracted ${images.length} images via ${apiResult.source}`);
+			}
+		} catch (apiErr) {
+			console.warn('[Save] Background: API extraction failed:', apiErr);
+		}
+
+		// Strategy 2: Playwright fallback (slow but reliable)
+		if (images.length === 0) {
+			console.log('[Save] Background: API returned no images, falling back to Playwright');
+			try {
+				const playwrightResult = await extractInstagramImages(url);
+				if (playwrightResult && playwrightResult.images.length > 0) {
+					images = playwrightResult.images;
+					mediaItems = playwrightResult.media;
+					caption = playwrightResult.caption;
+					author = playwrightResult.author;
+					slideCount = playwrightResult.slideCount;
+					extractionSource = 'playwright';
+					console.log(`[Save] Background: Playwright extracted ${images.length} images`);
+				}
+			} catch (pwErr) {
+				console.warn('[Save] Background: Playwright extraction also failed:', pwErr);
+			}
+		}
+
+		if (images.length > 0) {
+			console.log(`[Save] Background: ${extractionSource} got ${images.length} images, caption: "${caption?.slice(0, 50)}..."`);
 
 			// PERSIST MEDIA TO SUPABASE STORAGE
-			// This creates permanent URLs that won't expire like CDN URLs
-			let persistedUrls: string[] = result.images;
-			let mediaTypes: ('image' | 'video')[] = result.media?.map(m => m.type) || result.images.map(() => 'image');
-			let videoPositions: number[] = result.media?.filter(m => m.type === 'video').map((_, i) => {
-				const idx = result.media!.findIndex((m, j) => m.type === 'video' && result.media!.slice(0, j).filter(x => x.type === 'video').length === i);
-				return idx;
-			}) || [];
-			let originalCdnUrls: string[] = result.images;
+			let persistedUrls: string[] = images;
+			let mediaTypes: ('image' | 'video')[] = mediaItems.map(m => m.type);
+			let videoPositions: number[] = mediaItems.reduce<number[]>((acc, m, i) => m.type === 'video' ? [...acc, i] : acc, []);
+			let originalCdnUrls: string[] = images;
 			let mediaPersisted = false;
 
-			// Attempt to persist media to Supabase Storage
-			if (result.media && result.media.length > 0) {
-				try {
-					console.log(`[Save] Background: Persisting ${result.media.length} media items to storage`);
-					const persistResult = await persistInstagramMedia(result.media, userId, shortcode);
+			try {
+				console.log(`[Save] Background: Persisting ${mediaItems.length} media items to storage`);
+				const persistResult = await persistInstagramMedia(mediaItems, userId, shortcode);
 
-					if (persistResult.urls.length > 0) {
-						persistedUrls = persistResult.urls;
-						mediaTypes = persistResult.mediaTypes;
-						videoPositions = persistResult.videoPositions;
-						originalCdnUrls = persistResult.originalCdnUrls;
-						mediaPersisted = persistResult.success;
+				if (persistResult.urls.length > 0) {
+					persistedUrls = persistResult.urls;
+					mediaTypes = persistResult.mediaTypes;
+					videoPositions = persistResult.videoPositions;
+					originalCdnUrls = persistResult.originalCdnUrls;
+					mediaPersisted = persistResult.success;
 
-						console.log(`[Save] Background: Persisted ${persistedUrls.length} media items, videos at positions: [${videoPositions.join(', ')}]`);
-					}
-				} catch (persistError) {
-					console.warn('[Save] Background: Media persistence failed, using CDN URLs:', persistError);
-					// Fall back to CDN URLs (original behavior)
+					console.log(`[Save] Background: Persisted ${persistedUrls.length} media items`);
 				}
+			} catch (persistError) {
+				console.warn('[Save] Background: Media persistence failed, using CDN URLs:', persistError);
 			}
 
 			// Generate title from caption (max 80 chars)
-			const generatedTitle = result.caption
-				? result.caption.slice(0, 80).trim() || 'Instagram Post'
+			const generatedTitle = caption
+				? caption.slice(0, 80).trim() || 'Instagram Post'
 				: 'Instagram Post';
 
 			// Update card with all carousel images and metadata
@@ -268,29 +305,30 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 					: {}),
 				// Only update content if empty
 				...((!currentCard.content || currentCard.content === '')
-					? { content: result.caption }
+					? { content: caption }
 					: {}),
 				metadata: {
 					...currentMetadata,
 					images: persistedUrls,
-					author: result.author,
+					author,
 					platform: 'instagram',
-					slideCount: result.slideCount,
-					isCarousel: result.images.length > 1,
+					slideCount,
+					isCarousel: images.length > 1,
 					carouselExtracted: true,
 					carouselPending: false,
 					carouselExtractedAt: new Date().toISOString(),
-					// NEW: Media persistence fields
+					extractionSource,
+					// Media persistence fields
 					mediaTypes,
 					videoPositions: videoPositions.length > 0 ? videoPositions : undefined,
 					mediaPersisted,
-					originalCdnUrls: mediaPersisted ? originalCdnUrls : undefined, // Only store if we persisted
+					originalCdnUrls: mediaPersisted ? originalCdnUrls : undefined,
 				}
 			});
 
 			console.log(`[Save] Background: Card ${cardId} updated with ${persistedUrls.length} images (persisted: ${mediaPersisted})`);
 		} else {
-			console.warn(`[Save] Background: No images extracted for ${shortcode}`);
+			console.warn(`[Save] Background: No images extracted for ${shortcode} (API + Playwright both failed)`);
 
 			// Mark as failed so we don't keep retrying
 			await updateCard(cardId, {
@@ -328,61 +366,6 @@ async function extractInstagramCarouselBackground(cardId: string, shortcode: str
 			console.error('[Save] Background: Failed to update error status:', updateErr);
 		}
 	}
-}
-
-/**
- * Quick Instagram extraction - returns immediately with first image
- * Full carousel is extracted in background
- */
-async function scrapeInstagramQuickly(url: string): Promise<{
-	title: string;
-	imageUrl: string | null;
-	content: string;
-	author: string;
-	isCarousel: boolean;
-	shortcode: string;
-}> {
-	// Extract shortcode
-	const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
-	const shortcode = shortcodeMatch?.[2] || '';
-
-	if (!shortcode) {
-		return {
-			title: 'Instagram Post',
-			imageUrl: null,
-			content: '',
-			author: '',
-			isCarousel: false,
-			shortcode: '',
-		};
-	}
-
-	try {
-		const result = await scrapeInstagramQuick(shortcode);
-
-		if (result) {
-			return {
-				title: result.caption?.slice(0, 80) || 'Instagram Post',
-				imageUrl: result.firstImage,
-				content: result.caption,
-				author: result.author,
-				isCarousel: result.isCarousel,
-				shortcode,
-			};
-		}
-	} catch (error) {
-		console.warn('[Save] Quick Instagram extraction failed:', error);
-	}
-
-	// Fallback
-	return {
-		title: 'Instagram Post',
-		imageUrl: null,
-		content: '',
-		author: '',
-		isCarousel: true, // Assume carousel to trigger background extraction
-		shortcode,
-	};
 }
 
 // =============================================================================
@@ -497,36 +480,75 @@ export async function POST(request: NextRequest): Promise<NextResponse<SaveCardR
 		}
 
 		if (url && isInstagram) {
-			// INSTAGRAM FAST PATH: Get OG image quickly, full extraction in background
-			console.log('[Save] Instagram detected - using fast path with OG fallback');
+			// INSTAGRAM FAST PATH: Use O(1) API-first extractor (no Playwright)
+			console.log('[Save] Instagram detected - using API-first extraction');
 
-			// Try to get at least the OG image from microlink for immediate display
-			let ogImageUrl: string | undefined;
 			try {
-				const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&meta=true`;
-				const mlRes = await fetch(microlinkUrl, { signal: AbortSignal.timeout(5000) });
-				if (mlRes.ok) {
-					const mlData = await mlRes.json();
-					if (mlData.data?.image?.url) {
-						ogImageUrl = mlData.data.image.url;
-						console.log(`[Save] Instagram: Got OG image from microlink: ${mlData.data.image.url.slice(0, 60)}...`);
+				const igPost = await extractInstagramPost(url);
+
+				if (igPost && igPost.images.length > 0) {
+					console.log(`[Save] Instagram: ${igPost.source} extracted ${igPost.images.length} images in O(1)`);
+
+					// Persist first image to Supabase Storage immediately
+					let persistedImageUrl: string | undefined;
+					try {
+						const imgRes = await fetch(igPost.images[0], {
+							signal: AbortSignal.timeout(8000),
+							headers: {
+								'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+								'Referer': 'https://www.instagram.com/',
+							},
+						});
+						if (imgRes.ok) {
+							const buffer = Buffer.from(await imgRes.arrayBuffer());
+							const uploadedUrl = await uploadScreenshotToStorage(buffer, url);
+							if (uploadedUrl) {
+								persistedImageUrl = uploadedUrl;
+								console.log('[Save] Instagram: Primary image persisted to storage');
+							}
+						}
+					} catch (e) {
+						console.warn('[Save] Instagram: Image persistence failed, using CDN URL:', e);
 					}
+
+					preview = {
+						title: igPost.caption.slice(0, 80).trim() || 'Instagram Post',
+						imageUrl: persistedImageUrl || igPost.images[0],
+						content: igPost.caption,
+						description: igPost.caption,
+						images: igPost.images,
+						isCarousel: igPost.isCarousel,
+						shortcode: instagramShortcode,
+						authorName: igPost.authorName,
+						authorHandle: igPost.authorHandle,
+						authorAvatar: igPost.authorAvatar,
+					};
+				} else {
+					console.warn('[Save] Instagram: API extraction returned no images');
+					preview = {
+						title: 'Instagram Post',
+						imageUrl: undefined,
+						content: '',
+						description: '',
+						images: undefined,
+						isCarousel: true,
+						shortcode: instagramShortcode,
+					};
 				}
 			} catch (e) {
-				console.warn('[Save] Instagram: Microlink fallback failed:', e);
+				console.warn('[Save] Instagram: Extraction failed:', e);
+				preview = {
+					title: 'Instagram Post',
+					imageUrl: undefined,
+					content: '',
+					description: '',
+					images: undefined,
+					isCarousel: true,
+					shortcode: instagramShortcode,
+				};
 			}
 
-			preview = {
-				title: 'Instagram Post',
-				imageUrl: ogImageUrl, // Immediate OG image, will be replaced by high-res in background
-				content: '',
-				description: '',
-				images: undefined,
-				isCarousel: true, // Assume carousel, background will verify
-				shortcode: instagramShortcode,
-			};
-
-			console.log(`[Save] Instagram fast path: shortcode=${instagramShortcode}, hasOgImage=${!!ogImageUrl}`);
+			console.log(`[Save] Instagram: shortcode=${instagramShortcode}, hasImage=${!!preview.imageUrl}, images=${preview.images?.length || 0}`);
 		} else if (url) {
 			// Standard path for non-Instagram URLs
 			const scraped = await scrapeUrl(url);

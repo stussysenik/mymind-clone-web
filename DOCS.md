@@ -124,7 +124,9 @@ apps/web/
 │   │   ├── instagram.ts   # Instagram-specific
 │   │   ├── twitter.ts     # Twitter-specific
 │   │   └── website.ts     # General website
-│   ├── scraper.ts         # URL metadata extraction
+│   ├── instagram-extractor.ts # API-first Instagram extraction (GraphQL)
+│   ├── twitter-extractor.ts   # FxTwitter API extraction
+│   ├── scraper.ts         # URL metadata extraction (platform router)
 │   ├── screenshot-playwright.ts # Self-hosted screenshots
 │   └── supabase.ts        # Database client
 └── tests/                 # Playwright E2E tests
@@ -137,31 +139,45 @@ apps/web/
 ### Instagram Carousel Support
 
 **Architecture:**
-The Instagram scraper is split into focused modules:
-- `browser-factory.ts` — Stealth Playwright page creation with bot evasion, human-like delays
+Two-layer extraction system:
+- `instagram-extractor.ts` — **Primary**: O(1) API-based extraction (no browser needed, ~200ms)
+- `instagram-scraper.ts` — **Fallback**: Playwright-based extraction with stealth browser
+- `instagram-storage.ts` — Media persistence to Supabase Storage
+
+Supporting modules for the Playwright fallback:
+- `browser-factory.ts` — Stealth Playwright page creation with bot evasion
 - `scraper-config.ts` — Configuration constants (viewport, user agents, timeouts)
 - `selectors.ts` — Instagram DOM selectors and CDN patterns
 - `scraper-metrics.ts` — Scraper event recording for observability
-- `instagram-scraper.ts` — Orchestrates the fallback chain using the above modules
 
-**High-Quality Multi-Image Extraction:**
-The scraper uses an embed page approach that works without login:
-1. Navigate to `instagram.com/p/{shortcode}/embed/captioned/`
-2. Click "Next" button to navigate through carousel (triggers lazy-loading)
-3. Capture CDN image requests matching `t51.2885-15` pattern
-4. Filter for high-resolution versions (1080px+ width)
+**API-First Extraction (Primary — instagram-extractor.ts):**
+Uses Instagram's GraphQL API directly — no browser, no login:
+1. POST to `instagram.com/api/graphql` with `doc_id` and shortcode
+2. **CRITICAL**: Must use mobile User-Agent (iPhone) — desktop UA returns HTML login wall
+3. Parse `XDTGraphSidecar` typename for carousels (NOT `GraphSidecar`)
+4. Extract all `display_url` values from `edge_sidecar_to_children.edges[]`
+5. Returns all carousel images in ~200ms
 
 **Fallback Chain:**
 ```typescript
-// Strategy 1: Embed page with browser navigation (BEST - works without login)
-scrapeViaEmbed(shortcode)  // Uses createStealthPage() from browser-factory
+// Strategy 1: Instagram GraphQL API (BEST — O(1), ~200ms, all carousel images)
+fetchViaGraphQL(shortcode)  // Mobile UA required!
 
-// Strategy 2: Direct post page with stealth browser
-scrapeViaDirect(shortcode)
+// Strategy 2: Embed HTML parsing (broken as of Feb 2026 — login wall)
+fetchViaEmbedHTML(shortcode)
 
-// Strategy 3: Static embed HTML parsing (fastest but may miss images)
-scrapeViaStaticEmbed(shortcode)
+// Strategy 3: OG Tags (last resort — only 1 image)
+fetchViaOGTags(shortcode)
+
+// Strategy 4 (background): Playwright fallback if API fails
+extractInstagramImages(url)  // Full browser with carousel navigation
 ```
+
+**Important Notes:**
+- Instagram rotates `doc_id` values every 2-4 weeks. Current working: `10015901848480474`
+- Desktop User-Agent on GraphQL returns 755KB HTML login wall instead of JSON
+- Always check `content-type` header before calling `res.json()`
+- Embed HTML endpoint (`/embed/captioned/`) is dead as of Feb 2026
 
 **Detection:**
 ```typescript

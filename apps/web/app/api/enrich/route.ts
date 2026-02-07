@@ -143,8 +143,12 @@ export async function POST(request: NextRequest) {
                 let scrapedDate: string | undefined;
 
                 // If no content but we have a URL, try scraping it now
+                // OPTIMIZATION: Skip re-scraping for Instagram - the save route already extracted
+                // content via the O(1) API extractor, and re-scraping triggers slow Playwright chains
                 const scrapeStartTime = Date.now();
-                if (!contentToAnalyze && card.url) {
+                const isInstagram = card.url && (card.url.includes('instagram.com/p/') || card.url.includes('instagram.com/reel/') || card.url.includes('instagram.com/tv/'));
+
+                if (!contentToAnalyze && card.url && !isInstagram) {
                         try {
                                 console.log(`[Enrich API] Content missing, re-scraping URL: ${card.url}`);
                                 const scraped = await scrapeUrl(card.url);
@@ -153,22 +157,24 @@ export async function POST(request: NextRequest) {
 
                                 // Update card with scraped content for future
                                 if (contentToAnalyze) {
-                                        // Only update title if user hasn't manually edited it
                                         const shouldUpdateScrapedTitle = !card.metadata?.titleEditedAt && (!card.title || card.title === 'Link');
                                         await updateCard(cardId, {
                                                 content: contentToAnalyze,
-                                                // Also update title/image if scraper found better ones (but preserve user edits)
                                                 ...(shouldUpdateScrapedTitle && scraped.title ? { title: scraped.title } : {}),
                                                 image_url: (!card.image_url) ? scraped.imageUrl : card.image_url,
-                                                // We don't update metadata here to avoid race conditions, we'll do it in the final update
                                         });
                                 }
                         } catch (scrapeError) {
                                 console.warn(`[Enrich API] Re-scrape failed:`, scrapeError);
                         }
+                } else if (!contentToAnalyze && isInstagram) {
+                        // For Instagram, use whatever we have - title, URL, or metadata
+                        // The background extraction will fill in images/content later
+                        contentToAnalyze = card.title || card.url || 'Instagram post';
+                        console.log(`[Enrich API] Instagram: Using existing data for classification (skipping re-scrape)`);
                 }
                 const scrapeMs = Date.now() - scrapeStartTime;
-                console.log(`[Enrich API] Scrape completed in ${scrapeMs}ms`);
+                console.log(`[Enrich API] Scrape phase completed in ${scrapeMs}ms`);
 
                 // 3. Run AI Classification & Image Analysis (parallel)
                 // For Instagram carousels, pass image count for better prompt generation

@@ -46,7 +46,7 @@ cp .env.example .env.local
 bun dev
 ```
 
-Open [localhost:3000](http://localhost:3000)
+Open [localhost:3737](http://localhost:3737)
 
 ### Recommended: Nix Development Environment
 
@@ -111,13 +111,15 @@ An **anti-tool** for knowledge management. No folders. No manual tagging. Just:
 ## Visual Features
 
 ### Instagram Support
-- **High-quality extraction**: Images captured at 1080px+ resolution via embed page
-- **Multi-image carousels**: All carousel images extracted and navigable
+- **API-first extraction**: GraphQL API returns all carousel images in ~200ms (no browser needed)
+- **Full carousel support**: All images extracted (8, 10, 20+ slides) via `XDTGraphSidecar` parsing
 - **Carousel indicators**: "1/X" badge on multi-image posts
 - **Hashtag extraction**: Instagram hashtags become searchable tags
-- **No login required**: Uses embed page approach that works without authentication
+- **Media persistence**: Images uploaded to Supabase Storage (CDN URLs expire)
+- **No login required**: Uses mobile User-Agent with public GraphQL endpoint
 
 ### Twitter/X Support
+- **FxTwitter API**: Primary extraction via `api.fxtwitter.com` (no auth, rich JSON, ~200ms)
 - **Visual fidelity**: Preserves line breaks and formatting
 - **Thread detection**: Identifies threaded conversations
 - **Hashtag highlighting**: Blue hashtags for visual recognition
@@ -152,6 +154,8 @@ mymind-clone-web/
 │   │   └── CardGrid.tsx         # Masonry layout
 │   ├── lib/
 │   │   ├── ai.ts                # GLM integration
+│   │   ├── instagram-extractor.ts    # API-first Instagram extraction
+│   │   ├── twitter-extractor.ts      # FxTwitter API extraction
 │   │   ├── screenshot-playwright.ts  # Self-hosted screenshots
 │   │   └── supabase.ts          # Database client
 │   └── ios-capacitor-archive/   # Archived Capacitor experiment

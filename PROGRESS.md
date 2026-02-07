@@ -15,6 +15,32 @@
 
 #### Week 6 (Feb 3 - Feb 9)
 
+**Fix Instagram Carousel Extraction — All Images Now Captured (Feb 7)**
+- **Root Cause: Desktop User-Agent on GraphQL API** — Instagram's GraphQL endpoint returns a 755KB HTML login wall when hit with a desktop Chrome UA. Switched to iPhone mobile UA, which returns proper JSON with full carousel data
+- **Root Cause: Wrong typename check** — Instagram's API now returns `XDTGraphSidecar` for carousel posts, but the code only checked `GraphSidecar`. Carousel loop was skipped, only the cover image was extracted
+- **Content-type guard** — Added check before `res.json()` to catch HTML responses from Instagram (prevents silent JSON parse failures)
+- **Embed HTML fallback UA update** — Instagram embed endpoint also blocks desktop/Googlebot UAs now (returns login wall). Updated to mobile UA
+- **OG Tags fallback UA update** — Same mobile UA fix for the OG tags last-resort strategy
+- **Result**: 8-image carousel post now extracts all 8 images via GraphQL in ~200ms (was getting 0-2 images before)
+
+**Key Commits:**
+- `fix(instagram): use mobile UA and fix XDTGraphSidecar typename for full carousel extraction`
+
+**Artifacts:**
+- `apps/web/lib/instagram-extractor.ts` — Mobile UA, XDTGraphSidecar support, content-type guard
+
+---
+
+**Twitter Scraper Rewrite & GLM-4.7 Fix (Feb 6-7)**
+- **FxTwitter API**: Rewrote Twitter/X extraction to use FxTwitter API as primary (no auth, rich JSON, ~200ms)
+- **GLM-4.7 JSON parsing**: Fixed broken tool calling by switching to JSON-in-content approach with regex parsing
+
+**Key Commits:**
+- `feat(twitter): rewrite scraper with FxTwitter API for 99% reliability`
+- `fix(ai): use JSON content parsing instead of broken GLM-4.7 tool calling`
+
+---
+
 **UI Polish, Mobile Hydration Fix & Scraper Modules (Feb 6)**
 - **Add Modal Close Button Fix**: Close button was clipped by `overflow-hidden` and nearly invisible (`text-gray-400`). Moved inside bounds with `overflow-visible`, increased contrast (`text-gray-600`, `shadow-lg`), added 44x44px min tap target, responsive offsets, and `aria-label`
 - **Mobile Layout Shift Fix**: `windowWidth` defaulted to 1200px (desktop), causing 4+ column flash on mobile before correcting to 1. Fixed by using CSS-based column classes (`columns-1 sm:columns-2 lg:columns-3...`) as SSR fallback, only switching to JS-calculated columns after mount
@@ -257,7 +283,7 @@
 | Supabase auth | ✅ Done | OAuth + RLS |
 | Archive/Trash | ✅ Done | Full lifecycle |
 | Vercel deployment | ✅ Done | Edge functions |
-| Instagram carousels | ✅ Done | Multi-image extraction via embed page, high-res (1080px+) |
+| Instagram carousels | ✅ Done | GraphQL API extraction with mobile UA, all carousel images (1080px+) |
 | Platform-specific AI | ✅ Done | Instagram, Twitter, website prompts |
 | Dark mode | ✅ Done | Auto + manual with settings modal |
 | AI feedback UX | ✅ Done | Stage-based progress indicators |
@@ -358,4 +384,7 @@ apps/web/
 
 ---
 
-*Last updated: 2026-02-06*
+| Twitter/X extraction | ✅ Done | FxTwitter API primary, syndication backup, no auth needed |
+| Instagram API extractor | ✅ Done | GraphQL API with mobile UA, O(1) extraction, no Playwright |
+
+*Last updated: 2026-02-07*

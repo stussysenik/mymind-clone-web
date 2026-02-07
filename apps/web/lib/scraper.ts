@@ -1,44 +1,8 @@
 import * as cheerio from 'cheerio';
 import { extractTitleWithDSPy, extractAssetsWithDSPy, extractContentWithDSPy } from './dspy-client';
-import { extractInstagramImages } from './instagram-scraper';
+import { extractInstagramPost } from './instagram-extractor';
 import { extractTweet } from './twitter-extractor';
 import { decodeHtmlEntities } from './text-utils';
-
-// =============================================================================
-// INSTAGRAM SCRAPER WRAPPER (Delegates to dedicated module)
-// =============================================================================
-
-/**
- * Extracts high-resolution images from Instagram using network interception
- * This wrapper delegates to the instagram-scraper module which:
- * 1. Intercepts CDN image requests as Playwright navigates
- * 2. Clicks through carousel slides to trigger lazy loading
- * 3. Deduplicates and returns highest resolution images
- */
-async function scrapeInstagramWithPlaywright(shortcode: string): Promise<{
-	images: string[];
-	caption: string;
-	author: string;
-} | null> {
-	try {
-		const url = `https://www.instagram.com/p/${shortcode}/`;
-		const result = await extractInstagramImages(url);
-
-		if (result && result.images.length > 0) {
-			console.log(`[Scraper] Instagram: Extracted ${result.images.length} images from ${result.slideCount} slides`);
-			return {
-				images: result.images,
-				caption: result.caption,
-				author: result.author,
-			};
-		}
-
-		return null;
-	} catch (error) {
-		console.warn('[Scraper] Instagram extraction failed:', error);
-		return null;
-	}
-}
 
 export interface ScrapedContent {
         title: string;
@@ -206,319 +170,55 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
                 }
 
                 // =============================================================
-                // INSTAGRAM SPECIAL HANDLING - Enhanced for actual image extraction
+                // INSTAGRAM SPECIAL HANDLING - O(1) API-first extraction
                 // =============================================================
                 if (domain.includes('instagram.com')) {
                         try {
-                                console.log('[Scraper] Instagram: Extracting media');
+                                console.log('[Scraper] Instagram: Extracting via API (no Playwright)');
 
-                                // Extract shortcode from URL (e.g., /p/DSFjvqIjIZn/ or /reel/ABC123/)
-                                const shortcodeMatch = url.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
-                                const shortcode = shortcodeMatch?.[2];
+                                const igPost = await extractInstagramPost(url);
 
-                                if (shortcode) {
-                                        // ==========================================================
-                                        // PRIORITY 1: Try Playwright for HIGH-RES images
-                                        // ==========================================================
-                                        const playwrightResult = await scrapeInstagramWithPlaywright(shortcode);
-                                        if (playwrightResult && playwrightResult.images.length > 0) {
-                                                console.log(`[Scraper] Instagram: Using Playwright result (${playwrightResult.images.length} high-res images)`);
+                                if (igPost && igPost.images.length > 0) {
+                                        console.log(`[Scraper] Instagram: ${igPost.source} returned ${igPost.images.length} images`);
 
-                                                // Generate title from caption
-                                                let title = playwrightResult.caption.slice(0, 80).trim() || 'Instagram Post';
+                                        // Generate title from caption
+                                        let title = igPost.caption.slice(0, 80).trim() || 'Instagram Post';
 
-                                                // DSPy Enhancement: Use DSPy for better title extraction
-                                                try {
-                                                        const dspyTitle = await extractTitleWithDSPy(playwrightResult.caption, playwrightResult.author, 'instagram');
-                                                        if (dspyTitle.confidence > 0.7) {
-                                                                title = dspyTitle.title;
-                                                                console.log(`[Scraper] DSPy improved Playwright title: "${title.slice(0, 40)}..." (confidence: ${dspyTitle.confidence})`);
-                                                        }
-                                                } catch {
-                                                        // DSPy not available, use local extraction
+                                        // DSPy Enhancement: Use DSPy for better title extraction
+                                        try {
+                                                const dspyTitle = await extractTitleWithDSPy(igPost.caption, igPost.authorHandle, 'instagram');
+                                                if (dspyTitle.confidence > 0.7) {
+                                                        title = dspyTitle.title;
+                                                        console.log(`[Scraper] DSPy improved IG title: "${title.slice(0, 40)}..." (confidence: ${dspyTitle.confidence})`);
                                                 }
-
-                                                // Extract author handle from author string (may include @)
-                                                const authorHandle = playwrightResult.author?.replace('@', '') || '';
-                                                const authorName = authorHandle; // Instagram doesn't expose display names in embed
-
-                                                return {
-                                                        title,
-                                                        description: playwrightResult.caption,
-                                                        imageUrl: playwrightResult.images[0],
-                                                        images: playwrightResult.images,
-                                                        content: playwrightResult.caption,
-                                                        author: playwrightResult.author,
-                                                        authorName,
-                                                        authorHandle,
-                                                        domain: 'instagram.com',
-                                                        url,
-                                                };
+                                        } catch {
+                                                // DSPy not available, use local extraction
                                         }
 
-                                        // ==========================================================
-                                        // PRIORITY 2: Fall back to embed endpoint (lower quality)
-                                        // ==========================================================
-                                        console.log('[Scraper] Instagram: Playwright unavailable, falling back to embed');
-                                        const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
-                                        const embedRes = await fetch(embedUrl, {
-                                                headers: {
-                                                        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                                                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                                                },
-                                        });
-
-                                        if (embedRes.ok) {
-                                                const html = await embedRes.text();
-                                                const $ = cheerio.load(html);
-
-                                                // PHASE 5 FIX: Enhanced Instagram carousel image extraction
-                                                // Goal: Extract ALL carousel images at FULL resolution
-
-                                                // Collect all candidate images with metadata
-                                                interface ImageCandidate {
-                                                        url: string;
-                                                        width?: number;
-                                                        height?: number;
-                                                        source: 'display_url' | 'display_resources' | 'img_tag' | 'og_image';
-                                                }
-                                                const candidates: ImageCandidate[] = [];
-
-                                                // Strategy 1: Parse embedded JSON for edge_sidecar_to_children (carousel)
-                                                // and display_url/display_resources (all posts)
-                                                const scripts = $('script').map((_, el) => $(el).html()).get().join(' ');
-
-                                                try {
-                                                        // PRIORITY 1: Look for edge_sidecar_to_children (carousel posts)
-                                                        // This contains the ACTUAL carousel images, not related posts
-                                                        const sidecarMatch = scripts.match(/"edge_sidecar_to_children"\s*:\s*\{[^}]*"edges"\s*:\s*\[([\s\S]*?)\]\s*\}/);
-                                                        if (sidecarMatch) {
-                                                                console.log('[Scraper] Instagram: Detected carousel post');
-                                                                // Extract display_url from each carousel item
-                                                                const carouselUrls = sidecarMatch[1].match(/"display_url"\s*:\s*"([^"]+)"/g);
-                                                                if (carouselUrls) {
-                                                                        for (const urlMatch of carouselUrls) {
-                                                                                const url = urlMatch.match(/"display_url"\s*:\s*"([^"]+)"/)?.[1];
-                                                                                if (url) {
-                                                                                        const cleanUrl = url
-                                                                                                .replace(/\\u0026/g, '&')
-                                                                                                .replace(/\\\//g, '/')
-                                                                                                .replace(/\\"/g, '"');
-                                                                                        // Skip profile pictures (small dimensions in URL)
-                                                                                        if (!cleanUrl.includes('150x150') && !cleanUrl.includes('_s.')) {
-                                                                                                candidates.push({ url: cleanUrl, source: 'display_url' });
-                                                                                        }
-                                                                                }
-                                                                        }
-                                                                }
-                                                        }
-
-                                                        // PRIORITY 2: Single post - look for main media display_url
-                                                        // Only if we didn't find carousel images
-                                                        if (candidates.length === 0) {
-                                                                // Look for the FIRST display_url which is typically the main post
-                                                                // Avoid URLs that look like profile pics or thumbnails
-                                                                const displayUrlRegex = /"display_url"\s*:\s*"([^"]+)"/g;
-                                                                let match;
-                                                                let mainPostFound = false;
-                                                                while ((match = displayUrlRegex.exec(scripts)) !== null && !mainPostFound) {
-                                                                        if (match[1]) {
-                                                                                const cleanUrl = match[1]
-                                                                                        .replace(/\\u0026/g, '&')
-                                                                                        .replace(/\\\//g, '/')
-                                                                                        .replace(/\\"/g, '"');
-                                                                                // Filter out profile pictures and thumbnails
-                                                                                if (!cleanUrl.includes('150x150') &&
-                                                                                    !cleanUrl.includes('_s.') &&
-                                                                                    !cleanUrl.includes('s150x150') &&
-                                                                                    !cleanUrl.includes('/s/')) {
-                                                                                        candidates.push({ url: cleanUrl, source: 'display_url' });
-                                                                                        mainPostFound = true; // Only take the first valid one for single posts
-                                                                                }
-                                                                        }
-                                                                }
-                                                        }
-
-                                                        // PRIORITY 3: Look for display_resources (multiple sizes)
-                                                        // Only the highest quality (largest width)
-                                                        const resourcesRegex = /"display_resources"\s*:\s*\[([\s\S]*?)\]/g;
-                                                        let match;
-                                                        while ((match = resourcesRegex.exec(scripts)) !== null) {
-                                                                if (match[1]) {
-                                                                        const resourceRegex = /\{"config_width":(\d+),"config_height":(\d+),"src":"([^"]+)"\}/g;
-                                                                        let resourceMatch;
-                                                                        let bestResource: ImageCandidate | null = null;
-                                                                        while ((resourceMatch = resourceRegex.exec(match[1])) !== null) {
-                                                                                const width = parseInt(resourceMatch[1], 10);
-                                                                                const height = parseInt(resourceMatch[2], 10);
-                                                                                // Only consider high-res images (> 640px)
-                                                                                if (width >= 640) {
-                                                                                        const url = resourceMatch[3]
-                                                                                                .replace(/\\u0026/g, '&')
-                                                                                                .replace(/\\\//g, '/');
-                                                                                        if (!bestResource || width > (bestResource.width || 0)) {
-                                                                                                bestResource = { url, width, height, source: 'display_resources' };
-                                                                                        }
-                                                                                }
-                                                                        }
-                                                                        if (bestResource) {
-                                                                                candidates.push(bestResource);
-                                                                        }
-                                                                }
-                                                        }
-                                                } catch (e) {
-                                                        console.warn('[Scraper] Error parsing Instagram scripts:', e);
-                                                }
-
-                                                // Strategy 2: Fallback to img tags (usually lower quality)
-                                                $('img[src*="cdninstagram"], img[src*="scontent"], img[src*="fbcdn"]').each((_, el) => {
-                                                        const src = $(el).attr('src');
-                                                        if (src) {
-                                                                const cleanUrl = src.replace(/\\u0026/g, '&').replace(/\\\//g, '/');
-                                                                candidates.push({ url: cleanUrl, source: 'img_tag' });
-                                                        }
-                                                });
-
-                                                // Strategy 3: OG image as last resort
-                                                const ogImage = $('meta[property="og:image"]').attr('content');
-                                                if (ogImage && !ogImage.includes('static.cdninstagram')) {
-                                                        candidates.push({ url: ogImage, source: 'og_image' });
-                                                }
-
-                                                // Deduplicate and prioritize by quality
-                                                // Instagram URLs often contain the same image at different sizes
-                                                // The URL path before query params is usually unique per image
-                                                const seenBaseUrls = new Set<string>();
-                                                const images: string[] = [];
-
-                                                // Helper to extract base URL (without size params)
-                                                const getBaseUrl = (url: string): string => {
-                                                        try {
-                                                                const parsed = new URL(url);
-                                                                // Remove common size/quality params
-                                                                return parsed.pathname;
-                                                        } catch {
-                                                                return url;
-                                                        }
-                                                };
-
-                                                // Sort by quality: display_url > display_resources (by size) > img_tag > og_image
-                                                const prioritized = candidates.sort((a, b) => {
-                                                        const priority = { display_url: 0, display_resources: 1, img_tag: 2, og_image: 3 };
-                                                        if (priority[a.source] !== priority[b.source]) {
-                                                                return priority[a.source] - priority[b.source];
-                                                        }
-                                                        // For display_resources, prefer larger images
-                                                        if (a.source === 'display_resources' && b.source === 'display_resources') {
-                                                                const aSize = (a.width || 0) * (a.height || 0);
-                                                                const bSize = (b.width || 0) * (b.height || 0);
-                                                                return bSize - aSize; // Larger first
-                                                        }
-                                                        return 0;
-                                                });
-
-                                                // Select best image per unique content
-                                                for (const candidate of prioritized) {
-                                                        const baseUrl = getBaseUrl(candidate.url);
-                                                        if (!seenBaseUrls.has(baseUrl)) {
-                                                                seenBaseUrls.add(baseUrl);
-                                                                images.push(candidate.url);
-                                                        }
-                                                }
-
-                                                console.log(`[Scraper] Instagram: Found ${candidates.length} candidate images, selected ${images.length} unique`)
-
-                                                // Extract caption/text - FIXED: Separate author from caption
-                                                const rawCaption = $('.Caption').text()?.trim() ||
-                                                        $('meta[property="og:description"]').attr('content') || '';
-                                                const author = $('.UsernameText').text()?.trim() ||
-                                                        $('meta[property="og:title"]').attr('content')?.split(' on Instagram')?.[0] || '';
-
-                                                // FIX: Remove username prefix from caption if present
-                                                // Instagram embed often concatenates "username" + "caption text" without separator
-                                                let cleanCaption = rawCaption;
-                                                if (author && rawCaption.toLowerCase().startsWith(author.toLowerCase())) {
-                                                        cleanCaption = rawCaption.slice(author.length).trim();
-                                                }
-                                                // Also check for username without @ prefix variations
-                                                const usernameVariants = [
-                                                        author,
-                                                        author.replace('@', ''),
-                                                        `@${author.replace('@', '')}`,
-                                                ].filter(Boolean);
-                                                for (const variant of usernameVariants) {
-                                                        if (cleanCaption.toLowerCase().startsWith(variant.toLowerCase())) {
-                                                                cleanCaption = cleanCaption.slice(variant.length).trim();
-                                                                break;
-                                                        }
-                                                }
-
-                                                // Title is clean caption only (max 80 chars per signature)
-                                                let title = cleanCaption.slice(0, 80).trim() || 'Instagram Post';
-
-                                                // DSPy Enhancement: Use DSPy for better title extraction
-                                                try {
-                                                        const dspyTitle = await extractTitleWithDSPy(rawCaption, author, 'instagram');
-                                                        if (dspyTitle.confidence > 0.7) {
-                                                                title = dspyTitle.title;
-                                                                console.log(`[Scraper] DSPy improved title: "${title.slice(0, 40)}..." (confidence: ${dspyTitle.confidence})`);
-                                                        }
-                                                } catch (dspyErr) {
-                                                        // DSPy not available, use local extraction
-                                                        console.log('[Scraper] DSPy unavailable, using local title extraction');
-                                                }
-
-                                                if (images.length > 0) {
-                                                        // Extract author handle from author string
-                                                        const authorHandle = author?.replace('@', '') || '';
-                                                        const authorName = authorHandle;
-
-                                                        console.log(`[Scraper] Instagram: Found ${images.length} images, author="${author}", title="${title.slice(0, 40)}..."`);
-                                                        return {
-                                                                title,
-                                                                description: cleanCaption,
-                                                                imageUrl: images[0],
-                                                                images, // All carousel images
-                                                                content: cleanCaption,
-                                                                author,
-                                                                authorName,
-                                                                authorHandle,
-                                                                domain: 'instagram.com',
-                                                                url,
-                                                        };
-                                                }
-                                        }
+                                        return {
+                                                title,
+                                                description: igPost.caption,
+                                                imageUrl: igPost.images[0],
+                                                images: igPost.images,
+                                                content: igPost.caption,
+                                                author: igPost.authorHandle,
+                                                authorName: igPost.authorName,
+                                                authorHandle: igPost.authorHandle,
+                                                domain: 'instagram.com',
+                                                url,
+                                        };
                                 }
 
-                                // Final fallback: Direct HTML scrape with Googlebot UA
-                                console.warn('[Scraper] Instagram embed failed, trying direct HTML...');
-                                const directRes = await fetch(url, {
-                                        headers: {
-                                                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                                        },
-                                });
-
-                                if (directRes.ok) {
-                                        const html = await directRes.text();
-                                        const $ = cheerio.load(html);
-
-                                        // Get og:image which should be the first image
-                                        const ogImage = $('meta[property="og:image"]').attr('content');
-                                        const ogTitle = $('meta[property="og:title"]').attr('content') || 'Instagram Post';
-                                        const ogDesc = $('meta[property="og:description"]').attr('content') || '';
-
-                                        if (ogImage && !ogImage.includes('static.cdninstagram')) {
-                                                return {
-                                                        title: ogTitle,
-                                                        description: ogDesc,
-                                                        imageUrl: ogImage,
-                                                        content: ogDesc,
-                                                        domain: 'instagram.com',
-                                                        url,
-                                                };
-                                        }
-                                }
+                                // All strategies failed - return minimal data
+                                console.warn('[Scraper] Instagram: All extraction strategies failed');
+                                return {
+                                        title: 'Instagram Post',
+                                        description: '',
+                                        imageUrl: null,
+                                        content: '',
+                                        domain: 'instagram.com',
+                                        url,
+                                };
                         } catch (igErr) {
                                 console.warn('[Scraper] Instagram error:', igErr);
                         }
