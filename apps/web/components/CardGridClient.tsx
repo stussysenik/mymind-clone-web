@@ -38,6 +38,12 @@ interface CardGridClientProps {
         typeFilter?: string;
         /** Display mode: default (active), archive, or trash */
         mode?: 'default' | 'archive' | 'trash';
+        /** Total count of cards (for pagination) */
+        initialTotalCount?: number;
+        /** Whether there are more cards to load */
+        initialHasMore?: boolean;
+        /** Page size for pagination */
+        pageSize?: number;
 }
 
 // =============================================================================
@@ -47,7 +53,16 @@ interface CardGridClientProps {
 /**
  * Client-side wrapper that merges localStorage cards with server cards.
  */
-export function CardGridClient({ serverCards, searchQuery, platformFilter, typeFilter, mode = 'default' }: CardGridClientProps) {
+export function CardGridClient({
+        serverCards,
+        searchQuery,
+        platformFilter,
+        typeFilter,
+        mode = 'default',
+        initialTotalCount = 0,
+        initialHasMore = false,
+        pageSize = 20
+}: CardGridClientProps) {
         // Use platformFilter (new) or fall back to typeFilter (deprecated)
         const activeFilter = platformFilter || typeFilter;
         const router = useRouter();
@@ -62,6 +77,13 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
         // Maps to column counts: smaller value = more columns (compact), larger = fewer columns (expanded)
         const [cardSize, setCardSize] = useState<number>(1);
 
+        // Pagination state
+        const [allServerCards, setAllServerCards] = useState<Card[]>(serverCards);
+        const [currentPage, setCurrentPage] = useState(1);
+        const [hasMore, setHasMore] = useState(initialHasMore);
+        const [totalCount, setTotalCount] = useState(initialTotalCount);
+        const [isLoadingMore, setIsLoadingMore] = useState(false);
+
         // Similarity Search State
         const similarityId = searchParams.get('similar');
         const [similarCards, setSimilarCards] = useState<Card[]>([]);
@@ -75,6 +97,37 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
 
         // Color Search State
         const colorFilter = searchParams.get('color');
+
+        // Sync allServerCards when serverCards prop changes (initial load or refresh)
+        useEffect(() => {
+                setAllServerCards(serverCards);
+                setCurrentPage(1);
+                setHasMore(initialHasMore);
+                setTotalCount(initialTotalCount);
+        }, [serverCards, initialHasMore, initialTotalCount]);
+
+        // Load more cards (pagination)
+        const loadMoreCards = async () => {
+                if (isLoadingMore || !hasMore || mode !== 'default') return;
+
+                setIsLoadingMore(true);
+                try {
+                        const nextPage = currentPage + 1;
+                        const res = await fetch(`/api/cards?page=${nextPage}&pageSize=${pageSize}`);
+                        const data = await res.json();
+
+                        if (data.cards && data.cards.length > 0) {
+                                setAllServerCards(prev => [...prev, ...data.cards]);
+                                setCurrentPage(nextPage);
+                                setHasMore(data.hasMore);
+                                setTotalCount(data.total);
+                        }
+                } catch (err) {
+                        console.error('Failed to load more cards:', err);
+                } finally {
+                        setIsLoadingMore(false);
+                }
+        };
 
         // Fetch similar cards when similarityId changes
         useEffect(() => {
@@ -315,7 +368,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                         allCards = smartResults;
                 } else {
                         // Merge local and server cards (local cards first)
-                        allCards = [...localCards, ...serverCards];
+                        allCards = [...localCards, ...allServerCards];
                 }
 
                 // Apply platform filter FIRST (instant, no API call)
@@ -423,7 +476,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                 }
 
                 return unique;
-        }, [localCards, serverCards, searchQuery, deletedIds, mode, activeFilter, searchParams, similarityId, similarCards, searchMode, smartResults, currentQuery, colorFilter]);
+        }, [localCards, allServerCards, searchQuery, deletedIds, mode, activeFilter, searchParams, similarityId, similarCards, searchMode, smartResults, currentQuery, colorFilter]);
 
 
         // Calculate platform counts for dynamic TagScroller pills (before platform filter is applied)
@@ -436,7 +489,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                 } else if (searchMode === 'smart' && smartResults.length > 0) {
                         allCards = smartResults;
                 } else {
-                        allCards = [...localCards, ...serverCards];
+                        allCards = [...localCards, ...allServerCards];
                 }
 
                 // Apply color filter if present (but NOT platform filter)
@@ -481,7 +534,7 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                         counts[platform] = (counts[platform] || 0) + 1;
                 }
                 return counts;
-        }, [localCards, serverCards, deletedIds, mode, colorFilter, similarityId, similarCards, searchMode, smartResults]);
+        }, [localCards, allServerCards, deletedIds, mode, colorFilter, similarityId, similarCards, searchMode, smartResults]);
 
         // Sync selected card with updated server cards (for realtime/AI updates)
         // Must be AFTER uniqueCards is defined
@@ -652,7 +705,9 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                                                 {mounted && localCards.length > 0 && !similarityId
                                                         ? `${localCards.length} saved locally • `
                                                         : ''}
-                                                {uniqueCards.length} items
+                                                {mode === 'default' && totalCount > uniqueCards.length
+                                                        ? `Showing ${uniqueCards.length} of ${totalCount} items`
+                                                        : `${totalCount} items`}
                                         </p>
 
                                         <div className="flex items-center gap-4">
@@ -783,6 +838,37 @@ export function CardGridClient({ serverCards, searchQuery, platformFilter, typeF
                                                 </div>
                                         )}
                                 </>
+                        )}
+
+                        {/* Load More Button - only show in default mode with pagination */}
+                        {mode === 'default' && hasMore && !similarityId && searchMode !== 'smart' && (
+                                <div className="flex justify-center py-8">
+                                        <button
+                                                onClick={loadMoreCards}
+                                                disabled={isLoadingMore}
+                                                className={`
+                                                        px-6 py-3 rounded-full font-medium text-sm
+                                                        bg-[var(--surface-secondary)] text-[var(--foreground)]
+                                                        hover:bg-[var(--surface-tertiary)] transition-colors
+                                                        disabled:opacity-50 disabled:cursor-not-allowed
+                                                        flex items-center gap-2
+                                                `}
+                                        >
+                                                {isLoadingMore ? (
+                                                        <>
+                                                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                                Loading...
+                                                        </>
+                                                ) : (
+                                                        <>
+                                                                Load More
+                                                                <span className="text-[var(--foreground-muted)]">
+                                                                        ({uniqueCards.length} of {totalCount})
+                                                                </span>
+                                                        </>
+                                                )}
+                                        </button>
+                                </div>
                         )}
 
                         {/* Detail Modal */}
